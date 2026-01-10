@@ -46,6 +46,7 @@ Int         -- 64-bit signed integer
 Float       -- 64-bit IEEE 754 floating point
 Bool        -- true or false
 Timestamp   -- milliseconds since Unix epoch (Int alias with semantic meaning)
+Duration    -- time span in milliseconds (Int alias with semantic meaning)
 ID          -- opaque identifier (internal use)
 
 ```
@@ -56,14 +57,19 @@ Each scalar type supports:
 
 | Type | Operations |
 | --- | --- |
-| String | `=`, `!=`, `<`, `>`, `<=`, `>=` (lexicographic) |
+| String | `=`, `!=`, `<`, `>`, `<=`, `>=` (lexicographic), `++` (concatenation) |
 | Int | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*`, `/`, `%` |
 | Float | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*`, `/` |
 | Bool | `=`, `!=`, `and`, `or`, `not` |
-| Timestamp | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+` (add Int), `-` (subtract) |
+| Timestamp | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+` (add Duration), `-` (subtract Duration or Timestamp) |
+| Duration | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*` (by Int), `/` (by Int) |
 | ID | `=`, `!=` only |
 
-**String functions** (`length`, `concat`, `contains`) are reserved for v2. In v1, use only comparison operators on strings.
+**String functions**: `length`, `lower`, `upper`, `trim`, `contains`, `starts_with`, `ends_with`, `substring`, `replace`, `split`.
+
+**Timestamp functions**: `now()`, `year()`, `month()`, `day()`, `hour()`, `minute()`, `second()`, `millisecond()`, `day_of_week()`, `timestamp()` (parse ISO 8601).
+
+**Duration functions**: `to_milliseconds()`, `to_seconds()`, `to_minutes()`, `to_hours()`, `to_days()`.
 
 ### 1.2 Null semantics
 
@@ -99,9 +105,21 @@ The `_AttributeDef.default_value` field stores defaults as JSON-encoded strings:
 | Bool | true | `"true"` |
 | String | "hello" | `"\"hello\""` |
 | Timestamp | 1704067200000 | `"1704067200000"` |
+| Duration | 86400000 | `"86400000"` |
 | (no default) | - | `null` |
 
 The attribute's declared type determines how to parse the serialized value.
+
+### 1.4 Dynamic defaults
+
+For dynamic defaults like `now()`, the `default_value` field uses a special prefix:
+
+| Default Expression | Serialized |
+| --- | --- |
+| `now()` | `"$now()"` |
+| `now() + 24.hours` | `"$now() + 86400000"` |
+
+The `$` prefix indicates the value should be evaluated at entity creation time rather than parsed as a literal. The engine recognizes `$now()` and evaluates it to the current timestamp when the entity is created.
 
 ---
 
@@ -133,13 +151,15 @@ node _AttributeDef [sealed] {
   name: String [required],
   required: Bool = false,
   unique: Bool = false,
-  default_value: String?,  -- serialized default, null if none
+  indexed: String = "none",  -- "none", "asc", or "desc"
+  default_value: String?,  -- serialized default, null if none (see Section 1.3-1.4)
   doc: String?
 }
 
 node _ConstraintDef [sealed] {
-  name: String?,  -- optional, for debugging
+  name: String [required],  -- constraint name (required for error messages)
   hard: Bool = true,  -- hard constraints reject; soft constraints warn
+  message: String?,  -- custom error/warning message
   doc: String?
 }
 
@@ -182,7 +202,7 @@ node _AnyTypeExpr : _TypeExpr [sealed] {
 }
 
 node _ScalarTypeExpr : _TypeExpr [sealed] {
-  scalar_type: String [required]  -- "String", "Int", "Float", "Bool", "Timestamp"
+  scalar_type: String [required]  -- "String", "Int", "Float", "Bool", "Timestamp", "Duration"
 }
 
 ```
@@ -201,7 +221,8 @@ node _VarDef [sealed] {
 
 node _EdgePattern [sealed] {
   -- Represents an edge constraint within a pattern
-  negated: Bool = false  -- if true, pattern requires edge NOT to exist
+  negated: Bool = false,  -- if true, pattern requires edge NOT to exist
+  transitive: String = "none"  -- "none", "+", or "*" for transitive closure
 }
 
 ```
@@ -212,7 +233,7 @@ Note: Conditions in patterns are represented as `_Expr` nodes (specifically, exp
 
 ```
 node _ProductionDef [sealed] {
-  -- A production specifies what to create/delete/modify
+  -- A production specifies what to spawn/kill/link/unlink/set
 }
 
 node _Action [abstract, sealed] {
@@ -220,21 +241,25 @@ node _Action [abstract, sealed] {
   order: Int = 0  -- execution order within production
 }
 
-node _CreateNodeAction : _Action [sealed] {
+node _SpawnAction : _Action [sealed] {
   var_name: String [required],  -- variable to bind the new node to
   -- type is specified via edge to _TypeExpr
 }
 
-node _CreateEdgeAction : _Action [sealed] {
+node _LinkAction : _Action [sealed] {
   var_name: String?,  -- optional variable to bind the new edge to
   -- edge type and targets specified via edges
 }
 
-node _DeleteAction : _Action [sealed] {
-  target_var: String [required]  -- variable naming what to delete
+node _KillAction : _Action [sealed] {
+  target_var: String [required]  -- variable naming node to kill
 }
 
-node _SetAttributeAction : _Action [sealed] {
+node _UnlinkAction : _Action [sealed] {
+  target_var: String [required]  -- variable naming edge to unlink
+}
+
+node _SetAction : _Action [sealed] {
   target_var: String [required],
   attr_name: String [required]
   -- value specified via edge to _Expr
@@ -250,7 +275,7 @@ node _Expr [abstract, sealed] {
 }
 
 node _LiteralExpr : _Expr [sealed] {
-  value_type: String [required],  -- "String", "Int", "Float", "Bool", "Null"
+  value_type: String [required],  -- "String", "Int", "Float", "Bool", "Null", "Timestamp", "Duration"
   value_string: String [required]  -- serialized value (for Null: "null")
 }
 
@@ -280,6 +305,27 @@ node _UnaryOpExpr : _Expr [sealed] {
 node _ExistsExpr : _Expr [sealed] {
   negated: Bool = false  -- if true, this is "not exists"
   -- inner pattern specified via edge
+}
+
+node _IfExpr : _Expr [sealed] {
+  -- IF condition THEN then_branch ELSE else_branch
+  -- condition, then_branch, else_branch specified via edges
+}
+
+node _CaseExpr : _Expr [sealed] {
+  -- CASE subject? WHEN ... THEN ... ELSE ... END
+  has_subject: Bool = false  -- true if simple CASE (value matching), false if searched CASE
+  -- subject (optional), when_clauses, else_clause specified via edges
+}
+
+node _WhenClause [sealed] {
+  -- WHEN condition THEN result
+  -- condition and result specified via edges
+}
+
+node _CoalesceExpr : _Expr [sealed] {
+  -- COALESCE(expr1, expr2, ...) or expr1 ?? expr2
+  -- arguments specified via ordered _list_element edges
 }
 
 node _ListExpr : _Expr [sealed] {
@@ -351,7 +397,7 @@ edge _attr_has_type(
 edge _attr_has_scalar_type(
   attr: _AttributeDef
 ) {
-  scalar_type: String [required]  -- "String", "Int", "Float", "Bool", "Timestamp"
+  scalar_type: String [required]  -- "String", "Int", "Float", "Bool", "Timestamp", "Duration"
   -- attribute has this scalar type (unary edge with scalar attribute)
 }
 
@@ -500,50 +546,50 @@ edge _production_has_action(
   -- production includes this action
 }
 
-edge _create_node_type(
-  action: _CreateNodeAction,
+edge _spawn_node_type(
+  action: _SpawnAction,
   type_expr: _TypeExpr
 ) {
-  -- create action creates a node of this type
+  -- spawn action creates a node of this type
 }
 
-edge _create_edge_type(
-  action: _CreateEdgeAction,
+edge _link_edge_type(
+  action: _LinkAction,
   edge_type: _EdgeType
 ) {
-  -- create action creates an edge of this type
+  -- link action creates an edge of this type
 }
 
-edge _create_edge_target(
-  action: _CreateEdgeAction
+edge _link_edge_target(
+  action: _LinkAction
 ) {
   position: Int [required],      -- 0-indexed position in edge signature
   var_name: String [required]    -- name of variable to use as target
-  -- create action targets this variable at this position
+  -- link action targets this variable at this position
   -- (unary edge: var_name is a string reference, not a node target)
 }
 
 edge _set_attr_value(
-  action: _SetAttributeAction,
+  action: _SetAction,
   value: _Expr
 ) {
   -- set action uses this expression as value
 }
 
-edge _create_node_attribute(
-  action: _CreateNodeAction,
+edge _spawn_node_attribute(
+  action: _SpawnAction,
   value: _Expr
 ) {
   attr_name: String [required]
-  -- inline attribute assignment: CREATE x: T { attr_name = value }
+  -- inline attribute assignment: SPAWN x: T { attr_name = value }
 }
 
-edge _create_edge_attribute(
-  action: _CreateEdgeAction,
+edge _link_edge_attribute(
+  action: _LinkAction,
   value: _Expr
 ) {
   attr_name: String [required]
-  -- inline attribute assignment: CREATE edge(a, b) { attr_name = value }
+  -- inline attribute assignment: LINK edge(a, b) { attr_name = value }
 }
 
 ```
@@ -592,6 +638,71 @@ edge _list_element(
 ) {
   position: Int [required]  -- 0-indexed position in list
   -- list contains this element at this position
+}
+
+edge _if_condition(
+  expr: _IfExpr,
+  condition: _Expr
+) {
+  -- IF expression condition
+}
+
+edge _if_then(
+  expr: _IfExpr,
+  then_branch: _Expr
+) {
+  -- IF expression THEN branch
+}
+
+edge _if_else(
+  expr: _IfExpr,
+  else_branch: _Expr
+) {
+  -- IF expression ELSE branch
+}
+
+edge _case_subject(
+  expr: _CaseExpr,
+  subject: _Expr
+) {
+  -- CASE expression subject (for simple CASE)
+}
+
+edge _case_when(
+  expr: _CaseExpr,
+  when_clause: _WhenClause
+) {
+  position: Int [required]  -- 0-indexed position in WHEN list
+  -- CASE expression WHEN clause
+}
+
+edge _case_else(
+  expr: _CaseExpr,
+  else_branch: _Expr
+) {
+  -- CASE expression ELSE branch
+}
+
+edge _when_condition(
+  clause: _WhenClause,
+  condition: _Expr
+) {
+  -- WHEN clause condition
+}
+
+edge _when_result(
+  clause: _WhenClause,
+  result: _Expr
+) {
+  -- WHEN clause result
+}
+
+edge _coalesce_arg(
+  expr: _CoalesceExpr,
+  arg: _Expr
+) {
+  position: Int [required]  -- 0-indexed position in argument list
+  -- COALESCE argument at this position
 }
 
 ```
@@ -646,7 +757,7 @@ edge _instance_of(
   type: _NodeType
 ) {
   -- this node is an instance of this type
-  -- (implicit for all nodes, made explicit for querying)
+  -- (implicit for all nodes, made explicit for observing)
 }
 
 edge _edge_instance_of(
@@ -654,7 +765,7 @@ edge _edge_instance_of(
   type: _EdgeType
 ) {
   -- this edge is an instance of this edge type
-  -- (implicit, made explicit for higher-order querying)
+  -- (implicit, made explicit for higher-order observing)
 }
 
 ```
@@ -822,25 +933,31 @@ constraint _attr_access_has_base:
 
 ## 5. Built-in Operations
 
-These are primitive operations implemented by the engine.
+These are primitive operations implemented by the engine. The HOHG language uses specific keywords for these operations:
+
+- **SPAWN**: Create a node
+- **KILL**: Remove a node
+- **LINK**: Create an edge
+- **UNLINK**: Remove an edge
+- **SET**: Modify an attribute
 
 ### 5.1 Node operations
 
 ```
-createNode(type: _NodeType, attributes: Map<String, Any>) -> ID
+SPAWN(type: _NodeType, attributes: Map<String, Any>) -> ID
   -- Creates a node of the given type with given attributes
   -- Validates: type is not abstract, required attributes present, types match
   -- Returns: the new node's ID
 
-deleteNode(id: ID) -> Bool
-  -- Deletes the node with given ID
+KILL(id: ID) -> Bool
+  -- Removes the node with given ID
   -- Validates: no edges reference this node (or cascade delete)
-  -- Returns: true if deleted, false if not found
+  -- Returns: true if removed, false if not found
 
 getNode(id: ID) -> Node?
   -- Returns the node or null if not found
 
-setNodeAttribute(id: ID, attr: String, value: Any) -> Bool
+SET(id: ID, attr: String, value: Any) -> Bool
   -- Sets an attribute on a node
   -- Validates: attribute exists on type, value type matches
   -- Returns: true if set, false if invalid
@@ -850,27 +967,27 @@ setNodeAttribute(id: ID, attr: String, value: Any) -> Bool
 ### 5.2 Edge operations
 
 ```
-createEdge(type: _EdgeType, targets: List<ID>, attributes: Map<String, Any>) -> ID
+LINK(type: _EdgeType, targets: List<ID>, attributes: Map<String, Any>) -> ID
   -- Creates an edge of the given type connecting the targets
   -- Validates: targets.length = type.arity, target types match signature
   -- Returns: the new edge's ID
 
-deleteEdge(id: ID) -> Bool
-  -- Deletes the edge with given ID
+UNLINK(id: ID) -> Bool
+  -- Removes the edge with given ID
   -- Validates: no higher-order edges reference this edge (or cascade)
-  -- Returns: true if deleted, false if not found
+  -- Returns: true if removed, false if not found
 
 getEdge(id: ID) -> Edge?
   -- Returns the edge or null if not found
 
-setEdgeAttribute(id: ID, attr: String, value: Any) -> Bool
+SET(id: ID, attr: String, value: Any) -> Bool
   -- Sets an attribute on an edge
   -- Validates: attribute exists on type, value type matches
   -- Returns: true if set, false if invalid
 
 ```
 
-### 5.3 Query operations
+### 5.3 Observation operations
 
 ```
 findNodes(type: _NodeType?, filter: Expr?) -> Iterator<Node>
@@ -926,7 +1043,7 @@ merge(branch: BranchID) -> MergeResult
 
 ### 6.1 Constraint checking
 
-When any mutation occurs (create, delete, set):
+When any mutation occurs (SPAWN, KILL, LINK, UNLINK, SET):
 
 1. Identify all constraints whose pattern could be affected
 2. For each affected constraint:
@@ -1035,8 +1152,8 @@ The `_instance_of` and `_edge_instance_of` edges are **not created by default**.
 **Rationale**: Every node already has its type in the `_type` field. Creating explicit edges would double storage.
 
 **When created**:
-- On explicit API request: `createNode(..., { trackInstance: true })`
-- Lazily materialized when a meta-query requires them
+- On explicit API request: `SPAWN(..., { trackInstance: true })`
+- Lazily materialized when a meta-observation requires them
 - Can be bulk-created via utility function for existing data
 
 **Usage**: These edges enable meta-queries that treat type relationships as graph structure:
@@ -1050,6 +1167,25 @@ RETURN n
 MATCH n: Event
 RETURN n
 ```
+
+### 8.5 Type aliases
+
+Type aliases defined in the Ontology DSL (e.g., `type Email = String [match: "..."]`) are **expanded at compile time** and do not generate Layer 0 nodes.
+
+**Example:**
+```
+-- Ontology DSL:
+type Email = String [match: "^.+@.+\\..+$"]
+node Person { email: Email [required] }
+
+-- Compiles to (no _TypeAlias node):
+node Person { email: String [required, match: "^.+@.+\\..+$"] }
+```
+
+**Rationale**: Type aliases are syntactic sugar for developer convenience. Expanding them at compile time:
+- Keeps Layer 0 simpler (no additional node type needed)
+- Ensures all type information is directly on `_AttributeDef` nodes
+- Avoids indirection when observing ontology structure
 
 ---
 
@@ -1151,11 +1287,11 @@ At pattern/constraint/rule compile time, expressions are type-checked:
 
 ---
 
-## 10. Higher-Order Query Syntax
+## 10. Higher-Order Observation Syntax
 
 ### 10.1 Edge binding with AS
 
-To query higher-order edges (edges about edges), bind an edge to a variable using `AS`:
+To observe higher-order edges (edges about edges), bind an edge to a variable using `AS`:
 
 ```
 MATCH 
@@ -1216,7 +1352,7 @@ rule create_missing_inverse:
   WHERE r.relation_type = "similar_to"
     AND NOT EXISTS(related_to(c2, c1))
   =>
-  CREATE related_to(c2, c1) { relation_type = "similar_to" }
+  LINK related_to(c2, c1) { relation_type = "similar_to" }
 ```
 
 ### 11.2 Anonymous variable
@@ -1248,29 +1384,29 @@ WHERE NOT EXISTS(assigned_to(t, _))
 ### 12.1 Default behavior: reject if referenced
 
 ```
-deleteNode(id) 
-  → Error("Cannot delete: node referenced by edges") 
+KILL(id) 
+  → Error("Cannot kill: node referenced by edges") 
     if any edge targets this node
 
-deleteEdge(id)
-  → Error("Cannot delete: edge referenced by higher-order edges")
+UNLINK(id)
+  → Error("Cannot unlink: edge referenced by higher-order edges")
     if any edge targets this edge
 ```
 
 ### 12.2 Cascade deletion
 
-Optional cascade flag deletes referencing edges recursively:
+Optional cascade flag removes referencing edges recursively:
 
 ```
-deleteNode(id, { cascade: true })
+KILL(id, { cascade: true })
   1. Find all edges E where id ∈ E.targets
-  2. For each E: deleteEdge(E.id, { cascade: true })
-  3. Delete the node
+  2. For each E: UNLINK(E.id, { cascade: true })
+  3. Kill the node
 
-deleteEdge(id, { cascade: true })
+UNLINK(id, { cascade: true })
   1. Find all edges E where id ∈ E.targets (higher-order)
-  2. For each E: deleteEdge(E.id, { cascade: true })
-  3. Delete the edge
+  2. For each E: UNLINK(E.id, { cascade: true })
+  3. Unlink the edge
 ```
 
 Cascade is recursive and respects constraints—if any deletion would violate a constraint, the entire cascade fails.
@@ -1281,7 +1417,7 @@ Cascade is recursive and respects constraints—if any deletion would violate a 
 
 ### 13.1 Scalar-only attributes (v1)
 
-Attributes hold scalar values only: String, Int, Float, Bool, Timestamp.
+Attributes hold scalar values only: String, Int, Float, Bool, Timestamp, Duration.
 
 **Not supported in v1**:
 - List attributes: `tags: List<String>`
@@ -1324,14 +1460,14 @@ In rule productions, variables are bound sequentially:
 rule example:
   a: TypeA
   =>
-  CREATE b: TypeB { name = a.name },  -- 'b' bound here
-  CREATE connects(a, b),               -- 'b' available
-  SET b.processed = true               -- 'b' available
+  SPAWN b: TypeB { name = a.name },  -- 'b' bound here
+  LINK connects(a, b),               -- 'b' available
+  SET b.processed = true             -- 'b' available
 ```
 
 **Scope rules**:
 - Pattern variables: available throughout production
-- Created variables: available after their CREATE action
+- Spawned variables: available after their SPAWN action
 - Cannot reference a variable before it's created
 
 ### 14.3 Condition scope
@@ -1370,20 +1506,20 @@ constraint bad:
 
 ### 14.5 Inline attribute evaluation
 
-Attributes in a CREATE statement are evaluated independently (not sequentially):
+Attributes in a SPAWN statement are evaluated independently (not sequentially):
 
-- Cannot reference other attributes in the same CREATE
+- Cannot reference other attributes in the same SPAWN
 - Cannot reference the variable being bound
 
 ```
 -- Valid: reference pattern variable
-CREATE x: TypeX { a = y.value }
+SPAWN x: TypeX { a = y.value }
 
--- Invalid: cross-reference within CREATE
-CREATE x: TypeX { a = 1, b = a + 1 }   -- ERROR: a not in scope
+-- Invalid: cross-reference within SPAWN
+SPAWN x: TypeX { a = 1, b = a + 1 }   -- ERROR: a not in scope
 
 -- Invalid: self-reference
-CREATE x: TypeX { a = x.id }           -- ERROR: x not yet bound
+SPAWN x: TypeX { a = x.id }           -- ERROR: x not yet bound
 ```
 
 ---
@@ -1464,13 +1600,47 @@ Constraints mentioning `edge<any>` are added to a special set checked on ALL edg
 Cannot be used as identifiers:
 
 ```
-node, edge, constraint, rule,
-where, not, exists, and, or,
+-- Ontology DSL
+ontology, node, edge, constraint, rule,
+abstract, sealed, required, unique,
+
+-- Observation
+match, walk, from, follow, return,
+as, collect, until, depth, inspect,
+
+-- Filtering & Ordering
+where, order, by, asc, desc, limit, offset, distinct,
+
+-- Transformation
+spawn, kill, link, unlink, set,
+
+-- Transaction
+begin, commit, rollback,
+
+-- Schema
+load, extend, show, types, edges, constraints, rules,
+
+-- Index
+index, on, drop, indexes,
+
+-- Version
+snapshot, checkout, diff, versions, branch, switch, merge,
+
+-- Debug
+explain, profile,
+
+-- Context
+in, app, scope, using,
+
+-- Logic
+and, or, not, exists,
 true, false, null,
-as, create, delete, set,
-match, return, order, by, limit,
-abstract, sealed, required, unique
+
+-- Conditionals
+if, then, else, case, when, end, coalesce
 ```
+
+**Note:** Keywords are case-insensitive. Identifiers (type names, variable names, attribute names) are case-sensitive.
 
 ### 17.2 Reserved prefixes
 
@@ -1539,7 +1709,7 @@ When `_EdgeType.symmetric = true`:
 **Creation**: Creating a symmetric edge that already exists (in either order) returns the existing edge's ID:
 ```
 -- If similar(a, b) already exists:
-CREATE similar(b, a)  -- Returns existing edge ID, no duplicate created
+LINK similar(b, a)  -- Returns existing edge ID, no duplicate created
 ```
 
 **Storage**: Only one edge is stored, with targets canonicalized by ID order:
@@ -1579,11 +1749,11 @@ Protected types include all types whose names begin with underscore:
 ```
 _NodeType, _EdgeType, _AttributeDef, _ConstraintDef, _RuleDef,
 _PatternDef, _VarDef, _EdgePattern, _ProductionDef, _Action,
-_CreateNodeAction, _CreateEdgeAction, _DeleteAction, _SetAttributeAction,
+_SpawnAction, _LinkAction, _KillAction, _UnlinkAction, _SetAction,
 _Expr, _LiteralExpr, _VarRefExpr, _AttrAccessExpr, _BinaryOpExpr,
-_UnaryOpExpr, _ExistsExpr, _ListExpr, _TypeExpr, _NamedTypeExpr,
-_OptionalTypeExpr, _UnionTypeExpr, _EdgeRefTypeExpr, _AnyTypeExpr,
-_ScalarTypeExpr, _Ontology, _Import
+_UnaryOpExpr, _ExistsExpr, _IfExpr, _CaseExpr, _WhenClause, _CoalesceExpr,
+_ListExpr, _TypeExpr, _NamedTypeExpr, _OptionalTypeExpr, _UnionTypeExpr,
+_EdgeRefTypeExpr, _AnyTypeExpr, _ScalarTypeExpr, _Ontology, _Import
 ```
 
 ### 20.2 Enforcement
@@ -1591,7 +1761,7 @@ _ScalarTypeExpr, _Ontology, _Import
 Attempting to create a protected type directly results in an error:
 
 ```
-createNode("_NodeType", { name: "Foo" })
+SPAWN("_NodeType", { name: "Foo" })
 → Error: "Cannot create protected type '_NodeType' directly. 
           Use engine.loadOntology() or engine.extendOntology() instead."
 ```
@@ -1599,7 +1769,7 @@ createNode("_NodeType", { name: "Foo" })
 ### 20.3 Allowed Operations
 
 Protected types can be:
-- **READ**: Query, traverse, inspect (always allowed)
+- **READ**: Match, traverse, inspect (always allowed)
 - **CREATED**: Only through compiler (ontology loading, extension API)
 - **MODIFIED**: Only through compiler (attribute updates on existing)
 - **DELETED**: Only through compiler (ontology unloading, if supported)
@@ -1628,11 +1798,11 @@ This goes through full compiler validation before creating Layer 0 structure.
 
 | Component | Count | Purpose |
 | --- | --- | --- |
-| Node types | 26 | Represent ontology structure |
-| Edge types | 37 | Connect ontology components |
+| Node types | 31 | Represent ontology structure |
+| Edge types | 49 | Connect ontology components |
 | Constraints | 19 | Ensure ontology validity |
 | Operations | 15 | Primitive manipulations |
-| Scalars | 6 | Primitive value types |
+| Scalars | 7 | Primitive value types |
 
 This is complete and self-contained. An implementation that correctly handles all of the above can:
 

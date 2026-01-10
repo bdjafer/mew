@@ -225,7 +225,7 @@ At runtime, the system:
 
 **Rule execution:**
 - After mutation commits, find matching rule patterns
-- Execute rule productions (create, delete, modify)
+- Execute rule productions (SPAWN, KILL, LINK, UNLINK, SET)
 - Repeat until no new matches (quiescence) or cycle detected
 - All changes atomic: if any step fails, everything rolls back
 
@@ -254,7 +254,7 @@ Meaning must be stable. A symbol that meant X yesterday and Y today is useless f
 
 ### Inspectable over opaque
 
-Any belief, relationship, or reasoning step should be queryable. You can ask: Why does this edge exist? What supports this claim? What rules produced this conclusion? Transparency is not optional.
+Any belief, relationship, or reasoning step should be observable. You can ask: Why does this edge exist? What supports this claim? What rules produced this conclusion? Transparency is not optional.
 
 ### Validated over trusted
 
@@ -327,7 +327,7 @@ All mutations pass through constraint checking. All type signatures are verified
 │   │               │  │   Checker     │  │                       │  │
 │   └───────────────┘  └───────────────┘  └───────────────────────┘  │
 │   ┌───────────────┐  ┌───────────────┐  ┌───────────────────────┐  │
-│   │Index Manager  │  │  Transaction  │  │   Query Executor      │  │
+│   │Index Manager  │  │  Transaction  │  │  Observation Executor │  │
 │   │               │  │   Manager     │  │                       │  │
 │   └───────────────┘  └───────────────┘  └───────────────────────┘  │
 │   ┌─────────────────────────────────────────────────────────────┐  │
@@ -370,16 +370,16 @@ Ontology File (.hog)
    [Engine] ◄── Registries loaded, ontology active
 ```
 
-### Query Execution
+### Observation Execution
 
 ```
-Query Text
+Observation Statement
     │
     ▼
-[Parser] ──► Query AST
+[Parser] ──► Observation AST
     │
     ▼
-[Planner] ──► Query Plan (uses type info, indexes)
+[Planner] ──► Observation Plan (uses type info, indexes)
     │
     ▼
 [Executor] ──► Iterate graph, match patterns, filter
@@ -391,7 +391,7 @@ Results (stream of matches)
 ### Mutation Execution
 
 ```
-Mutation (CREATE, DELETE, SET)
+Mutation (SPAWN, KILL, LINK, UNLINK, SET)
     │
     ▼
 [Type Checker] ──► Validate types match
@@ -445,12 +445,12 @@ The engine processes operations against the compiled ontology:
 
 | Operation | Flow |
 |-----------|------|
-| **createNode** | Type check → Apply → Constraint check → Rule trigger → Commit |
-| **createEdge** | Signature check → Apply → Constraint check → Rule trigger → Commit |
-| **deleteNode** | Reference check → Apply → Constraint check → Rule trigger → Commit |
-| **deleteEdge** | Reference check → Apply → Constraint check → Rule trigger → Commit |
-| **setAttr** | Type check → Apply → Constraint check → Rule trigger → Commit |
-| **query** | Parse → Plan → Execute → Stream results |
+| **SPAWN** (node) | Type check → Apply → Constraint check → Rule trigger → Commit |
+| **LINK** (edge) | Signature check → Apply → Constraint check → Rule trigger → Commit |
+| **KILL** (node) | Reference check → Apply → Constraint check → Rule trigger → Commit |
+| **UNLINK** (edge) | Reference check → Apply → Constraint check → Rule trigger → Commit |
+| **SET** (attribute) | Type check → Apply → Constraint check → Rule trigger → Commit |
+| **MATCH** (observation) | Parse → Plan → Execute → Stream results |
 | **matchPattern** | Compile pattern → Execute → Stream matches |
 
 ---
@@ -524,7 +524,7 @@ Schema-less databases (like document stores) offer flexibility but sacrifice:
 | Fast writes | Fast reads |
 
 We choose compiled ontologies because:
-- **Performance:** Query optimization requires known structure
+- **Performance:** Observation optimization requires known structure
 - **Correctness:** Constraint enforcement requires declared types
 - **Reasoning:** Rules require typed patterns
 
@@ -547,7 +547,7 @@ constraint temporal_causation:
 ```
 
 Benefits:
-- **Inspectable:** You can query what constraints exist
+- **Inspectable:** You can observe what constraints exist
 - **Optimizable:** Engine can index for constraint checking
 - **Composable:** Patterns reused in queries, rules, constraints
 - **Self-documenting:** The constraint IS its specification
@@ -591,7 +591,7 @@ Build a production-ready HOHG database:
 - Compiled ontologies
 - Constraint enforcement
 - Rule execution
-- Query optimization
+- Observation optimization
 - Versioning
 
 **Milestone:** A database others can use, with documented ontologies.
@@ -701,8 +701,8 @@ Combine all components:
 │    │   └── Ontology Language Reference                              │
 │    │   └── Test Ontologies (examples)                               │
 │    │                                                                 │
-│    ├── Want to query the database?                                  │
-│    │   └── Query Language Reference                                 │
+│    ├── Want to operate the database?                                  │
+│    │   └── Language Reference                                       │
 │    │                                                                 │
 │    ├── Want to implement the system?                                │
 │    │   └── Architecture Overview                                    │

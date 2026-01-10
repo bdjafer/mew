@@ -2196,7 +2196,7 @@ LINK assigned_to(#task_123, $personId)
 
 ## 27.10.3 Parameter Binding
 
-Parameters are bound when executing the query:
+Parameters are bound when executing the observation:
 
 ```typescript
 // API usage (pseudocode)
