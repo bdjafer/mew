@@ -1,0 +1,187 @@
+-- =============================================================================
+-- ONTOLOGY: StateMachine
+-- LEVEL: B (Medium)
+-- PURPOSE: Finite state machines with guards, actions, and execution history
+-- =============================================================================
+
+ontology StateMachine : Layer0 {
+
+  -- ===========================================================================
+  -- NODE TYPES
+  -- ===========================================================================
+
+  node Machine {
+    name: String [required, unique],
+    description: String?,
+    version: String = "1.0",
+    created_at: Timestamp?
+  }
+
+  node State {
+    name: String [required],
+    state_type: String = "normal",    -- "initial", "normal", "final"
+    description: String?,
+    on_enter_action: String?,
+    on_exit_action: String?
+  }
+
+  node Transition {
+    name: String?,
+    event: String [required],         -- event that triggers transition
+    guard: String?,                   -- condition expression
+    action: String?,                  -- action to perform
+    priority: Int = 0                 -- for multiple matching transitions
+  }
+
+  node Instance {
+    instance_id: String [required, unique],
+    created_at: Timestamp [required],
+    context: String?                  -- JSON context data
+  }
+
+  node ExecutionStep {
+    step_number: Int [required],
+    event: String [required],
+    occurred_at: Timestamp [required],
+    guard_result: Bool?,
+    action_result: String?
+  }
+
+  node Variable {
+    name: String [required],
+    var_type: String = "string",      -- "string", "int", "bool", "float"
+    default_value: String?
+  }
+
+  -- ===========================================================================
+  -- EDGE TYPES
+  -- ===========================================================================
+
+  edge belongs_to_machine(state: State, machine: Machine) {}
+
+  edge transition_from(transition: Transition, state: State) {}
+
+  edge transition_to(transition: Transition, state: State) {}
+
+  edge initial_state(machine: Machine, state: State) {}
+
+  edge instance_of_machine(instance: Instance, machine: Machine) {}
+
+  edge current_state(instance: Instance, state: State) {}
+
+  edge execution_history(instance: Instance, step: ExecutionStep) {}
+
+  edge step_from_state(step: ExecutionStep, state: State) {}
+
+  edge step_to_state(step: ExecutionStep, state: State) {}
+
+  edge step_transition(step: ExecutionStep, transition: Transition) {}
+
+  edge machine_has_variable(machine: Machine, variable: Variable) {}
+
+  -- Higher-order: transition frequency tracking
+  edge transition_count(
+    transition: edge<transition_from>,
+    count: Int
+  ) {
+    last_used: Timestamp?
+  }
+
+  -- Higher-order: state dwell time
+  edge state_dwell_time(
+    state_entry: edge<current_state>,
+    entered_at: Timestamp
+  ) {}
+
+  -- ===========================================================================
+  -- CONSTRAINTS
+  -- ===========================================================================
+
+  -- State belongs to exactly one machine
+  constraint state_single_machine:
+    s: State, m1: Machine, m2: Machine,
+    belongs_to_machine(s, m1), belongs_to_machine(s, m2)
+    => m1.id = m2.id
+
+  -- Transition source and target must be in same machine
+  constraint transition_same_machine:
+    t: Transition, s1: State, s2: State, m1: Machine, m2: Machine,
+    transition_from(t, s1), transition_to(t, s2),
+    belongs_to_machine(s1, m1), belongs_to_machine(s2, m2)
+    => m1.id = m2.id
+
+  -- Machine has exactly one initial state
+  constraint single_initial_state:
+    m: Machine, s1: State, s2: State,
+    initial_state(m, s1), initial_state(m, s2)
+    => s1.id = s2.id
+
+  -- Initial state must belong to the machine
+  constraint initial_state_belongs:
+    m: Machine, s: State,
+    initial_state(m, s)
+    => EXISTS(belongs_to_machine(s, m))
+
+  -- Instance current state must be in the instance's machine
+  constraint current_state_valid:
+    i: Instance, s: State, m: Machine,
+    current_state(i, s),
+    instance_of_machine(i, m)
+    => EXISTS(belongs_to_machine(s, m))
+
+  -- Instance has exactly one current state
+  constraint single_current_state:
+    i: Instance, s1: State, s2: State,
+    current_state(i, s1), current_state(i, s2)
+    => s1.id = s2.id
+
+  -- Step numbers must be positive
+  constraint step_number_positive:
+    s: ExecutionStep
+    => s.step_number >= 1
+
+  -- Transition priority must be non-negative
+  constraint priority_non_negative:
+    t: Transition
+    => t.priority >= 0
+
+  -- ===========================================================================
+  -- RULES
+  -- ===========================================================================
+
+  -- Record state entry time when current_state is set
+  rule track_state_entry [priority: 10]:
+    i: Instance, s: State,
+    current_state(i, s) AS cs
+    WHERE NOT EXISTS(state_dwell_time(cs, _))
+    =>
+    CREATE state_dwell_time(cs, now())
+
+  -- Initialize transition count
+  rule init_transition_count [priority: 5]:
+    t: Transition, s: State,
+    transition_from(t, s) AS tf
+    WHERE NOT EXISTS(transition_count(tf, _))
+    =>
+    CREATE transition_count(tf, 0)
+
+  -- Increment transition count when used
+  rule increment_transition_count [priority: 8]:
+    step: ExecutionStep, t: Transition, s: State,
+    step_transition(step, t),
+    transition_from(t, s) AS tf,
+    transition_count(tf, count) AS tc
+    =>
+    SET tc.count = count + 1,
+    SET tc.last_used = step.occurred_at
+
+  -- Create initial current_state for new instances
+  rule set_initial_state [priority: 15]:
+    i: Instance, m: Machine, s: State,
+    instance_of_machine(i, m),
+    initial_state(m, s)
+    WHERE NOT EXISTS(current_state(i, _))
+    =>
+    CREATE current_state(i, s)
+
+}

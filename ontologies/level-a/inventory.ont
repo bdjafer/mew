@@ -1,0 +1,138 @@
+-- =============================================================================
+-- ONTOLOGY: Inventory
+-- LEVEL: A (Simple)
+-- PURPOSE: Warehouse inventory management with products, locations, and movements
+-- =============================================================================
+
+ontology Inventory : Layer0 {
+
+  -- ===========================================================================
+  -- NODE TYPES
+  -- ===========================================================================
+
+  node Product {
+    sku: String [required, unique],
+    name: String [required],
+    description: String?,
+    category: String?,
+    unit_price: Float?,
+    weight_kg: Float?,
+    min_stock_level: Int = 0,
+    active: Bool = true
+  }
+
+  node Warehouse {
+    code: String [required, unique],
+    name: String [required],
+    address: String?,
+    capacity: Int?
+  }
+
+  node Location {
+    code: String [required],
+    zone: String?,                    -- "A", "B", "C", etc.
+    aisle: String?,
+    shelf: String?,
+    bin: String?,
+    max_capacity: Int?
+  }
+
+  node StockEntry {
+    quantity: Int [required],
+    batch_number: String?,
+    expiry_date: Timestamp?,
+    received_at: Timestamp [required],
+    unit_cost: Float?
+  }
+
+  node Supplier {
+    code: String [required, unique],
+    name: String [required],
+    contact_email: String?,
+    contact_phone: String?,
+    address: String?,
+    active: Bool = true
+  }
+
+  node StockMovement {
+    movement_type: String [required], -- "in", "out", "transfer", "adjustment"
+    quantity: Int [required],
+    reason: String?,
+    performed_at: Timestamp [required],
+    performed_by: String?
+  }
+
+  -- ===========================================================================
+  -- EDGE TYPES
+  -- ===========================================================================
+
+  edge located_in(location: Location, warehouse: Warehouse) {}
+
+  edge stock_at(entry: StockEntry, location: Location) {}
+
+  edge stock_of(entry: StockEntry, product: Product) {}
+
+  edge supplies(supplier: Supplier, product: Product) {
+    lead_time_days: Int?,
+    min_order_quantity: Int?,
+    preferred: Bool = false
+  }
+
+  edge movement_product(movement: StockMovement, product: Product) {}
+
+  edge movement_from(movement: StockMovement, location: Location) {}
+
+  edge movement_to(movement: StockMovement, location: Location) {}
+
+  -- ===========================================================================
+  -- CONSTRAINTS
+  -- ===========================================================================
+
+  -- Stock quantity must be non-negative
+  constraint non_negative_stock:
+    e: StockEntry
+    => e.quantity >= 0
+
+  -- Movement quantity must be positive
+  constraint positive_movement:
+    m: StockMovement
+    => m.quantity > 0
+
+  -- Location belongs to exactly one warehouse
+  constraint location_single_warehouse:
+    loc: Location, w1: Warehouse, w2: Warehouse,
+    located_in(loc, w1), located_in(loc, w2)
+    => w1.id = w2.id
+
+  -- Stock entry is at exactly one location
+  constraint stock_single_location:
+    e: StockEntry, l1: Location, l2: Location,
+    stock_at(e, l1), stock_at(e, l2)
+    => l1.id = l2.id
+
+  -- Stock entry is for exactly one product
+  constraint stock_single_product:
+    e: StockEntry, p1: Product, p2: Product,
+    stock_of(e, p1), stock_of(e, p2)
+    => p1.id = p2.id
+
+  -- Transfer movements must have both from and to locations
+  constraint transfer_has_both_locations:
+    m: StockMovement
+    WHERE m.movement_type = "transfer"
+    => EXISTS(l1: Location, movement_from(m, l1))
+       AND EXISTS(l2: Location, movement_to(m, l2))
+
+  -- Out movements must have from location
+  constraint out_has_from:
+    m: StockMovement
+    WHERE m.movement_type = "out"
+    => EXISTS(l: Location, movement_from(m, l))
+
+  -- In movements must have to location
+  constraint in_has_to:
+    m: StockMovement
+    WHERE m.movement_type = "in"
+    => EXISTS(l: Location, movement_to(m, l))
+
+}

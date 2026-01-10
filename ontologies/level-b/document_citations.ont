@@ -1,0 +1,211 @@
+-- =============================================================================
+-- ONTOLOGY: DocumentCitations
+-- LEVEL: B (Medium)
+-- PURPOSE: Academic documents with citations, claims, and provenance tracking
+-- =============================================================================
+
+ontology DocumentCitations : Layer0 {
+
+  -- ===========================================================================
+  -- NODE TYPES
+  -- ===========================================================================
+
+  node Author {
+    name: String [required],
+    orcid: String?,
+    affiliation: String?,
+    email: String?
+  }
+
+  node Document {
+    title: String [required],
+    doc_type: String = "article",     -- "article", "book", "thesis", "report"
+    abstract: String?,
+    published_at: Timestamp?,
+    doi: String?,
+    url: String?,
+    peer_reviewed: Bool = false,
+    citation_count: Int = 0
+  }
+
+  node Section {
+    title: String?,
+    section_number: String?,
+    content: String?
+  }
+
+  node Claim {
+    statement: String [required],
+    claim_type: String?,              -- "empirical", "theoretical", "definition"
+    confidence: Float = 1.0
+  }
+
+  node Dataset {
+    name: String [required],
+    description: String?,
+    url: String?,
+    license: String?
+  }
+
+  node Method {
+    name: String [required],
+    description: String?,
+    method_type: String?              -- "experimental", "computational", "survey"
+  }
+
+  node Venue {
+    name: String [required],
+    venue_type: String?,              -- "journal", "conference", "workshop"
+    publisher: String?,
+    impact_factor: Float?
+  }
+
+  -- ===========================================================================
+  -- EDGE TYPES
+  -- ===========================================================================
+
+  edge authored_by(doc: Document, author: Author) {
+    position: Int?,                   -- author order (1 = first author)
+    corresponding: Bool = false
+  }
+
+  edge has_section(doc: Document, section: Section) {
+    order: Int [required]
+  }
+
+  edge published_in(doc: Document, venue: Venue) {
+    volume: String?,
+    issue: String?,
+    pages: String?
+  }
+
+  edge cites(citing: Document, cited: Document) {
+    context: String?,                 -- why cited
+    citation_type: String?            -- "supports", "contradicts", "extends", "uses"
+  }
+
+  edge makes_claim(doc: Document, claim: Claim) {
+    in_section: String?
+  }
+
+  edge supports_claim(citing: Document, claim: Claim) {
+    -- citing provides evidence for claim
+  }
+
+  edge contradicts_claim(citing: Document, claim: Claim) {}
+
+  edge uses_dataset(doc: Document, dataset: Dataset) {}
+
+  edge uses_method(doc: Document, method: Method) {}
+
+  edge claim_in_section(claim: Claim, section: Section) {}
+
+  -- Higher-order: citation quality/relevance
+  edge citation_quality(
+    citation: edge<cites>,
+    score: Float
+  ) {
+    -- 0.0 to 1.0, how relevant/appropriate the citation is
+    assessed_by: String?
+  }
+
+  -- Higher-order: claim provenance
+  edge claim_source(
+    claim: Claim,
+    original: edge<makes_claim>
+  ) {
+    -- tracks where a claim originated
+  }
+
+  -- Higher-order: replication relationship
+  edge replicates(
+    replication: edge<makes_claim>,
+    original: edge<makes_claim>
+  ) {
+    success: Bool?,
+    partial: Bool = false
+  }
+
+  -- ===========================================================================
+  -- CONSTRAINTS
+  -- ===========================================================================
+
+  -- Document must have at least one author
+  constraint document_has_author:
+    d: Document
+    => EXISTS(a: Author, authored_by(d, a))
+
+  -- Citation quality in valid range
+  constraint citation_quality_range:
+    c: edge<cites>, score: Float, citation_quality(c, score)
+    => score >= 0.0 AND score <= 1.0
+
+  -- Can't cite yourself (document level)
+  constraint no_self_citation:
+    d: Document, cites(d, d)
+    => false
+
+  -- Claim confidence in valid range
+  constraint claim_confidence_range:
+    c: Claim
+    => c.confidence >= 0.0 AND c.confidence <= 1.0
+
+  -- Section order must be positive
+  constraint section_order_positive:
+    d: Document, s: Section, has_section(d, s) AS hs
+    => hs.order >= 1
+
+  -- Author position must be positive
+  constraint author_position_positive:
+    d: Document, a: Author, authored_by(d, a) AS ab
+    WHERE ab.position != null
+    => ab.position >= 1
+
+  -- ===========================================================================
+  -- RULES
+  -- ===========================================================================
+
+  -- When a document cites another, increment citation count
+  rule increment_citation_count [priority: 10]:
+    citing: Document, cited: Document,
+    cites(citing, cited) AS c
+    WHERE NOT EXISTS(
+      -- check if we already processed this
+      edge<citation_quality> about c
+    )
+    =>
+    SET cited.citation_count = cited.citation_count + 1,
+    CREATE citation_quality(c, 0.5) { assessed_by = "auto" }  -- default quality
+
+  -- Propagate claims through supporting citations
+  rule propagate_supported_claim [priority: 5]:
+    d1: Document, d2: Document, claim: Claim,
+    makes_claim(d1, claim) AS original,
+    cites(d2, d1) AS citation,
+    supports_claim(d2, claim)
+    WHERE citation.citation_type = "supports"
+      AND NOT EXISTS(claim_source(claim, original))
+    =>
+    CREATE claim_source(claim, original)
+
+  -- Flag contradictory claims in same document
+  rule flag_internal_contradiction [priority: 8]:
+    d: Document, c1: Claim, c2: Claim,
+    makes_claim(d, c1),
+    makes_claim(d, c2),
+    contradicts_claim(d, c1)  -- d contradicts its own claim?
+    =>
+    SET c1.claim_type = "contested"
+
+  -- Boost claim confidence when replicated
+  rule replication_boost [priority: 7]:
+    c: Claim,
+    d1: Document, d2: Document,
+    makes_claim(d1, c) AS m1,
+    makes_claim(d2, c) AS m2,
+    replicates(m2, m1) AS rep
+    WHERE rep.success = true AND c.confidence < 0.95
+    =>
+    SET c.confidence = c.confidence + 0.1 * (1.0 - c.confidence)
+
+}

@@ -1,0 +1,191 @@
+-- =============================================================================
+-- ONTOLOGY: CausalReasoning
+-- LEVEL: B (Medium)
+-- PURPOSE: Modeling causal relationships with confidence, evidence, and inference
+-- =============================================================================
+
+ontology CausalReasoning : Layer0 {
+
+  -- ===========================================================================
+  -- NODE TYPES
+  -- ===========================================================================
+
+  node Entity {
+    name: String [required],
+    description: String?,
+    entity_type: String?              -- "object", "process", "state", etc.
+  }
+
+  node Event : Entity {
+    timestamp: Timestamp?,
+    duration_ms: Int?,
+    completed: Bool = true
+  }
+
+  node State : Entity {
+    started_at: Timestamp?,
+    ended_at: Timestamp?,
+    active: Bool = true
+  }
+
+  node Agent : Entity {
+    agent_type: String?               -- "person", "organization", "system"
+  }
+
+  node Evidence {
+    source: String [required],
+    source_type: String?,             -- "observation", "experiment", "testimony"
+    reliability: Float = 1.0,
+    collected_at: Timestamp?,
+    description: String?
+  }
+
+  node Hypothesis {
+    statement: String [required],
+    status: String = "proposed",      -- "proposed", "supported", "refuted"
+    proposed_at: Timestamp?
+  }
+
+  -- ===========================================================================
+  -- EDGE TYPES
+  -- ===========================================================================
+
+  edge causes(cause: Event | State | Agent, effect: Event | State) {
+    mechanism: String?,
+    delay_ms: Int?,
+    strength: Float = 1.0             -- causal strength, 0.0 to 1.0
+  }
+
+  edge prevents(preventer: Event | State | Agent, prevented: Event | State) {
+    mechanism: String?
+  }
+
+  edge enables(enabler: Event | State, enabled: Event | State) {
+    -- enabler makes enabled possible but doesn't guarantee it
+    necessity: Float = 1.0            -- how necessary, 0.0 to 1.0
+  }
+
+  edge participates(agent: Agent, event: Event) {
+    role: String?                     -- "initiator", "participant", "observer"
+  }
+
+  edge triggers(trigger: Event, triggered: Event) {
+    -- immediate causation, no delay
+  }
+
+  -- Higher-order: confidence about causal claims
+  edge confidence(
+    claim: edge<causes> | edge<prevents> | edge<enables>,
+    level: Float
+  ) {
+    -- level from 0.0 (no confidence) to 1.0 (certain)
+    assessed_at: Timestamp?,
+    assessor: String?
+  }
+
+  -- Higher-order: evidence supporting a claim
+  edge supports(
+    evidence: Evidence,
+    claim: edge<causes> | edge<prevents> | edge<enables>
+  ) {
+    strength: Float = 1.0             -- how strongly evidence supports claim
+  }
+
+  edge contradicts(
+    evidence: Evidence,
+    claim: edge<causes> | edge<prevents> | edge<enables>
+  ) {
+    strength: Float = 1.0
+  }
+
+  edge tests(
+    hypothesis: Hypothesis,
+    claim: edge<causes> | edge<prevents> | edge<enables>
+  ) {}
+
+  -- ===========================================================================
+  -- CONSTRAINTS
+  -- ===========================================================================
+
+  -- Events that cause other events must occur before (or at same time)
+  constraint temporal_causation:
+    e1: Event, e2: Event, causes(e1, e2) AS c
+    WHERE e1.timestamp != null AND e2.timestamp != null
+    => e1.timestamp <= e2.timestamp
+
+  -- Triggers are immediate: triggered event at same time or just after
+  constraint trigger_immediate:
+    e1: Event, e2: Event, triggers(e1, e2)
+    WHERE e1.timestamp != null AND e2.timestamp != null
+    => e2.timestamp >= e1.timestamp 
+       AND e2.timestamp <= e1.timestamp + 1000  -- within 1 second
+
+  -- No self-causation
+  constraint no_self_causation:
+    e: Event, causes(e, e)
+    => false
+
+  -- Confidence must be in valid range
+  constraint confidence_range:
+    c: edge<causes>, conf: Float, confidence(c, conf)
+    => conf >= 0.0 AND conf <= 1.0
+
+  -- Evidence reliability must be in valid range
+  constraint reliability_range:
+    e: Evidence
+    => e.reliability >= 0.0 AND e.reliability <= 1.0
+
+  -- Causal strength must be in valid range
+  constraint strength_range:
+    e1: Event, e2: Event, causes(e1, e2) AS c
+    => c.strength >= 0.0 AND c.strength <= 1.0
+
+  -- ===========================================================================
+  -- RULES
+  -- ===========================================================================
+
+  -- Transitivity of causation with confidence decay
+  rule transitive_causation [priority: 10]:
+    e1: Event, e2: Event, e3: Event,
+    causes(e1, e2) AS c1,
+    causes(e2, e3) AS c2,
+    confidence(c1, level1) AS conf1,
+    confidence(c2, level2) AS conf2
+    WHERE NOT EXISTS(causes(e1, e3))
+    =>
+    CREATE causes(e1, e3) { 
+      mechanism = "inferred:transitive",
+      strength = c1.strength * c2.strength
+    } AS c3,
+    CREATE confidence(c3, level1 * level2) {
+      assessed_at = now(),
+      assessor = "inference_engine"
+    }
+
+  -- If evidence contradicts and supports same claim, flag conflict
+  rule evidence_conflict [priority: 5]:
+    ev: Evidence, 
+    claim: edge<causes>,
+    supports(ev, claim) AS s,
+    contradicts(ev, claim) AS c
+    =>
+    -- This should not happen - evidence can't both support and contradict
+    -- The pattern match itself flags the conflict
+    DELETE s  -- or could delete c, or flag for review
+
+  -- Low confidence claims decay over time (if no new evidence)
+  rule confidence_decay [priority: 1, auto: false]:
+    claim: edge<causes>,
+    confidence(claim, level) AS conf
+    WHERE level < 0.3 
+      AND conf.assessed_at < now() - 86400000  -- older than 1 day
+      AND NOT EXISTS(
+        ev: Evidence, 
+        supports(ev, claim) AS s
+        WHERE s.strength > 0.5
+      )
+    =>
+    DELETE claim,
+    DELETE conf
+
+}

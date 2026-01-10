@@ -1,0 +1,112 @@
+-- =============================================================================
+-- ONTOLOGY: TaskManagement
+-- LEVEL: A (Simple)
+-- PURPOSE: Project and task tracking with assignments and dependencies
+-- =============================================================================
+
+ontology TaskManagement : Layer0 {
+
+  -- ===========================================================================
+  -- NODE TYPES
+  -- ===========================================================================
+
+  node Person {
+    name: String [required],
+    email: String [required, unique],
+    role: String?
+  }
+
+  node Team {
+    name: String [required, unique],
+    description: String?
+  }
+
+  node Project {
+    name: String [required],
+    description: String?,
+    status: String = "active",        -- "active", "completed", "archived"
+    deadline: Timestamp?
+  }
+
+  node Task {
+    title: String [required],
+    description: String?,
+    status: String = "todo",          -- "todo", "in_progress", "done", "blocked"
+    priority: Int = 0,                -- higher = more important
+    estimated_hours: Float?,
+    actual_hours: Float?,
+    created_at: Timestamp [required],
+    completed_at: Timestamp?
+  }
+
+  node Tag {
+    name: String [required, unique],
+    color: String?
+  }
+
+  -- ===========================================================================
+  -- EDGE TYPES
+  -- ===========================================================================
+
+  edge member_of(person: Person, team: Team) {
+    role: String?,                    -- "lead", "member", etc.
+    joined_at: Timestamp?
+  }
+
+  edge owns_project(team: Team, project: Project) {}
+
+  edge contains_task(project: Project, task: Task) {}
+
+  edge assigned_to(task: Task, person: Person) {
+    assigned_at: Timestamp?
+  }
+
+  edge depends_on(downstream: Task, upstream: Task) {
+    -- downstream is blocked until upstream is done
+  }
+
+  edge subtask_of(child: Task, parent: Task) {}
+
+  edge tagged_with(task: Task, tag: Tag) {}
+
+  -- ===========================================================================
+  -- CONSTRAINTS
+  -- ===========================================================================
+
+  -- No task can depend on itself
+  constraint no_self_dependency:
+    t: Task, depends_on(t, t)
+    => false
+
+  -- No circular dependencies of length 2
+  constraint no_circular_dependency_2:
+    t1: Task, t2: Task,
+    depends_on(t1, t2), depends_on(t2, t1)
+    => false
+
+  -- A subtask cannot be its own parent
+  constraint no_self_parent:
+    t: Task, subtask_of(t, t)
+    => false
+
+  -- Completed tasks must have completed_at timestamp
+  constraint completed_has_timestamp:
+    t: Task
+    WHERE t.status = "done"
+    => t.completed_at != null
+
+  -- A task can only be in one project
+  constraint task_single_project:
+    t: Task, p1: Project, p2: Project,
+    contains_task(p1, t), contains_task(p2, t)
+    => p1.id = p2.id
+
+  -- Subtasks must be in the same project as parent
+  constraint subtask_same_project:
+    child: Task, parent: Task, p1: Project, p2: Project,
+    subtask_of(child, parent),
+    contains_task(p1, child),
+    contains_task(p2, parent)
+    => p1.id = p2.id
+
+}

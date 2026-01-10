@@ -1,0 +1,128 @@
+-- =============================================================================
+-- ONTOLOGY: SocialGraph
+-- LEVEL: A (Simple)
+-- PURPOSE: Social network with users, connections, posts, and interactions
+-- =============================================================================
+
+ontology SocialGraph : Layer0 {
+
+  -- ===========================================================================
+  -- NODE TYPES
+  -- ===========================================================================
+
+  node User {
+    username: String [required, unique],
+    display_name: String [required],
+    bio: String?,
+    email: String?,
+    created_at: Timestamp [required],
+    verified: Bool = false,
+    follower_count: Int = 0,
+    following_count: Int = 0
+  }
+
+  node Post {
+    content: String [required],
+    created_at: Timestamp [required],
+    edited_at: Timestamp?,
+    like_count: Int = 0,
+    reply_count: Int = 0,
+    visibility: String = "public"     -- "public", "followers", "private"
+  }
+
+  node Comment {
+    content: String [required],
+    created_at: Timestamp [required],
+    like_count: Int = 0
+  }
+
+  node HashTag {
+    name: String [required, unique]
+  }
+
+  node Media {
+    url: String [required],
+    media_type: String [required],    -- "image", "video", "audio"
+    alt_text: String?
+  }
+
+  -- ===========================================================================
+  -- EDGE TYPES
+  -- ===========================================================================
+
+  edge follows(follower: User, followed: User) {
+    followed_at: Timestamp?
+  }
+
+  edge blocks(blocker: User, blocked: User) {
+    blocked_at: Timestamp?
+  }
+
+  edge authored(user: User, post: Post) {}
+
+  edge commented(user: User, comment: Comment) {}
+
+  edge comment_on(comment: Comment, post: Post) {}
+
+  edge reply_to(reply: Comment, parent: Comment) {}
+
+  edge likes_post(user: User, post: Post) {
+    liked_at: Timestamp?
+  }
+
+  edge likes_comment(user: User, comment: Comment) {
+    liked_at: Timestamp?
+  }
+
+  edge mentions(post: Post, user: User) {}
+
+  edge tagged_with(post: Post, tag: HashTag) {}
+
+  edge has_media(post: Post, media: Media) {
+    position: Int = 0                 -- order in post
+  }
+
+  -- ===========================================================================
+  -- CONSTRAINTS
+  -- ===========================================================================
+
+  -- Cannot follow yourself
+  constraint no_self_follow:
+    u: User, follows(u, u)
+    => false
+
+  -- Cannot block yourself
+  constraint no_self_block:
+    u: User, blocks(u, u)
+    => false
+
+  -- A post has exactly one author
+  constraint post_single_author:
+    p: Post, u1: User, u2: User,
+    authored(u1, p), authored(u2, p)
+    => u1.id = u2.id
+
+  -- A comment has exactly one author
+  constraint comment_single_author:
+    c: Comment, u1: User, u2: User,
+    commented(u1, c), commented(u2, c)
+    => u1.id = u2.id
+
+  -- A comment is on exactly one post
+  constraint comment_single_post:
+    c: Comment, p1: Post, p2: Post,
+    comment_on(c, p1), comment_on(c, p2)
+    => p1.id = p2.id
+
+  -- A reply's parent must be on the same post
+  constraint reply_same_post:
+    reply: Comment, parent: Comment, p1: Post, p2: Post,
+    reply_to(reply, parent),
+    comment_on(reply, p1),
+    comment_on(parent, p2)
+    => p1.id = p2.id
+
+  -- Cannot like the same post twice (implicit in edge uniqueness)
+  -- Cannot like the same comment twice (implicit in edge uniqueness)
+
+}
