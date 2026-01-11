@@ -4,10 +4,13 @@ use mew_core::{EdgeId, EntityId, NodeId, Value};
 use mew_graph::Graph;
 use mew_parser::{KillStmt, LinkStmt, SetStmt, SpawnStmt, UnlinkStmt};
 use mew_pattern::{Bindings, Evaluator};
-use mew_registry::Registry;
+use mew_registry::{OnKillAction, Registry};
+use std::collections::{HashSet, VecDeque};
 
 use crate::error::{MutationError, MutationResult};
-use crate::result::{CreatedEntity, DeletedEntities, MutationResult as MutationOutput, UpdatedEntities};
+use crate::result::{
+    CreatedEntity, DeletedEntities, MutationResult as MutationOutput, UpdatedEntities,
+};
 
 /// Mutation executor.
 pub struct MutationExecutor<'r, 'g> {
@@ -22,7 +25,11 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
     }
 
     /// Execute a SPAWN statement.
-    pub fn execute_spawn(&mut self, stmt: &SpawnStmt, bindings: &Bindings) -> MutationResult<MutationOutput> {
+    pub fn execute_spawn(
+        &mut self,
+        stmt: &SpawnStmt,
+        bindings: &Bindings,
+    ) -> MutationResult<MutationOutput> {
         // Look up the type
         let type_id = self
             .registry
@@ -40,9 +47,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         let mut attrs = mew_core::Attributes::new();
 
         // Create evaluator with immutable graph reference
-        let evaluator = Evaluator::new(self.registry, unsafe {
-            &*(self.graph as *const Graph)
-        });
+        let evaluator = Evaluator::new(self.registry, unsafe { &*(self.graph as *const Graph) });
 
         for assign in &stmt.attrs {
             // Evaluate the value expression
@@ -67,46 +72,102 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
     }
 
     /// Execute a KILL statement (node deletion).
-    pub fn execute_kill(&mut self, stmt: &KillStmt, target_id: NodeId) -> MutationResult<MutationOutput> {
+    pub fn execute_kill(
+        &mut self,
+        stmt: &KillStmt,
+        target_id: NodeId,
+    ) -> MutationResult<MutationOutput> {
         // Check node exists
         if self.graph.get_node(target_id).is_none() {
             return Err(MutationError::NodeNotFound(target_id));
         }
 
-        // Collect edges to delete (cascade)
         let cascade = stmt.cascade.unwrap_or(true);
-        let mut deleted_edges = Vec::new();
+        let mut deleted_edges = HashSet::new();
+        let mut deleted_nodes = HashSet::new();
+        let mut to_delete = VecDeque::new();
+        to_delete.push_back(target_id);
 
-        if cascade {
-            // Delete all incident edges
-            let edges_from: Vec<_> = self.graph.edges_from(target_id, None).collect();
-            let edges_to: Vec<_> = self.graph.edges_to(target_id, None).collect();
+        while let Some(node_id) = to_delete.pop_front() {
+            if deleted_nodes.contains(&node_id) {
+                continue;
+            }
+
+            if cascade {
+                let incident_edges: Vec<_> = self
+                    .graph
+                    .edges_from(node_id, None)
+                    .chain(self.graph.edges_to(node_id, None))
+                    .collect();
+
+                for edge_id in incident_edges {
+                    if let Some(edge) = self.graph.get_edge(edge_id) {
+                        let edge_type =
+                            self.registry.get_edge_type(edge.type_id).ok_or_else(|| {
+                                MutationError::unknown_edge_type(edge.type_id.0.to_string())
+                            })?;
+                        let target_index = edge.targets.iter().position(
+                            |target| matches!(target, EntityId::Node(id) if *id == node_id),
+                        );
+                        if let Some(index) = target_index {
+                            let action = self.on_kill_action(edge_type, index);
+                            match action {
+                                OnKillAction::Cascade => {
+                                    for target in &edge.targets {
+                                        if let EntityId::Node(other_id) = target {
+                                            if *other_id != node_id {
+                                                to_delete.push_back(*other_id);
+                                            }
+                                        }
+                                    }
+                                }
+                                OnKillAction::Restrict => {
+                                    return Err(MutationError::on_kill_restrict(
+                                        edge_type.name.clone(),
+                                    ));
+                                }
+                                OnKillAction::SetNull | OnKillAction::Delete => {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Collect edges to delete (cascade)
+            let edges_from: Vec<_> = self.graph.edges_from(node_id, None).collect();
+            let edges_to: Vec<_> = self.graph.edges_to(node_id, None).collect();
 
             for edge_id in edges_from.into_iter().chain(edges_to) {
                 // Also delete higher-order edges about this edge
                 let ho_edges: Vec<_> = self.graph.edges_about(edge_id).collect();
                 for ho_edge_id in ho_edges {
                     if self.graph.delete_edge(ho_edge_id).is_ok() {
-                        deleted_edges.push(ho_edge_id);
+                        deleted_edges.insert(ho_edge_id);
                     }
                 }
 
                 if self.graph.delete_edge(edge_id).is_ok() {
-                    deleted_edges.push(edge_id);
+                    deleted_edges.insert(edge_id);
                 }
             }
+
+            // Delete the node
+            let _ = self.graph.delete_node(node_id);
+            deleted_nodes.insert(node_id);
         }
 
-        // Delete the node
-        self.graph.delete_node(target_id);
-
         Ok(MutationOutput::Deleted(
-            DeletedEntities::node(target_id).with_cascade_edges(deleted_edges),
+            DeletedEntities::nodes(deleted_nodes.into_iter().collect())
+                .with_cascade_edges(deleted_edges.into_iter().collect()),
         ))
     }
 
     /// Execute a LINK statement (edge creation).
-    pub fn execute_link(&mut self, stmt: &LinkStmt, target_ids: Vec<EntityId>) -> MutationResult<MutationOutput> {
+    pub fn execute_link(
+        &mut self,
+        stmt: &LinkStmt,
+        target_ids: Vec<EntityId>,
+    ) -> MutationResult<MutationOutput> {
         // Look up the edge type
         let edge_type_id = self
             .registry
@@ -118,20 +179,29 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
             let expected = edge_type.params.len();
             let actual = target_ids.len();
             if expected != actual {
-                return Err(MutationError::invalid_arity(&stmt.edge_type, expected, actual));
+                return Err(MutationError::invalid_arity(
+                    &stmt.edge_type,
+                    expected,
+                    actual,
+                ));
             }
 
             // Validate target types
-            for (i, (param, target_id)) in edge_type.params.iter().zip(target_ids.iter()).enumerate() {
+            for (i, (param, target_id)) in
+                edge_type.params.iter().zip(target_ids.iter()).enumerate()
+            {
                 if let EntityId::Node(node_id) = target_id {
                     if let Some(node) = self.graph.get_node(*node_id) {
                         // Check if node type matches expected parameter type
                         // "any" means any type is allowed
                         if param.type_constraint != "any" {
-                            let expected_type_id = self.registry.get_type_id(&param.type_constraint);
+                            let expected_type_id =
+                                self.registry.get_type_id(&param.type_constraint);
                             if let Some(expected_id) = expected_type_id {
                                 if !self.registry.is_subtype(node.type_id, expected_id) {
-                                    let actual_name = self.registry.get_type(node.type_id)
+                                    let actual_name = self
+                                        .registry
+                                        .get_type(node.type_id)
                                         .map(|t| t.name.clone())
                                         .unwrap_or_else(|| "unknown".to_string());
                                     return Err(MutationError::target_type_mismatch(
@@ -145,14 +215,16 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
                     }
                 }
             }
+
+            if edge_type.acyclic {
+                self.ensure_acyclic(edge_type_id, &stmt.edge_type, &target_ids)?;
+            }
         }
 
         // Build attributes
         let mut attrs = mew_core::Attributes::new();
         let bindings = Bindings::new();
-        let evaluator = Evaluator::new(self.registry, unsafe {
-            &*(self.graph as *const Graph)
-        });
+        let evaluator = Evaluator::new(self.registry, unsafe { &*(self.graph as *const Graph) });
 
         for assign in &stmt.attrs {
             let value = evaluator.eval(&assign.value, &bindings)?;
@@ -160,14 +232,20 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         }
 
         // Create the edge
-        let edge_id = self.graph.create_edge(edge_type_id, target_ids, attrs)
+        let edge_id = self
+            .graph
+            .create_edge(edge_type_id, target_ids, attrs)
             .map_err(|e| MutationError::pattern_error(e.to_string()))?;
 
         Ok(MutationOutput::Created(CreatedEntity::edge(edge_id)))
     }
 
     /// Execute an UNLINK statement (edge deletion).
-    pub fn execute_unlink(&mut self, _stmt: &UnlinkStmt, target_id: EdgeId) -> MutationResult<MutationOutput> {
+    pub fn execute_unlink(
+        &mut self,
+        _stmt: &UnlinkStmt,
+        target_id: EdgeId,
+    ) -> MutationResult<MutationOutput> {
         // Check edge exists
         if self.graph.get_edge(target_id).is_none() {
             return Err(MutationError::EdgeNotFound(target_id));
@@ -187,7 +265,9 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         let _ = self.graph.delete_edge(target_id);
         deleted_edges.push(target_id);
 
-        Ok(MutationOutput::Deleted(DeletedEntities::edge(target_id).with_cascade_edges(deleted_edges)))
+        Ok(MutationOutput::Deleted(
+            DeletedEntities::edge(target_id).with_cascade_edges(deleted_edges),
+        ))
     }
 
     /// Execute a SET statement (attribute update).
@@ -199,9 +279,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
     ) -> MutationResult<MutationOutput> {
         let mut updated_ids = Vec::new();
 
-        let evaluator = Evaluator::new(self.registry, unsafe {
-            &*(self.graph as *const Graph)
-        });
+        let evaluator = Evaluator::new(self.registry, unsafe { &*(self.graph as *const Graph) });
 
         for node_id in node_ids {
             let node = self
@@ -210,7 +288,9 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
                 .ok_or(MutationError::NodeNotFound(node_id))?;
 
             let type_id = node.type_id;
-            let type_name = self.registry.get_type(type_id)
+            let type_name = self
+                .registry
+                .get_type(type_id)
                 .map(|t| t.name.clone())
                 .unwrap_or_else(|| "unknown".to_string());
 
@@ -229,7 +309,8 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
 
             // Apply updates
             for (name, value) in new_attrs {
-                self.graph.set_node_attr(node_id, &name, value)
+                self.graph
+                    .set_node_attr(node_id, &name, value)
                     .map_err(|e| MutationError::pattern_error(e.to_string()))?;
             }
 
@@ -278,7 +359,10 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
     ) -> MutationResult<()> {
         // Get all attrs including inherited ones
         for attr_def in self.registry.get_all_type_attrs(type_id) {
-            if attr_def.required && !attrs.contains_key(&attr_def.name) && attr_def.default.is_none() {
+            if attr_def.required
+                && !attrs.contains_key(&attr_def.name)
+                && attr_def.default.is_none()
+            {
                 return Err(MutationError::missing_required(type_name, &attr_def.name));
             }
         }
@@ -333,6 +417,77 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
             return true;
         }
         false
+    }
+
+    fn ensure_acyclic(
+        &self,
+        edge_type_id: mew_core::EdgeTypeId,
+        edge_type_name: &str,
+        target_ids: &[EntityId],
+    ) -> MutationResult<()> {
+        if target_ids.len() < 2 {
+            return Ok(());
+        }
+
+        let source = match target_ids[0] {
+            EntityId::Node(node_id) => node_id,
+            _ => return Ok(()),
+        };
+        let target = match target_ids[1] {
+            EntityId::Node(node_id) => node_id,
+            _ => return Ok(()),
+        };
+
+        if source == target {
+            return Err(MutationError::acyclic_violation(edge_type_name));
+        }
+
+        if self.path_exists(edge_type_id, target, source) {
+            return Err(MutationError::acyclic_violation(edge_type_name));
+        }
+
+        Ok(())
+    }
+
+    fn path_exists(&self, edge_type_id: mew_core::EdgeTypeId, start: NodeId, goal: NodeId) -> bool {
+        let graph = unsafe { &*(self.graph as *const Graph) };
+        let mut visited = HashSet::new();
+        let mut stack = VecDeque::new();
+        stack.push_back(start);
+
+        while let Some(node_id) = stack.pop_front() {
+            if node_id == goal {
+                return true;
+            }
+            if !visited.insert(node_id) {
+                continue;
+            }
+            for edge_id in graph.edges_from(node_id, Some(edge_type_id)) {
+                if let Some(edge) = graph.get_edge(edge_id) {
+                    if let Some(EntityId::Node(next_id)) = edge.targets.get(1) {
+                        if !visited.contains(next_id) {
+                            stack.push_back(*next_id);
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    fn on_kill_action(&self, edge_type: &mew_registry::EdgeTypeDef, index: usize) -> OnKillAction {
+        if edge_type.on_kill.is_empty() {
+            return OnKillAction::Delete;
+        }
+        if edge_type.on_kill.len() == 1 {
+            return edge_type.on_kill[0];
+        }
+        edge_type
+            .on_kill
+            .get(index)
+            .copied()
+            .unwrap_or(OnKillAction::Delete)
     }
 }
 
@@ -418,7 +573,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MutationError::UnknownType { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            MutationError::UnknownType { .. }
+        ));
     }
 
     #[test]
@@ -443,7 +601,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MutationError::MissingRequired { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            MutationError::MissingRequired { .. }
+        ));
     }
 
     #[test]
@@ -485,7 +646,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MutationError::InvalidAttrType { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            MutationError::InvalidAttrType { .. }
+        ));
     }
 
     #[test]
@@ -532,7 +696,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MutationError::NodeNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            MutationError::NodeNotFound(_)
+        ));
     }
 
     #[test]
@@ -592,7 +759,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MutationError::InvalidArity { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            MutationError::InvalidArity { .. }
+        ));
     }
 
     #[test]
@@ -606,7 +776,9 @@ mod tests {
 
         let person = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
         let task = graph.create_node(task_type_id, attrs! { "title" => "Task 1" });
-        let edge = graph.create_edge(owns_type_id, vec![person.into(), task.into()], attrs! {}).unwrap();
+        let edge = graph
+            .create_edge(owns_type_id, vec![person.into(), task.into()], attrs! {})
+            .unwrap();
 
         let mut executor = MutationExecutor::new(&registry, &mut graph);
 
@@ -657,6 +829,9 @@ mod tests {
 
         // Verify the update
         let node = graph.get_node(node_id).unwrap();
-        assert_eq!(node.get_attr("title"), Some(&Value::String("Updated".to_string())));
+        assert_eq!(
+            node.get_attr("title"),
+            Some(&Value::String("Updated".to_string()))
+        );
     }
 }
