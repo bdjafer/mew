@@ -1411,10 +1411,9 @@ impl Parser {
         } else if self.check_ident("symmetric") {
             self.advance();
             Ok(EdgeModifier::Symmetric)
-        } else if self.check_ident("on_kill") {
+        } else if self.check_ident("on_kill") || self.check_ident("on_kill_target") || self.check_ident("on_kill_source") {
             self.advance();
             self.expect(&TokenKind::Colon)?;
-            // Accept both keyword and identifier for on_kill actions
             let action = if self.check(&TokenKind::Cascade) || self.check_ident("cascade") {
                 self.advance();
                 OnKillAction::Cascade
@@ -1437,7 +1436,7 @@ impl Parser {
             let token = self.peek();
             Err(ParseError::unexpected_token(
                 token.span,
-                "edge modifier",
+                "edge modifier (acyclic, unique, no_self, symmetric, on_kill)",
                 token.kind.name(),
             ))
         }
@@ -1483,9 +1482,16 @@ impl Parser {
                 } else if self.check_ident("priority") {
                     self.advance();
                     priority = Some(self.expect_int()?);
-                }
-                if self.check(&TokenKind::Comma) {
+                } else if self.check(&TokenKind::Comma) {
                     self.advance();
+                } else {
+                    // Unknown modifier - skip it to avoid infinite loop
+                    let token = self.peek().clone();
+                    return Err(ParseError::unexpected_token(
+                        token.span,
+                        "auto, priority, or ]",
+                        token.kind.name(),
+                    ));
                 }
             }
             self.expect(&TokenKind::RBracket)?;

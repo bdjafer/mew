@@ -270,40 +270,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn skip_whitespace_and_comments(&mut self) {
-        loop {
-            // Skip whitespace
-            while let Some(c) = self.peek_char() {
-                if c.is_whitespace() {
-                    self.next_char();
-                } else {
-                    break;
-                }
-            }
-
-            // Check for comment
-            if self.peek_char() == Some('-') {
-                let pos = self.pos;
+    fn skip_whitespace(&mut self) {
+        while let Some(c) = self.peek_char() {
+            if c.is_whitespace() {
                 self.next_char();
-                if self.peek_char() == Some('-') {
-                    // Line comment
-                    self.next_char();
-                    while let Some(c) = self.peek_char() {
-                        if c == '\n' {
-                            break;
-                        }
-                        self.next_char();
-                    }
-                } else {
-                    // Not a comment, restore position
-                    // We can't easily restore, so we need to handle this differently
-                    // Actually we've already consumed the '-', so we need to handle it in next_token
-                    // For simplicity, let's not restore and handle '-' specially
-                    self.pos = pos;
-                    // Re-create the iterator from current position
-                    self.chars = self.input[pos..].char_indices().peekable();
-                    break;
-                }
             } else {
                 break;
             }
@@ -311,7 +281,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn next_token(&mut self) -> ParseResult<Token> {
-        self.skip_whitespace_and_comments();
+        self.skip_whitespace();
 
         let start = self.pos;
         let start_line = self.line;
