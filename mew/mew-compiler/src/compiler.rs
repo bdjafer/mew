@@ -68,6 +68,10 @@ impl Compiler {
         // Second pass: add types and edges
         for def in &defs {
             match def {
+                OntologyDef::TypeAlias(_) => {
+                    // Type aliases are expanded at use site - nothing to register
+                    // The modifiers are applied when the alias is used in an attribute
+                }
                 OntologyDef::Node(n) => {
                     self.add_node_type(&mut builder, n)?;
                 }
@@ -132,8 +136,31 @@ impl Compiler {
     ) -> CompileResult<TypeId> {
         let mut type_builder = builder.add_type(&node_def.name);
 
+        // Add parent types for inheritance
+        for parent in &node_def.parents {
+            type_builder = type_builder.extends(parent);
+        }
+
         for attr_def in &node_def.attrs {
             let mut attr = AttrDef::new(&attr_def.name, &attr_def.type_name);
+
+            // Handle nullable types
+            if attr_def.nullable {
+                attr = attr.nullable();
+            }
+
+            // Handle inline default value (= expr)
+            if let Some(default_expr) = &attr_def.default_value {
+                if let Some(value) = expr_to_value(default_expr) {
+                    attr = attr.with_default(value);
+                }
+                // For now(), we need special handling - just mark as having default
+                // The actual now() value would be computed at runtime
+                if is_now_call(default_expr) {
+                    // Mark as having a timestamp default (computed at runtime)
+                    attr = attr.with_default(Value::Timestamp(0)); // Placeholder
+                }
+            }
 
             // Process modifiers and expand to constraints
             for modifier in &attr_def.modifiers {
@@ -186,6 +213,36 @@ impl Compiler {
                             });
                         }
                     }
+                    AttrModifier::InValues(values) => {
+                        // Generate enum constraint
+                        let value_strs: Vec<String> = values
+                            .iter()
+                            .filter_map(expr_to_value)
+                            .map(|v| format!("{:?}", v))
+                            .collect();
+                        if !value_strs.is_empty() {
+                            self.generated_type_constraints.push(GeneratedConstraint {
+                                name: format!("_{}_{}_{}", node_def.name, attr_def.name, "enum"),
+                                on_type: node_def.name.clone(),
+                                condition: format!(
+                                    "t.{} IN [{}]",
+                                    attr_def.name,
+                                    value_strs.join(", ")
+                                ),
+                            });
+                        }
+                    }
+                    AttrModifier::Match(pattern) => {
+                        // Generate regex constraint
+                        self.generated_type_constraints.push(GeneratedConstraint {
+                            name: format!("_{}_{}_{}", node_def.name, attr_def.name, "match"),
+                            on_type: node_def.name.clone(),
+                            condition: format!(
+                                "t.{} MATCHES \"{}\"",
+                                attr_def.name, pattern
+                            ),
+                        });
+                    }
                 }
             }
 
@@ -214,7 +271,56 @@ impl Compiler {
             edge_builder = edge_builder.param(param_name, param_type);
         }
 
-        // Process modifiers
+        // Process edge attributes
+        for attr_def in &edge_def.attrs {
+            let mut attr = AttrDef::new(&attr_def.name, &attr_def.type_name);
+
+            // Handle nullable types
+            if attr_def.nullable {
+                attr = attr.nullable();
+            }
+
+            // Handle inline default value
+            if let Some(default_expr) = &attr_def.default_value {
+                if let Some(value) = expr_to_value(default_expr) {
+                    attr = attr.with_default(value);
+                }
+                if is_now_call(default_expr) {
+                    attr = attr.with_default(Value::Timestamp(0)); // Placeholder
+                }
+            }
+
+            // Process modifiers
+            for modifier in &attr_def.modifiers {
+                match modifier {
+                    AttrModifier::Required => {
+                        attr = attr.required();
+                    }
+                    AttrModifier::Unique => {
+                        attr = attr.unique();
+                    }
+                    AttrModifier::Default(expr) => {
+                        if let Some(value) = expr_to_value(expr) {
+                            attr = attr.with_default(value);
+                        }
+                    }
+                    AttrModifier::Range { min, max } => {
+                        let min_val = min.as_ref().and_then(expr_to_value);
+                        let max_val = max.as_ref().and_then(expr_to_value);
+                        attr = attr.with_range(min_val, max_val);
+                    }
+                    AttrModifier::InValues(_) | AttrModifier::Match(_) => {
+                        // These are constraint-generating modifiers
+                        // For edge attributes, we'd generate edge-level constraints
+                        // For now, just skip - runtime constraint checking will handle them
+                    }
+                }
+            }
+
+            edge_builder = edge_builder.attr(attr);
+        }
+
+        // Process edge modifiers
         for modifier in &edge_def.modifiers {
             match modifier {
                 EdgeModifier::Acyclic => {
@@ -228,6 +334,17 @@ impl Compiler {
                 }
                 EdgeModifier::Unique => {
                     edge_builder = edge_builder.unique_edge();
+                }
+                EdgeModifier::NoSelf => {
+                    // Generate no-self constraint
+                    self.generated_edge_constraints.push(GeneratedConstraint {
+                        name: format!("_{}_no_self", edge_def.name),
+                        on_type: edge_def.name.clone(),
+                        condition: "source != target".to_string(),
+                    });
+                }
+                EdgeModifier::Symmetric => {
+                    edge_builder = edge_builder.symmetric();
                 }
                 EdgeModifier::OnKill(action) => {
                     let registry_action = match action {
@@ -263,6 +380,11 @@ fn expr_to_value(expr: &mew_parser::Expr) -> Option<Value> {
         },
         _ => None,
     }
+}
+
+/// Check if an expression is a `now()` function call.
+fn is_now_call(expr: &mew_parser::Expr) -> bool {
+    matches!(expr, mew_parser::Expr::FnCall(fc) if fc.name.eq_ignore_ascii_case("now") && fc.args.is_empty())
 }
 
 /// Compile ontology source into a Registry.

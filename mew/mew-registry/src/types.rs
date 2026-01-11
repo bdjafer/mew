@@ -12,6 +12,8 @@ pub struct AttrDef {
     pub type_name: String,
     /// Whether this attribute is required.
     pub required: bool,
+    /// Whether this attribute can be null.
+    pub nullable: bool,
     /// Whether this attribute must be unique across instances.
     pub unique: bool,
     /// Default value if not provided.
@@ -28,6 +30,7 @@ impl AttrDef {
             name: name.into(),
             type_name: type_name.into(),
             required: false,
+            nullable: false,
             unique: false,
             default: None,
             min: None,
@@ -37,6 +40,11 @@ impl AttrDef {
 
     pub fn required(mut self) -> Self {
         self.required = true;
+        self
+    }
+
+    pub fn nullable(mut self) -> Self {
+        self.nullable = true;
         self
     }
 

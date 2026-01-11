@@ -106,6 +106,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "mew-repl"
+version = "0.1.0"
+dependencies = [
+ "mew-analyzer",
+ "mew-compiler",
+ "mew-constraint",
+ "mew-core",
+ "mew-graph",
+ "mew-journal",
+ "mew-mutation",
+ "mew-parser",
+ "mew-pattern",
+ "mew-query",
+ "mew-registry",
+ "mew-rule",
+ "mew-session",
+ "mew-transaction",
+ "thiserror",
+]
+
+[[package]]
 name = "mew-rule"
 version = "0.1.0"
 dependencies = [

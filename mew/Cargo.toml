@@ -15,6 +15,7 @@ members = [
     "mew-transaction",
     "mew-journal",
     "mew-session",
+    "mew-repl",
 ]
 
 [workspace.package]

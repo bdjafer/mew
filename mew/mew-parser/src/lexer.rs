@@ -45,6 +45,8 @@ pub enum TokenKind {
     Edge,
     Constraint,
     Rule,
+    Type,
+    In,
     On,
     Read,
     Serializable,
@@ -90,6 +92,7 @@ pub enum TokenKind {
     Dollar,   // $
     Concat,   // ++
     Range,    // ..
+    Question, // ?
 
     // End of file
     Eof,
@@ -137,6 +140,8 @@ impl TokenKind {
             TokenKind::Edge => "edge",
             TokenKind::Constraint => "constraint",
             TokenKind::Rule => "rule",
+            TokenKind::Type => "type",
+            TokenKind::In => "in",
             TokenKind::On => "ON",
             TokenKind::Read => "READ",
             TokenKind::Serializable => "SERIALIZABLE",
@@ -178,6 +183,7 @@ impl TokenKind {
             TokenKind::Dollar => "$",
             TokenKind::Concat => "++",
             TokenKind::Range => "..",
+            TokenKind::Question => "?",
             TokenKind::Eof => "end of input",
         }
     }
@@ -389,6 +395,7 @@ impl<'a> Lexer<'a> {
             '|' => TokenKind::Pipe,
             '#' => TokenKind::Hash,
             '$' => TokenKind::Dollar,
+            '?' => TokenKind::Question,
             '"' => self.scan_string(start, start_line, start_col)?,
             '_' | 'a'..='z' | 'A'..='Z' => {
                 self.scan_ident_or_keyword(c, start, start_line, start_col)
@@ -514,6 +521,8 @@ impl<'a> Lexer<'a> {
             "EDGE" => TokenKind::Edge,
             "CONSTRAINT" => TokenKind::Constraint,
             "RULE" => TokenKind::Rule,
+            "TYPE" => TokenKind::Type,
+            "IN" => TokenKind::In,
             "ON" => TokenKind::On,
             // AUTO, PRIORITY, REQUIRED, UNIQUE, DEFAULT are context-specific
             // and handled as identifiers to avoid conflicts with attribute names
@@ -771,5 +780,20 @@ mod tests {
         assert_eq!(tokens[0].span.column, 1);
         assert_eq!(tokens[1].span.line, 2);
         assert_eq!(tokens[1].span.column, 1);
+    }
+
+    #[test]
+    fn test_nullable_type_syntax() {
+        let kinds = tokenize("name: String?");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident("name".into()),
+                TokenKind::Colon,
+                TokenKind::Ident("String".into()),
+                TokenKind::Question,
+                TokenKind::Eof
+            ]
+        );
     }
 }
