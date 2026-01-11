@@ -7,6 +7,6 @@ mod builder;
 mod registry;
 mod types;
 
-pub use builder::RegistryBuilder;
+pub use builder::{RegistryBuilder, RegistryError};
 pub use registry::Registry;
 pub use types::*;

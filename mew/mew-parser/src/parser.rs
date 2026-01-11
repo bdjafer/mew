@@ -1032,6 +1032,322 @@ pub fn parse_match(input: &str) -> ParseResult<MatchStmt> {
     }
 }
 
+/// Parse ontology definitions from source text.
+pub fn parse_ontology(input: &str) -> ParseResult<Vec<OntologyDef>> {
+    Parser::new(input)?.parse_ontology_defs()
+}
+
+impl Parser {
+    /// Parse multiple ontology definitions.
+    pub fn parse_ontology_defs(&mut self) -> ParseResult<Vec<OntologyDef>> {
+        let mut defs = Vec::new();
+
+        while !self.check(&TokenKind::Eof) {
+            defs.push(self.parse_ontology_def()?);
+        }
+
+        Ok(defs)
+    }
+
+    /// Parse a single ontology definition.
+    fn parse_ontology_def(&mut self) -> ParseResult<OntologyDef> {
+        let token = self.peek().clone();
+        match &token.kind {
+            TokenKind::Node => self.parse_node_type_def().map(OntologyDef::Node),
+            TokenKind::Edge => self.parse_edge_type_def().map(OntologyDef::Edge),
+            TokenKind::Constraint => self.parse_constraint_def().map(OntologyDef::Constraint),
+            TokenKind::Rule => self.parse_rule_def().map(OntologyDef::Rule),
+            _ => Err(ParseError::unexpected_token(
+                token.span,
+                "node, edge, constraint, or rule",
+                token.kind.name(),
+            )),
+        }
+    }
+
+    /// Parse a node type definition.
+    /// Syntax: node TypeName [extends Parent] { attr: Type [modifiers], ... }
+    fn parse_node_type_def(&mut self) -> ParseResult<NodeTypeDef> {
+        let start = self.expect(&TokenKind::Node)?.span;
+        let name = self.expect_ident()?;
+
+        // Parse attribute definitions in braces
+        let attrs = if self.check(&TokenKind::LBrace) {
+            self.parse_attr_defs()?
+        } else {
+            Vec::new()
+        };
+
+        let span = self.span_from(start);
+        Ok(NodeTypeDef { name, attrs, span })
+    }
+
+    /// Parse attribute definitions: { name: Type [modifiers], ... }
+    fn parse_attr_defs(&mut self) -> ParseResult<Vec<AttrDef>> {
+        self.expect(&TokenKind::LBrace)?;
+
+        let mut attrs = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            attrs.push(self.parse_attr_def()?);
+            // Comma is optional between attrs
+            if self.check(&TokenKind::Comma) {
+                self.advance();
+            }
+        }
+
+        self.expect(&TokenKind::RBrace)?;
+        Ok(attrs)
+    }
+
+    /// Parse a single attribute definition: name: Type [modifiers]
+    fn parse_attr_def(&mut self) -> ParseResult<AttrDef> {
+        let start = self.peek().span;
+        let name = self.expect_ident()?;
+        self.expect(&TokenKind::Colon)?;
+        let type_name = self.expect_ident()?;
+
+        // Parse optional modifiers in brackets
+        let modifiers = if self.check(&TokenKind::LBracket) {
+            self.parse_attr_modifiers()?
+        } else {
+            Vec::new()
+        };
+
+        let span = self.span_from(start);
+        Ok(AttrDef {
+            name,
+            type_name,
+            modifiers,
+            span,
+        })
+    }
+
+    /// Parse attribute modifiers: [required, unique, default = x, >= n, <= n]
+    fn parse_attr_modifiers(&mut self) -> ParseResult<Vec<AttrModifier>> {
+        self.expect(&TokenKind::LBracket)?;
+
+        let mut modifiers = Vec::new();
+        while !self.check(&TokenKind::RBracket) && !self.check(&TokenKind::Eof) {
+            modifiers.push(self.parse_attr_modifier()?);
+            if self.check(&TokenKind::Comma) {
+                self.advance();
+            }
+        }
+
+        self.expect(&TokenKind::RBracket)?;
+        Ok(modifiers)
+    }
+
+    /// Parse a single attribute modifier.
+    fn parse_attr_modifier(&mut self) -> ParseResult<AttrModifier> {
+        if self.check_ident("required") {
+            self.advance();
+            Ok(AttrModifier::Required)
+        } else if self.check_ident("unique") {
+            self.advance();
+            Ok(AttrModifier::Unique)
+        } else if self.check_ident("default") {
+            self.advance();
+            self.expect(&TokenKind::Eq)?;
+            let value = self.parse_expr()?;
+            Ok(AttrModifier::Default(value))
+        } else if self.check(&TokenKind::GtEq) {
+            self.advance();
+            let min = self.parse_expr()?;
+            Ok(AttrModifier::Range {
+                min: Some(min),
+                max: None,
+            })
+        } else if self.check(&TokenKind::LtEq) {
+            self.advance();
+            let max = self.parse_expr()?;
+            Ok(AttrModifier::Range {
+                min: None,
+                max: Some(max),
+            })
+        } else {
+            let token = self.peek();
+            Err(ParseError::unexpected_token(
+                token.span,
+                "modifier",
+                token.kind.name(),
+            ))
+        }
+    }
+
+    /// Parse an edge type definition.
+    /// Syntax: edge EdgeName(param: Type, ...) [modifiers]
+    fn parse_edge_type_def(&mut self) -> ParseResult<EdgeTypeDef> {
+        let start = self.expect(&TokenKind::Edge)?.span;
+        let name = self.expect_ident()?;
+
+        // Parse parameters
+        self.expect(&TokenKind::LParen)?;
+        let mut params = Vec::new();
+        while !self.check(&TokenKind::RParen) && !self.check(&TokenKind::Eof) {
+            let param_name = self.expect_ident()?;
+            self.expect(&TokenKind::Colon)?;
+            // Accept 'any' keyword as a type constraint
+            let param_type = if self.check(&TokenKind::Any) {
+                self.advance();
+                "any".to_string()
+            } else {
+                self.expect_ident()?
+            };
+            params.push((param_name, param_type));
+            if self.check(&TokenKind::Comma) {
+                self.advance();
+            }
+        }
+        self.expect(&TokenKind::RParen)?;
+
+        // Parse optional modifiers
+        let modifiers = if self.check(&TokenKind::LBracket) {
+            self.parse_edge_modifiers()?
+        } else {
+            Vec::new()
+        };
+
+        let span = self.span_from(start);
+        Ok(EdgeTypeDef {
+            name,
+            params,
+            modifiers,
+            span,
+        })
+    }
+
+    /// Parse edge modifiers: [acyclic, unique, on_kill: cascade]
+    fn parse_edge_modifiers(&mut self) -> ParseResult<Vec<EdgeModifier>> {
+        self.expect(&TokenKind::LBracket)?;
+
+        let mut modifiers = Vec::new();
+        while !self.check(&TokenKind::RBracket) && !self.check(&TokenKind::Eof) {
+            modifiers.push(self.parse_edge_modifier()?);
+            if self.check(&TokenKind::Comma) {
+                self.advance();
+            }
+        }
+
+        self.expect(&TokenKind::RBracket)?;
+        Ok(modifiers)
+    }
+
+    /// Parse a single edge modifier.
+    fn parse_edge_modifier(&mut self) -> ParseResult<EdgeModifier> {
+        if self.check_ident("acyclic") {
+            self.advance();
+            Ok(EdgeModifier::Acyclic)
+        } else if self.check_ident("unique") {
+            self.advance();
+            Ok(EdgeModifier::Unique)
+        } else if self.check_ident("on_kill") {
+            self.advance();
+            self.expect(&TokenKind::Colon)?;
+            // Accept both keyword and identifier for on_kill actions
+            let action = if self.check(&TokenKind::Cascade) || self.check_ident("cascade") {
+                self.advance();
+                OnKillAction::Cascade
+            } else if self.check_ident("restrict") {
+                self.advance();
+                OnKillAction::Restrict
+            } else if self.check_ident("set_null") {
+                self.advance();
+                OnKillAction::SetNull
+            } else {
+                let token = self.peek();
+                return Err(ParseError::unexpected_token(
+                    token.span,
+                    "cascade, restrict, or set_null",
+                    token.kind.name(),
+                ));
+            };
+            Ok(EdgeModifier::OnKill(action))
+        } else {
+            let token = self.peek();
+            Err(ParseError::unexpected_token(
+                token.span,
+                "edge modifier",
+                token.kind.name(),
+            ))
+        }
+    }
+
+    /// Parse a constraint definition.
+    /// Syntax: constraint Name on Type: condition
+    fn parse_constraint_def(&mut self) -> ParseResult<ConstraintDef> {
+        let start = self.expect(&TokenKind::Constraint)?.span;
+        let name = self.expect_ident()?;
+        self.expect(&TokenKind::On)?;
+        let on_type = self.expect_ident()?;
+        self.expect(&TokenKind::Colon)?;
+        let condition = self.parse_expr()?;
+
+        let span = self.span_from(start);
+        Ok(ConstraintDef {
+            name,
+            on_type,
+            condition,
+            span,
+        })
+    }
+
+    /// Parse a rule definition.
+    /// Syntax: rule Name on Type [auto] [priority N]: { statements }
+    fn parse_rule_def(&mut self) -> ParseResult<RuleDef> {
+        let start = self.expect(&TokenKind::Rule)?.span;
+        let name = self.expect_ident()?;
+        self.expect(&TokenKind::On)?;
+        let on_type = self.expect_ident()?;
+
+        let mut auto = false;
+        let mut priority = None;
+
+        // Parse optional modifiers
+        if self.check(&TokenKind::LBracket) {
+            self.advance();
+            while !self.check(&TokenKind::RBracket) && !self.check(&TokenKind::Eof) {
+                if self.check_ident("auto") {
+                    self.advance();
+                    auto = true;
+                } else if self.check_ident("priority") {
+                    self.advance();
+                    priority = Some(self.expect_int()?);
+                }
+                if self.check(&TokenKind::Comma) {
+                    self.advance();
+                }
+            }
+            self.expect(&TokenKind::RBracket)?;
+        }
+
+        self.expect(&TokenKind::Colon)?;
+
+        // Parse production statements
+        let mut production = Vec::new();
+        if self.check(&TokenKind::LBrace) {
+            self.advance();
+            while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+                production.push(self.parse_stmt()?);
+            }
+            self.expect(&TokenKind::RBrace)?;
+        } else {
+            // Single statement
+            production.push(self.parse_stmt()?);
+        }
+
+        let span = self.span_from(start);
+        Ok(RuleDef {
+            name,
+            on_type,
+            auto,
+            priority,
+            production,
+            span,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
