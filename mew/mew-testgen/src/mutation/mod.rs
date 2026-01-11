@@ -69,9 +69,10 @@ impl<'a> MutationGenerator<'a> {
 
         let var = self.next_var();
 
-        // Generate all required attributes
+        // Generate all required attributes (including inherited)
+        let all_attrs = self.collect_all_attrs(type_info);
         let mut attrs = Vec::new();
-        for attr in &type_info.attrs {
+        for attr in &all_attrs {
             if attr.required || rng.gen_bool(0.5) {
                 let gen_value = attr.generate_value_with_aliases(rng, &self.schema.type_aliases);
                 attrs.push((attr.name.clone(), self.value_to_mew(&gen_value.value)));
@@ -104,9 +105,13 @@ impl<'a> MutationGenerator<'a> {
 
     /// SPAWN missing required attribute - should fail
     fn gen_spawn_missing_required(&mut self, rng: &mut impl Rng) -> Option<GeneratedMutation> {
-        // Find a type with required attributes
+        // Find a type with required attributes (including inherited)
+        let node_types = &self.schema.node_types;
         let types_with_required: Vec<(&String, &NodeTypeInfo)> = self.schema.node_types.iter()
-            .filter(|(_, info)| info.attrs.iter().any(|a| a.required))
+            .filter(|(_, info)| {
+                let all_attrs = Self::collect_all_attrs_static(info, node_types);
+                all_attrs.iter().any(|a| a.required)
+            })
             .collect();
 
         if types_with_required.is_empty() {
@@ -116,14 +121,18 @@ impl<'a> MutationGenerator<'a> {
         let (type_name, type_info) = types_with_required[rng.gen_range(0..types_with_required.len())];
         let var = self.next_var();
 
-        // Skip the required attribute
-        let required_attr = type_info.attrs.iter()
+        // Get all attrs including inherited
+        let all_attrs = self.collect_all_attrs(type_info);
+
+        // Skip one required attribute
+        let required_attr = all_attrs.iter()
             .find(|a| a.required)?;
 
-        // Generate other attrs but skip required one
+        // Generate other required attrs but skip selected required one
         let type_aliases = &self.schema.type_aliases;
-        let attrs: Vec<(String, String)> = type_info.attrs.iter()
-            .filter(|a| a.name != required_attr.name && !a.required)
+        let attrs: Vec<(String, String)> = all_attrs.iter()
+            .filter(|a| a.name != required_attr.name)
+            .filter(|a| a.required) // Only include other required attrs
             .map(|a| {
                 let gen_value = a.generate_value_with_aliases(rng, type_aliases);
                 (a.name.clone(), self.value_to_mew(&gen_value.value))
@@ -156,9 +165,13 @@ impl<'a> MutationGenerator<'a> {
 
     /// SPAWN with out-of-range value - should fail
     fn gen_spawn_out_of_range(&mut self, rng: &mut impl Rng) -> Option<GeneratedMutation> {
-        // Find a type with range constraints
+        // Find a type with range constraints (including inherited)
+        let node_types = &self.schema.node_types;
         let types_with_range: Vec<(&String, &NodeTypeInfo)> = self.schema.node_types.iter()
-            .filter(|(_, info)| info.attrs.iter().any(|a| a.min.is_some() || a.max.is_some()))
+            .filter(|(_, info)| {
+                let all_attrs = Self::collect_all_attrs_static(info, node_types);
+                all_attrs.iter().any(|a| a.min.is_some() || a.max.is_some())
+            })
             .collect();
 
         if types_with_range.is_empty() {
@@ -168,7 +181,10 @@ impl<'a> MutationGenerator<'a> {
         let (type_name, type_info) = types_with_range[rng.gen_range(0..types_with_range.len())];
         let var = self.next_var();
 
-        let range_attr = type_info.attrs.iter()
+        // Get all attrs including inherited
+        let all_attrs = self.collect_all_attrs(type_info);
+
+        let range_attr = all_attrs.iter()
             .find(|a| a.min.is_some() || a.max.is_some())?;
 
         // Generate an out-of-range value
@@ -180,9 +196,9 @@ impl<'a> MutationGenerator<'a> {
             return None;
         };
 
-        // Generate attrs with one out of range
+        // Generate attrs with one out of range (include all required, including inherited)
         let mut attrs = Vec::new();
-        for attr in &type_info.attrs {
+        for attr in &all_attrs {
             if attr.name == range_attr.name {
                 attrs.push((attr.name.clone(), self.value_to_mew(&out_of_range)));
             } else if attr.required {
@@ -281,6 +297,33 @@ impl<'a> MutationGenerator<'a> {
     fn next_var(&mut self) -> String {
         self.var_counter += 1;
         format!("v{}", self.var_counter)
+    }
+
+    /// Collect all attributes for a type, including inherited ones
+    fn collect_all_attrs(&self, type_info: &NodeTypeInfo) -> Vec<AttrInfo> {
+        Self::collect_all_attrs_static(type_info, &self.schema.node_types)
+    }
+
+    /// Static version for use in closures
+    fn collect_all_attrs_static(
+        type_info: &NodeTypeInfo,
+        node_types: &std::collections::HashMap<String, NodeTypeInfo>,
+    ) -> Vec<AttrInfo> {
+        let mut attrs = type_info.attrs.clone();
+
+        // Add parent attrs
+        for parent_name in &type_info.parents {
+            if let Some(parent) = node_types.get(parent_name) {
+                let parent_attrs = Self::collect_all_attrs_static(parent, node_types);
+                for attr in parent_attrs {
+                    if !attrs.iter().any(|a| a.name == attr.name) {
+                        attrs.push(attr);
+                    }
+                }
+            }
+        }
+
+        attrs
     }
 
     fn value_to_mew(&self, v: &Value) -> String {
