@@ -126,6 +126,7 @@ dependencies = [
  "mew-graph",
  "mew-parser",
  "mew-query",
+ "mew-registry",
  "mew-transaction",
  "thiserror",
 ]
@@ -138,6 +139,7 @@ dependencies = [
  "mew-core",
  "mew-graph",
  "mew-mutation",
+ "mew-registry",
  "mew-rule",
  "thiserror",
 ]
