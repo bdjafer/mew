@@ -1,0 +1,25 @@
+[package]
+name = "mew-repl"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mew"
+path = "src/main.rs"
+
+[dependencies]
+mew-core.workspace = true
+mew-graph.workspace = true
+mew-registry.workspace = true
+mew-parser.workspace = true
+mew-analyzer.workspace = true
+mew-compiler.workspace = true
+mew-pattern.workspace = true
+mew-query.workspace = true
+mew-mutation.workspace = true
+mew-constraint.workspace = true
+mew-rule.workspace = true
+mew-transaction.workspace = true
+mew-journal.workspace = true
+mew-session.workspace = true
+thiserror.workspace = true
