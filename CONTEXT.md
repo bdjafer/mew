@@ -10,33 +10,7 @@
 
 # Part I: Vision
 
-## 1.1 The Problem
-
-Current approaches to artificial intelligence fall into two failure modes:
-
-**Symbolic systems** (knowledge graphs, ontologies, rule engines) are:
-- Brittle: They break when encountering situations outside their designed scope
-- Static: They cannot learn or adapt their own structure
-- Labor-intensive: Humans must hand-engineer all knowledge
-
-**Neural systems** (deep learning, LLMs) are:
-- Opaque: No stable, inspectable representation of knowledge
-- Ungrounded: Symbols have no fixed meaning, leading to drift
-- Inefficient: Require massive compute for simple reasoning
-- Unreliable: Cannot guarantee constraints or invariants
-
-Neither approach alone produces systems that can:
-- Learn new concepts and relationships
-- Maintain stable, inspectable knowledge
-- Guarantee behavioral constraints
-- Reason reliably across domains
-- Improve themselves without catastrophic drift
-
-**The gap:** We lack a substrate that combines the learnability of neural systems with the stability and inspectability of symbolic systems.
-
----
-
-## 1.2 The Hypothesis
+## 1.1 The Hypothesis
 
 **Core hypothesis:** Reality is structured as a higher-order hypergraph.
 
@@ -52,30 +26,6 @@ If this hypothesis is correct, then a system whose internal representation match
 - Maintain semantic stability through explicit constraint
 - Reason by graph transformation
 - Model itself (self-representation)
-
-**The bet:** Build the right substrate, and intelligence becomes a matter of learning the right structure within it.
-
----
-
-## 1.3 The Goal
-
-**Build an AGI system grounded in higher-order hypergraphs.**
-
-This requires:
-
-1. **A database** that stores higher-order hypergraphs efficiently
-2. **An ontology system** that constrains graph structure and enables optimization
-3. **A rewrite engine** that transforms graphs according to rules
-4. **A learning system** that proposes structural changes
-5. **A selection mechanism** that evaluates and commits changes
-6. **A grounding system** that connects symbols to reality
-
-The end state is a system that:
-- Learns ontologies from experience
-- Reasons by graph transformation
-- Maintains coherent, inspectable beliefs
-- Improves itself within safe constraints
-- Generalizes across domains
 
 ---
 
@@ -150,14 +100,10 @@ It answers: What is a type? What is a constraint? What is a rule?
 
 Layer 0 is:
 - **Fixed:** It does not change (or changes extremely rarely via formal process)
-- **Hardcoded:** It is built into the engine, not stored as data
+- **Hardcoded:** It is built into the kernel, not stored as data
 - **Universal:** All ontologies are expressed in terms of Layer 0
 - **Self-describing:** Ontologies are stored as Layer 0 structures in the graph itself
 
-Layer 0 defines approximately:
-- 26 node types (for describing ontology structure)
-- 39 edge types (for connecting ontology components)
-- 19 constraints (ensuring ontology validity)
 
 When you write:
 
@@ -178,7 +124,7 @@ This compiles to Layer 0 structure:
 
 ## 2.4 The Compilation Model
 
-Ontologies are written in a domain-specific language (DSL) and **compiled** into the system.
+Ontologies are written in a domain-specific language (DSL) and **compiled** into a kernel.
 
 **Compilation does:**
 1. Parse ontology text into an AST
@@ -190,7 +136,7 @@ Ontologies are written in a domain-specific language (DSL) and **compiled** into
 **Compilation does not:**
 - Execute at runtime (it runs once when loading)
 - Create user data (only ontology structure)
-- Modify the engine (it configures, not changes)
+- Modify the kernel (it configures, not changes)
 
 **Why compilation matters:**
 
@@ -321,7 +267,7 @@ All mutations pass through constraint checking. All type signatures are verified
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                           ENGINE                                     │
+│                           KERNEL                                     │
 │   ┌───────────────┐  ┌───────────────┐  ┌───────────────────────┐  │
 │   │  Graph Store  │  │  Constraint   │  │    Rule Executor      │  │
 │   │               │  │   Checker     │  │                       │  │
@@ -367,7 +313,7 @@ Ontology File (.hog)
        │             + Rule Registry
        │             + Indexes
        ▼
-   [Engine] ◄── Registries loaded, ontology active
+   [Kernel] ◄── Registries loaded, ontology active
 ```
 
 ### Observation Execution
@@ -567,7 +513,7 @@ We chose compiler-gating:
 createNode("_NodeType", { name: "NewType" })  // Error
 
 // ALLOWED
-engine.extendOntology(`node NewType { ... }`)  // Goes through compiler
+kernel.extendOntology(`node NewType { ... }`)  // Goes through compiler
 ```
 
 Benefits:
@@ -586,7 +532,7 @@ The compiler is the gatekeeper. This is a safety feature, not a limitation.
 
 ### Phase 1-2: The Substrate
 
-Build a production-ready HOHG database:
+Build a production-ready MEW database:
 - Higher-order hypergraph storage
 - Compiled ontologies
 - Constraint enforcement
@@ -733,14 +679,14 @@ Combine all components:
 **For using (user-first):**
 1. Context Document (Part II only)
 2. Ontology Language Reference
-3. HOHG Language Reference
+3. MEW Language Reference
 4. Test Ontologies (examples)
 
 ## 8.3 Quick Reference
 
 | I want to... | Go to... |
 |--------------|----------|
-| Understand what HOHG is | Context Document, Part I-II |
+| Understand what MEW is | Context Document, Part I-II |
 | See the design philosophy | Context Document, Part III |
 | Understand the architecture | Context Document, Part IV or Architecture Overview |
 | Know why decisions were made | Context Document, Part V |
@@ -748,7 +694,7 @@ Combine all components:
 | Read the formal specification | Layer 0 Specification |
 | Write an ontology | Ontology Language Reference |
 | See ontology examples | Test Ontologies (9 examples) |
-| Write queries | HOHG Language Reference |
+| Write queries | MEW Language Reference |
 | Implement the system | Architecture Overview + Implementation Plan |
 | Propose spec changes | Revision Protocol |
 | Look up a term | Glossary |
@@ -793,7 +739,7 @@ Systems, ideas and theories that relates with this design:
 
 # Closing
 
-This document is the entry point to the HOHG project. It captures the vision, philosophy, and key decisions made during design.
+This document is the entry point to the MEW project. It captures the vision, philosophy, and key decisions made during design.
 
 The specification is in Layer 0. The process is in the Revision Protocol. The examples are in the Test Ontologies. The implementation guidance is in the Architecture Overview and Implementation Plan.
 

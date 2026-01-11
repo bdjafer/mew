@@ -1,23 +1,14 @@
 # MEW
 
-**Minimum Executable World** — A nested hypergraph database.
+**Minimum Executable World** — A hypergraph rewriting kernel
 
 [![CI](https://github.com/bryandjafer/mew/actions/workflows/ci.yml/badge.svg)](https://github.com/bryandjafer/mew/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## What is MEW?
 
-A **nested hypergraph database** where:
-- **Hyperedges** connect any number of nodes (not just pairs)
-- **Edges can connect to edges** (higher-order relationships)
-- **Schema is stored as data** (self-describing)
-- **ACID transactions** with crash recovery
+Declare an ontology — types, relations, constraints, rules — compile it, then query and mutate a typed higher-order hypergraph where constraints hold and rules fire automatically.
 
-```
-Standard Graph:        Hypergraph:           Higher-Order:
-  A ──── B              A ──┬── B              A ──┬── B
-                            │                      │
-                            C                 [confidence: 0.9]
 ```
 
 ## Quick Start
