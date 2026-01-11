@@ -2323,13 +2323,15 @@ type Action =
 
 # 16. Complete Grammar
 
+For shared constructs (Types, Expressions, Literals, Lexical), see **Part I: Foundations §6.3**.
+
 ```ebnf
 (* Top Level *)
 OntologyFile     = OntologyDecl? Declaration*
 OntologyDecl     = "ontology" Identifier (":" QualIdent ("," QualIdent)*)? "{" Declaration* "}"
 Declaration      = TypeAliasDecl | NodeTypeDecl | EdgeTypeDecl | ConstraintDecl | RuleDecl
 
-(* Type Aliases - scalar with modifiers OR union types *)
+(* Type Aliases *)
 TypeAliasDecl    = "type" Identifier "=" TypeExpr AttrModifiers?
                  | "type" Identifier "=" TypeExpr ("|" TypeExpr)+
 
@@ -2342,14 +2344,14 @@ AttrModifiers    = "[" AttrModifier ("," AttrModifier)* "]"
 AttrModifier     = "required" | "unique" 
                  | "indexed" (":" ("asc" | "desc"))?
                  | ">=" Literal | "<=" Literal | ">" Literal | "<" Literal
-                 | IntLiteral ".." IntLiteral                 (* range shorthand *)
+                 | IntLiteral ".." IntLiteral
                  | "in:" "[" Literal ("," Literal)* "]"
                  | "match:" StringLiteral
                  | "length:" IntLiteral ".." IntLiteral
 DefaultValue     = "=" (Literal | ConstantExpr)
 ConstantExpr     = "now()"
 
-(* Edge Types - braces optional *)
+(* Edge Types *)
 EdgeTypeDecl     = DocComment? "edge" Identifier "(" SigParams ")" EdgeModifiers? ("{" AttributeDecl* "}")?
 SigParams        = SigParam ("," SigParam)*
 SigParam         = Identifier ":" TypeExpr
@@ -2389,200 +2391,67 @@ TransitiveMod    = "+" | "*"
 Targets          = Target ("," Target)*
 Target           = Identifier | "_"
 WhereClause      = "where" Expr
-
-(* Types *)
-TypeExpr         = UnionType
-UnionType        = OptionalType ("|" OptionalType)*
-OptionalType     = PrimaryType "?"?
-PrimaryType      = QualIdent | EdgeRefType | "any" | ScalarType | "(" TypeExpr ")"
-EdgeRefType      = "edge" "<" (QualIdent | "any") ">"
-ScalarType       = "String" | "Int" | "Float" | "Bool" | "Timestamp" | "ID"
-
-(* Expressions *)
-Expr             = OrExpr
-OrExpr           = AndExpr ("or" AndExpr)*
-AndExpr          = EqualityExpr ("and" EqualityExpr)*
-EqualityExpr     = CompareExpr (("=" | "!=") CompareExpr)*
-CompareExpr      = AddExpr (("<" | ">" | "<=" | ">=") AddExpr)*
-AddExpr          = MulExpr (("+" | "-" | "++") MulExpr)*
-MulExpr          = UnaryExpr (("*" | "/" | "%") UnaryExpr)*
-UnaryExpr        = ("-" | "not")? PostfixExpr
-PostfixExpr      = PrimaryExpr ("." Identifier)*
-PrimaryExpr      = Literal | Identifier | CallExpr | ExistsExpr | "(" Expr ")"
-CallExpr         = Identifier "(" (Expr ("," Expr)*)? ")"
-ExistsExpr       = "not"? "exists" "(" Pattern ")"
 AttrAccess       = Identifier ("." Identifier)+
-
-(* Literals *)
-Literal          = StringLiteral | IntLiteral | FloatLiteral | BoolLiteral | NullLiteral
-
-(* Lexical *)
-Identifier       = [a-zA-Z_][a-zA-Z0-9_]*
-QualIdent        = Identifier ("::" Identifier)*
-DocComment       = "---" (~[\n\r])* 
 ```
 
 ---
 
 # 17. Complete Example
 
+A compact TaskManagement ontology demonstrating all DSL features:
+
 ```
 ontology TaskManagement : Layer0 {
 
-  -- ===========================================================================
-  -- TYPE ALIASES
-  -- ===========================================================================
-
+  -- Type aliases
   type Email = String [match: "^.+@.+\\..+$"]
   type Priority = Int [>= 0, <= 10]
   type TaskStatus = String [in: ["todo", "in_progress", "done", "blocked"]]
-  type ProjectStatus = String [in: ["active", "completed", "archived"]]
 
-  -- ===========================================================================
-  -- NODE TYPES
-  -- ===========================================================================
-
-  --- A person who can be assigned to tasks and belong to teams
+  -- Nodes
   node Person {
     name: String [required, length: 1..100],
     email: Email [required, unique, indexed],
-    role: String [in: ["admin", "member", "guest"]] = "member",
-    active: Bool = true,
-    created_at: Timestamp [required, indexed: desc] = now()
+    role: String [in: ["admin", "member", "guest"]] = "member"
   }
 
-  --- A team that groups people and owns projects
-  node Team {
-    name: String [required, unique, length: 1..100],
-    description: String? [length: 0..1000],
-    created_at: Timestamp [required] = now()
-  }
-
-  --- A project containing tasks
-  node Project {
-    name: String [required, length: 1..200],
-    status: ProjectStatus = "active",
-    deadline: Timestamp?,
-    created_at: Timestamp [required, indexed: desc] = now()
-  }
-
-  --- A task that can be assigned, have dependencies, and subtasks
+  node Team { name: String [required, unique] }
+  node Project { name: String [required], status: String = "active", deadline: Timestamp? }
   node Task {
-    title: String [required, length: 1..500],
-    description: String? [length: 0..5000],
+    title: String [required],
     status: TaskStatus = "todo",
     priority: Priority = 5,
-    estimated_hours: Float? [>= 0],
-    actual_hours: Float? [>= 0],
-    created_at: Timestamp [required, indexed: desc] = now(),
     completed_at: Timestamp?
   }
+  node Tag { name: String [required, unique, match: "^[a-z0-9-]+$"] }
 
-  --- A tag for categorizing tasks
-  node Tag {
-    name: String [required, unique, length: 1..50, match: "^[a-z0-9-]+$"],
-    color: String? [match: "^#[0-9A-Fa-f]{6}$"]
-  }
-
-  -- ===========================================================================
-  -- EDGE TYPES
-  -- ===========================================================================
-
-  --- Person belongs to a team
-  edge member_of(person: Person, team: Team) [unique] {
-    role: String [in: ["lead", "member"]] = "member",
-    joined_at: Timestamp [required] = now()
-  }
-
-  --- Team owns a project (no braces - no attributes)
-  edge owns(team: Team, project: Project) [
-    project -> 1,
-    on_kill_source: prevent
-  ]
-
-  --- Task belongs to a project
-  edge belongs_to(task: Task, project: Project) [
-    task -> 1,
-    on_kill_target: cascade
-  ]
-
-  --- Task assigned to a person
-  edge assigned_to(task: Task, person: Person) [task -> 0..1, on_kill_target: unlink] {
-    assigned_at: Timestamp [required] = now(),
-    assigned_by: String?
-  }
-
-  --- Task depends on another task (no braces)
+  -- Edges
+  edge member_of(person: Person, team: Team) [unique] { role: String = "member" }
+  edge owns(team: Team, project: Project) [project -> 1, on_kill_source: prevent]
+  edge belongs_to(task: Task, project: Project) [task -> 1, on_kill_target: cascade]
+  edge assigned_to(task: Task, person: Person) [task -> 0..1, on_kill_target: unlink]
   edge depends_on(downstream: Task, upstream: Task) [no_self, acyclic]
-
-  --- Task is subtask of another (no braces)
   edge subtask_of(child: Task, parent: Task) [no_self, acyclic, child -> 0..1]
-
-  --- Task has a tag (no braces)
   edge tagged(task: Task, tag: Tag) [unique]
 
-  -- ===========================================================================
-  -- CONSTRAINTS
-  -- ===========================================================================
+  -- Constraints
+  constraint completed_has_timestamp [message: "Completed tasks must have completed_at"]:
+    t: Task WHERE t.status = "done" => t.completed_at != null
 
-  --- Completed tasks must have completion timestamp
-  constraint completed_has_timestamp [message: "Completed tasks must have completed_at set"]:
-    t: Task
-    WHERE t.status = "done"
-    => t.completed_at != null
-
-  --- Subtasks must be in same project as parent
-  constraint subtask_same_project [message: "Subtask must be in the same project as its parent"]:
+  constraint subtask_same_project [message: "Subtask must be in same project"]:
     child: Task, parent: Task, p1: Project, p2: Project,
-    subtask_of(child, parent),
-    belongs_to(child, p1),
-    belongs_to(parent, p2)
+    subtask_of(child, parent), belongs_to(child, p1), belongs_to(parent, p2)
     => p1.id = p2.id
 
-  --- Blocked tasks should have a blocking dependency (soft)
-  constraint blocked_has_reason [soft, message: "Blocked tasks should have an incomplete dependency"]:
-    t: Task
-    WHERE t.status = "blocked"
-    => exists(
-      upstream: Task, depends_on(t, upstream)
-      WHERE upstream.status != "done"
-    )
-
-  -- ===========================================================================
-  -- RULES
-  -- ===========================================================================
-
-  --- Auto-set completion timestamp when task marked done
+  -- Rules
   rule auto_complete_timestamp [priority: 10]:
-    t: Task
-    WHERE t.status = "done" AND t.completed_at = null
-    =>
-    SET t.completed_at = now()
+    t: Task WHERE t.status = "done" AND t.completed_at = null
+    => SET t.completed_at = now()
 
-  --- Propagate completion: when all subtasks done, suggest parent completion
-  rule propagate_completion [priority: 5]:
-    parent: Task, child: Task,
-    subtask_of(child, parent)
-    WHERE child.status = "done"
-      AND parent.status != "done"
-      AND NOT EXISTS(
-        other: Task, subtask_of(other, parent)
-        WHERE other.status != "done"
-      )
-    =>
-    SET parent.status = "done"
-
-  --- Unblock task when all dependencies completed
   rule auto_unblock [priority: 8]:
-    t: Task
-    WHERE t.status = "blocked"
-      AND NOT EXISTS(
-        upstream: Task, depends_on(t, upstream)
-        WHERE upstream.status != "done"
-      )
-    =>
-    SET t.status = "todo"
-
+    t: Task WHERE t.status = "blocked"
+      AND NOT EXISTS(upstream: Task, depends_on(t, upstream) WHERE upstream.status != "done")
+    => SET t.status = "todo"
 }
 ```
 
@@ -2590,66 +2459,36 @@ ontology TaskManagement : Layer0 {
 
 # 18. Summary
 
-## 18.1 DX Features
+## 18.1 Modifier Quick Reference
 
-| Feature | Benefit | Compiles To |
-|---------|---------|-------------|
-| `type Alias = ...` | Reusable type definitions | Inline expansion |
-| `type Union = A \| B` | Union type aliases | Inline expansion |
-| Alias chaining | Build on existing aliases | Recursive expansion |
-| `= now()` | Auto-timestamps | Evaluated at creation |
-| `[required]` | Null validation | Constraint |
-| `[unique]` | Uniqueness validation | Constraint + Index |
-| `[N..M]` | Range shorthand | Constraints |
-| `[>= N, <= M]` | Range validation | Constraints |
-| `[in: [...]]` | Enum validation | Constraint |
-| `[match: "..."]` | Pattern validation | Constraint |
-| `[length: N..M]` | Length validation | Constraint |
-| `[indexed]` | Performance hint | Engine index |
-| `[no_self]` | No self-loops | Constraint |
-| `[acyclic]` | No cycles (⚠️ perf) | Constraint |
-| `[a -> 0..1]` | Cardinality | Constraint (at commit) |
-| `[symmetric]` | Order-independent edges | Storage + matching |
-| `[on_kill_*: cascade]` | Referential action | Rule (binary only) |
-| `[message: "..."]` | Error message | Constraint metadata |
-| Optional `{}` on edges | Cleaner syntax | — |
+| Modifier | Compiles To |
+|----------|-------------|
+| `[required]` | Constraint |
+| `[unique]` | Constraint + Index |
+| `[indexed]` | Engine index |
+| `[>= N]`, `[<= M]`, `[N..M]` | Constraint |
+| `[in: [...]]`, `[match: "..."]`, `[length: N..M]` | Constraint |
+| `[no_self]`, `[acyclic]` | Constraint |
+| `[a -> 0..1]` | Constraint (at commit) |
+| `[symmetric]` | Storage + matching |
+| `[on_kill_*: cascade\|unlink\|prevent]` | Rule (binary only) |
 
 ## 18.2 Key Semantics
 
-| Behavior | Description |
-|----------|-------------|
-| Cardinality timing | Checked at transaction COMMIT, not per-operation |
-| Auto-commit cardinality | Each statement is a transaction; cardinality checked immediately |
-| Symmetric cardinality | One constraint applies to both; conflicting values = compile error |
-| Transitive patterns | Default depth limit 100, silent truncation, cycle detection |
-| Referential actions | Binary edges only; use rules for n-ary |
-| Cascade depth | Counts toward depth limit (100); exceeding fails transaction |
-| Higher-order cascade | Unlinking edge auto-unlinks referencing edges |
-| Rule determinism | Equal priority → declaration order; parent before child |
-| `now()` in rules | Same value throughout single rule execution |
-| `now()` in rule WHERE | Evaluated at trigger time, not continuously |
-| `now()` in constraints | Not allowed (compile error) |
-| NULL in value modifiers | Constraints skip NULL values (use `[required]` to enforce) |
-| Edge attribute defaults | Apply at LINK time; braces optional if all have defaults |
-| Constraint names | Required (compile error if missing) |
+- **Cardinality**: Checked at COMMIT, not per-operation
+- **Referential actions**: Binary edges only; use rules for n-ary
+- **Rule ordering**: Priority → declaration order → parent before child
+- **`now()`**: Allowed in defaults/rules (evaluated once), forbidden in constraints
+- **NULL handling**: Value modifiers skip NULL; use `[required]` to enforce
 
-## 18.3 Execution Limits
+## 18.3 Limits
 
-| Limit | Default | Purpose |
-|-------|---------|---------|
-| Same-binding | 1 | Prevent rule re-execution with same bindings |
-| Action limit | 10,000 | Cap total rule actions per transaction |
-| Depth limit | 100 | Cap nested rule triggers |
-
-## 18.4 Design Principles Applied
-
-| Principle | How Applied |
-|-----------|-------------|
-| Graph-native | All sugar compiles to constraints/rules |
-| Explicit | All behavior is declared |
-| DX-focused | Common patterns are one-liners |
-| Inspectable | Expanded constraints are observable |
+| Limit | Default |
+|-------|---------|
+| Same-binding | 1 |
+| Action limit | 10,000 |
+| Depth limit | 100 |
 
 ---
 
-*End of Part II: Ontology DSL (Revised)*
+*End of Part II: Ontology DSL*

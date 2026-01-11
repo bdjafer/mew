@@ -3556,7 +3556,9 @@ interface ProfileStmt {
 
 ---
 
-# 33. Complete Grammar (HOHG Language)
+# 33. Complete Grammar (GQL)
+
+For shared constructs (Patterns, Types, Expressions, Literals), see **Part I: Foundations §6.3**.
 
 ```ebnf
 (* Statements *)
@@ -3648,147 +3650,23 @@ ExplainStmt      = "explain" Statement
 ProfileStmt      = "profile" Statement
 DryRunStmt       = "dry" "run" TransformationStmt
 
-(* Observation Control *)
+(* Query Control *)
 TimeoutClause    = "timeout" Duration
 Duration         = IntLiteral TimeUnit
 TimeUnit         = "ms" | "s" | "min" | "h"
-
-(* Patterns - shared with Ontology DSL *)
-Pattern          = PatternElem ("," PatternElem)* ("where" Expr)?
-PatternElem      = NodePattern | EdgePattern
-NodePattern      = Identifier ":" TypeExpr
-EdgePattern      = Identifier TransMod? "(" Targets ")" ("as" Identifier)? DepthMod?
-TransMod         = "+" | "*"
-Targets          = Target ("," Target)*
-Target           = Identifier | "_"
-DepthMod         = "[" "depth:" IntLiteral "]"
-
-(* Types - shared with Ontology DSL *)
-TypeExpr         = UnionType
-UnionType        = OptionalType ("|" OptionalType)*
-OptionalType     = PrimaryType "?"?
-PrimaryType      = QualIdent | EdgeRefType | "any" | ScalarType | "(" TypeExpr ")"
-EdgeRefType      = "edge" "<" (QualIdent | "any") ">"
-ScalarType       = "String" | "Int" | "Float" | "Bool" | "Timestamp" | "ID"
-
-(* Expressions - shared with Ontology DSL *)
-Expr             = OrExpr
-OrExpr           = AndExpr ("or" AndExpr)*
-AndExpr          = EqualityExpr ("and" EqualityExpr)*
-EqualityExpr     = CompareExpr (("=" | "!=") CompareExpr)*
-CompareExpr      = AddExpr (("<" | ">" | "<=" | ">=") AddExpr)*
-AddExpr          = MulExpr (("+" | "-" | "++") MulExpr)*
-MulExpr          = UnaryExpr (("*" | "/" | "%") UnaryExpr)*
-UnaryExpr        = ("-" | "not")? PostfixExpr
-PostfixExpr      = PrimaryExpr ("." Identifier | "(" (Expr ("," Expr)*)? ")")*
-PrimaryExpr      = Literal | Identifier | IdRef | AggregateExpr | ExistsExpr 
-                 | IfExpr | CaseExpr | CoalesceExpr | "(" Expr ")"
-AggregateExpr    = ("count" | "sum" | "avg" | "min" | "max" | "collect") "(" "distinct"? Expr ")"
-ExistsExpr       = "not"? "exists" "(" Pattern ")"
-IfExpr           = "if" Expr "then" Expr "else" Expr
-CaseExpr         = "case" Expr? WhenClause+ ElseClause? "end"
-WhenClause       = "when" Expr "then" Expr
-ElseClause       = "else" Expr
-CoalesceExpr     = "coalesce" "(" Expr ("," Expr)+ ")" | Expr "??" Expr
-
-(* Literals *)
-Literal          = StringLiteral | IntLiteral | FloatLiteral | BoolLiteral | NullLiteral
-Identifier       = [a-zA-Z_][a-zA-Z0-9_]*
-QualIdent        = Identifier ("::" Identifier)*
 ```
 
 ---
 
 # 34. Quick Reference
 
-## 34.1 Observation
-
-```
--- Pattern matching
-MATCH pattern WHERE condition RETURN projection ORDER BY expr LIMIT n
-
--- Path traversal
-WALK FROM start FOLLOW edge [depth: n] UNTIL condition RETURN nodes|edges|path|terminal
-
--- Direct access
-INSPECT #id RETURN attrs
-```
-
-## 34.2 Transformation
-
-```
--- Create node
-SPAWN var: Type { attr = value } RETURNING id|*
-
--- Remove node
-KILL #id|{match} CASCADE|NO CASCADE
-
--- Create edge (with optional inline spawn)
-LINK EdgeType(target, target) AS alias { attr = value }
-LINK EdgeType(SPAWN Type {...}, #existing) AS alias
-
--- Remove edge
-UNLINK #id|pattern|{match}
-
--- Modify attribute (single or multiple)
-SET #id.attr = value
-SET #id { attr1 = value1, attr2 = value2 }
-SET {match}.attr = value
-```
-
-## 34.3 Transaction
-
-```
-BEGIN [READ COMMITTED | SERIALIZABLE]
-  -- operations
-COMMIT | ROLLBACK
-
-SAVEPOINT name
-ROLLBACK TO name
-```
-
-## 34.4 Administration
-
-```
-LOAD ONTOLOGY FROM "file" | { source }
-EXTEND ONTOLOGY name { declarations }
-
-SHOW TYPES | EDGES | CONSTRAINTS | RULES | INDEXES | STATISTICS | STATUS
-SHOW TYPE name | EDGE name | ...
-
-CREATE INDEX name ON Type(attr)
-DROP INDEX name
-```
-
-## 34.5 Versioning
-
-```
-SNAPSHOT "label"
-SHOW VERSIONS
-CHECKOUT "version" READONLY | RESTORE
-DIFF "v1" "v2" DETAILED?
-
-CREATE BRANCH "name" FROM "version"?
-SWITCH BRANCH "name"
-SHOW BRANCHES
-DELETE BRANCH "name"
-MERGE BRANCH "source" INTO "target"?
-```
-
-## 34.6 Debug & Safety
-
-```
-EXPLAIN statement
-PROFILE statement
-DRY RUN transformation_statement
-
--- Query timeout
-MATCH ... RETURN ... TIMEOUT 5s
-
--- Safety overrides
-KILL { MATCH ... } FORCE
-CHECKOUT "version" RESTORE CONFIRM
-```
+See individual sections for detailed syntax and examples:
+- **Observation**: §20 MATCH, §21 WALK, §22 INSPECT
+- **Transformation**: §23 SPAWN, §24 KILL, §25 LINK, §26 UNLINK, §27 SET
+- **Transaction**: §28 BEGIN/COMMIT/ROLLBACK
+- **Administration**: §29 LOAD, EXTEND, SHOW, INDEX
+- **Versioning**: §30 SNAPSHOT, CHECKOUT, DIFF, BRANCH, MERGE
+- **Debug**: §31 Query Control, §32 EXPLAIN/PROFILE
 
 ---
 
@@ -3813,9 +3691,8 @@ CHECKOUT "version" RESTORE CONFIRM
 | 31. Query Control | TIMEOUT, safety limits, DRY RUN |
 | 32. Debug | EXPLAIN, PROFILE |
 | 33. Grammar | Complete EBNF |
-| 34. Quick Reference | Cheat sheet |
 
-## 35.2 Design Principles Applied
+## 35.2 Design Principles
 
 | Principle | How Applied |
 |-----------|-------------|
@@ -3825,162 +3702,39 @@ CHECKOUT "version" RESTORE CONFIRM
 | Composable | Match patterns reused across operations |
 | Inspectable | SHOW, EXPLAIN, PROFILE for transparency |
 
-## 35.3 Complete Language Map
+---
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     HOHG LANGUAGE FAMILY                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ONTOLOGY DSL (Part II)              HOHG LANGUAGE (Part III)       │
-│  ═══════════════════════             ════════════════════════        │
-│  Compiled, defines schema            Interpreted, operates on graph │
-│                                                                      │
-│  • node declarations                 OBSERVATION                     │
-│  • edge declarations                 • MATCH (pattern)              │
-│  • constraint declarations           • WALK (traversal)             │
-│  • rule declarations                 • INSPECT (direct)             │
-│  • type aliases                                                      │
-│                                      TRANSFORMATION                  │
-│  Modifiers (sugar → constraints):    • SPAWN (create node)          │
-│  • [required, unique]                • KILL (remove node)           │
-│  • [>= N, <= M, in:[...]]            • LINK (create edge)           │
-│  • [no_self, acyclic]                • UNLINK (remove edge)         │
-│  • [task -> 0..1]                    • SET (modify attr)            │
-│  • [on_kill: cascade]                                                │
-│                                      CONTROL                         │
-│                                      • BEGIN/COMMIT/ROLLBACK        │
-│                                      • SAVEPOINT                     │
-│                                                                      │
-│                                      ADMIN                           │
-│                                      • LOAD/EXTEND ONTOLOGY         │
-│                                      • SHOW                          │
-│                                      • CREATE/DROP INDEX            │
-│                                                                      │
-│                                      VERSION                         │
-│                                      • SNAPSHOT/CHECKOUT            │
-│                                      • DIFF/MERGE                   │
-│                                      • BRANCH                        │
-│                                                                      │
-│                                      DEBUG                           │
-│                                      • EXPLAIN/PROFILE              │
-│                                                                      │
-├─────────────────────────────────────────────────────────────────────┤
-│                     SHARED CONSTRUCTS (Part I)                       │
-│  • Lexical structure    • Scalar types    • Type expressions        │
-│  • Patterns             • Expressions     • Operators               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+*End of Part III: GQL (Runtime)*
 
 ---
 
-*End of Part III: HOHG Language (Runtime)*
+# Appendix A: Reserved Keywords
+
+See **Part I: Foundations §2.5** for the complete list of reserved keywords shared across both languages.
 
 ---
 
-# Appendix A: Reserved Keywords (Complete)
+# Appendix B: Operator Precedence
 
-All reserved keywords across both languages:
-
-```
-abstract    acyclic     and         any         as          asc
-auto        begin       bool        branch      by          cascade
-checkout    collect     commit      constraint  count       create
-delete      depth       desc        detailed    diff        distinct
-drop        edge        exists      explain     extend      false
-float       follow      from        hard        id          in
-inbound     index       indexed     inspect     int         into
-kill        length      limit       link        load        manual
-match       max         merge       message     min         no
-node        not         null        offset      on          ontology
-or          order       outbound    path        prevent     priority
-profile     readonly    required    restore     return      returning
-rollback    rule        savepoint   sealed      self        serializable
-set         show        snapshot    soft        spawn       statistics
-status      string      sum         switch      symmetric   terminal
-timestamp   to          true        type        types       unique
-unlink      until       using       versions    walk        where
-```
+See **Part I: Foundations §2.8.1** for operator precedence table.
 
 ---
 
-# Appendix B: Operator Precedence (Complete)
+# Appendix C: Built-in Functions
 
-From highest to lowest:
+For string, numeric, timestamp, and general functions, see **Part I: Foundations §5.7.1**.
 
-| Precedence | Operators | Associativity |
-|------------|-----------|---------------|
-| 1 | `.` `()` | Left |
-| 2 | unary `-` `not` | Right |
-| 3 | `*` `/` `%` | Left |
-| 4 | `+` `-` `++` | Left |
-| 5 | `<` `>` `<=` `>=` | Left |
-| 6 | `=` `!=` | Left |
-| 7 | `and` | Left |
-| 8 | `or` | Left |
-
----
-
-# Appendix C: Built-in Functions (Complete)
-
-## String Functions
+## Aggregate Functions (GQL-specific)
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `length(s)` | String → Int | Character count |
-| `lower(s)` | String → String | Lower case |
-| `upper(s)` | String → String | Upper case |
-| `trim(s)` | String → String | Remove whitespace |
-| `contains(s, sub)` | String × String → Bool | Substring test |
-| `starts_with(s, pre)` | String × String → Bool | Prefix test |
-| `ends_with(s, suf)` | String × String → Bool | Suffix test |
-| `substring(s, start, len)` | String × Int × Int → String | Extract |
-| `replace(s, old, new)` | String × String × String → String | Replace |
-| `split(s, delim)` | String × String → String[] | Split |
-| `matches(s, pattern)` | String × String → Bool | Regex match |
-
-## Numeric Functions
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `abs(n)` | Number → Number | Absolute value |
-| `min(a, b)` | Number × Number → Number | Minimum |
-| `max(a, b)` | Number × Number → Number | Maximum |
-| `floor(f)` | Float → Int | Round down |
-| `ceil(f)` | Float → Int | Round up |
-| `round(f)` | Float → Int | Round nearest |
-
-## Timestamp Functions
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `now()` | () → Timestamp | Current time |
-| `year(t)` | Timestamp → Int | Extract year |
-| `month(t)` | Timestamp → Int | Extract month |
-| `day(t)` | Timestamp → Int | Extract day |
-| `hour(t)` | Timestamp → Int | Extract hour |
-| `minute(t)` | Timestamp → Int | Extract minute |
-| `second(t)` | Timestamp → Int | Extract second |
-
-## General Functions
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `coalesce(a, b)` | T? × T → T | First non-null |
-| `is_null(x)` | T? → Bool | Null test |
-| `type_of(x)` | Any → String | Type name |
-
-## Aggregate Functions (MATCH only)
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `count(x)` | Any → Int | Count matches |
-| `count(distinct x)` | Any → Int | Count unique |
-| `sum(x)` | Number → Number | Sum |
-| `avg(x)` | Number → Float | Average |
-| `min(x)` | Comparable → Same | Minimum |
-| `max(x)` | Comparable → Same | Maximum |
-| `collect(x)` | Any → List | Collect to list |
+| `COUNT(x)` | Any → Int | Count matches |
+| `COUNT(DISTINCT x)` | Any → Int | Count unique |
+| `SUM(x)` | Number → Number | Sum |
+| `AVG(x)` | Number → Float | Average |
+| `MIN(x)` | Comparable → Same | Minimum |
+| `MAX(x)` | Comparable → Same | Maximum |
+| `COLLECT(x)` | Any → List | Collect to list |
 
 ---
 

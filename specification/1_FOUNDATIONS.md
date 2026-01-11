@@ -612,457 +612,110 @@ String comparison uses Unicode code point order:
 
 ## 3.3 Int
 
-### 3.3.1 Definition
+64-bit signed two's complement integer. Range: `-2^63` to `2^63 - 1`.
 
-An `Int` is a 64-bit signed two's complement integer.
+### 3.3.1 Operations
 
-### 3.3.2 Range
+Standard comparison (`=`, `!=`, `<`, `>`, `<=`, `>=`) and arithmetic (`+`, `-`, `*`, `/`, `%`, unary `-`).
+Functions: `abs(a)`, `min(a, b)`, `max(a, b)`.
 
-```
-Minimum: -9223372036854775808  (-2^63)
-Maximum:  9223372036854775807  (2^63 - 1)
-```
-
-### 3.3.3 Operations
-
-| Operation | Syntax | Result Type | Description |
-|-----------|--------|-------------|-------------|
-| Equality | `a = b` | Bool | True if equal |
-| Inequality | `a != b` | Bool | True if not equal |
-| Less than | `a < b` | Bool | True if a < b |
-| Greater than | `a > b` | Bool | True if a > b |
-| Less or equal | `a <= b` | Bool | True if a ≤ b |
-| Greater or equal | `a >= b` | Bool | True if a ≥ b |
-| Addition | `a + b` | Int | Sum |
-| Subtraction | `a - b` | Int | Difference |
-| Multiplication | `a * b` | Int | Product |
-| Division | `a / b` | Int | Integer division (truncates toward zero) |
-| Modulo | `a % b` | Int | Remainder |
-| Negation | `-a` | Int | Arithmetic negation |
-| Absolute | `abs(a)` | Int | Absolute value |
-| Minimum | `min(a, b)` | Int | Smaller value |
-| Maximum | `max(a, b)` | Int | Larger value |
-
-### 3.3.4 Division Semantics
-
-Integer division truncates toward zero:
-- `7 / 3` = `2`
-- `-7 / 3` = `-2`
-- `7 / -3` = `-2`
-
-Division by zero is a runtime error.
-
-### 3.3.5 Overflow Behavior
-
-Integer overflow wraps (two's complement behavior):
-- `9223372036854775807 + 1` = `-9223372036854775808`
-
-Implementations MAY provide overflow checking as an option.
+Division truncates toward zero: `7 / 3` = `2`, `-7 / 3` = `-2`. Division by zero is a runtime error.
+Overflow wraps (two's complement).
 
 ---
 
 ## 3.4 Float
 
-### 3.4.1 Definition
+64-bit IEEE 754 double-precision. Special values: `±0.0`, `±∞`, `NaN`.
 
-A `Float` is a 64-bit IEEE 754 double-precision floating-point number.
+### 3.4.1 Operations
 
-### 3.4.2 Special Values
+Standard comparison and arithmetic. NaN comparisons: `NaN = NaN` → `false`, `NaN != NaN` → `true`.
+Functions: `abs(a)`, `floor(a)`, `ceil(a)`, `round(a)`, `min(a, b)`, `max(a, b)`, `is_nan(x)`.
 
-| Value | Description |
-|-------|-------------|
-| `+0.0`, `-0.0` | Positive and negative zero (compare equal) |
-| `+∞`, `-∞` | Positive and negative infinity |
-| `NaN` | Not a Number |
-
-### 3.4.3 Operations
-
-| Operation | Syntax | Result Type | Description |
-|-----------|--------|-------------|-------------|
-| Equality | `a = b` | Bool | True if equal (NaN ≠ NaN) |
-| Inequality | `a != b` | Bool | True if not equal |
-| Less than | `a < b` | Bool | True if a < b |
-| Greater than | `a > b` | Bool | True if a > b |
-| Less or equal | `a <= b` | Bool | True if a ≤ b |
-| Greater or equal | `a >= b` | Bool | True if a ≥ b |
-| Addition | `a + b` | Float | Sum |
-| Subtraction | `a - b` | Float | Difference |
-| Multiplication | `a * b` | Float | Product |
-| Division | `a / b` | Float | Quotient |
-| Negation | `-a` | Float | Arithmetic negation |
-| Absolute | `abs(a)` | Float | Absolute value |
-| Floor | `floor(a)` | Int | Round toward negative infinity |
-| Ceiling | `ceil(a)` | Int | Round toward positive infinity |
-| Round | `round(a)` | Int | Round to nearest integer |
-| Minimum | `min(a, b)` | Float | Smaller value |
-| Maximum | `max(a, b)` | Float | Larger value |
-
-### 3.4.4 NaN Behavior
-
-NaN (Not a Number) has special comparison behavior:
-- `NaN = NaN` → `false`
-- `NaN != NaN` → `true`
-- `NaN < x` → `false` for any x
-- `NaN > x` → `false` for any x
-
-To test for NaN, use `is_nan(x)`.
-
-### 3.4.5 Type Coercion
-
-Int may be implicitly converted to Float when required:
-- In mixed arithmetic: `1 + 2.0` → `3.0`
-- In Float-typed contexts
-
-Float is NOT implicitly converted to Int. Use explicit conversion: `floor(x)`, `ceil(x)`, or `round(x)`.
-
-### 3.4.6 Division by Zero
-
-Float division by zero follows IEEE 754:
-- `x / 0.0` where x > 0 → `+∞`
-- `x / 0.0` where x < 0 → `-∞`
-- `0.0 / 0.0` → `NaN`
-
-Integer division by zero is a runtime error (see Section 3.3.4).
+Int→Float coercion is implicit; Float→Int requires explicit `floor`/`ceil`/`round`.
+Division by zero: `x/0.0` → `±∞`, `0.0/0.0` → `NaN`.
 
 ---
 
 ## 3.5 Bool
 
-### 3.5.1 Definition
+Values: `true`, `false`. Operations: `=`, `!=`, `and`, `or`, `not`.
 
-A `Bool` has exactly two values: `true` and `false`.
+Short-circuit evaluation: `false and x` → `false`, `true or x` → `true` (x not evaluated).
 
-### 3.5.2 Operations
-
-| Operation | Syntax | Result Type | Description |
-|-----------|--------|-------------|-------------|
-| Equality | `a = b` | Bool | True if same value |
-| Inequality | `a != b` | Bool | True if different values |
-| Logical AND | `a and b` | Bool | True if both true |
-| Logical OR | `a or b` | Bool | True if either true |
-| Logical NOT | `not a` | Bool | Logical negation |
-
-### 3.5.3 Short-Circuit Evaluation
-
-Logical operators use short-circuit evaluation:
-
-- `false and x` → `false` (x not evaluated)
-- `true or x` → `true` (x not evaluated)
-
-This is significant when x has side effects or when x would error.
-
-### 3.5.4 Truthiness
-
-Boolean contexts (WHERE clauses, conditions) accept:
-1. `Bool` expressions: must be `true` or `false`
-2. `Bool?` expressions: `null` is treated as `false`
-
-There is no implicit conversion from non-boolean types:
-
-```
-/* INVALID */
-WHERE x.count        /* Int is not Bool */
-
-/* VALID */
-WHERE x.count > 0    /* comparison produces Bool */
-WHERE x.active       /* Bool?, null treated as false */
-WHERE x.active = true  /* explicit: only matches true, not null */
-```
+In boolean contexts, `Bool?` with `null` is treated as `false`. No implicit conversion from non-boolean types.
 
 ---
 
 ## 3.6 Timestamp
 
-### 3.6.1 Definition
+Milliseconds since Unix epoch (1970-01-01T00:00:00Z). Stored as `Int`.
 
-A `Timestamp` represents a point in time as milliseconds since the Unix epoch (1970-01-01T00:00:00Z).
+### 3.6.1 Operations
 
-Internally, `Timestamp` is stored as an `Int` (64-bit signed integer).
+Comparison (`=`, `!=`, `<`, `>`, `<=`, `>=`), arithmetic (`t + n`, `t - n`, `t2 - t1`).
 
-### 3.6.2 Range
+Functions: `now()`, `year(t)`, `month(t)`, `day(t)`, `hour(t)`, `minute(t)`, `second(t)`, `millisecond(t)`, `day_of_week(t)`, `timestamp(s)`.
 
-| Bound | Value | Approximate Date |
-|-------|-------|------------------|
-| Minimum | -9223372036854775808 | ~292 billion years ago |
-| Maximum | 9223372036854775807 | ~292 billion years in future |
+### 3.6.2 Literals
 
-### 3.6.3 Operations
-
-| Operation | Syntax | Result Type | Description |
-|-----------|--------|-------------|-------------|
-| Equality | `a = b` | Bool | True if same instant |
-| Inequality | `a != b` | Bool | True if different |
-| Less than | `a < b` | Bool | a is before b |
-| Greater than | `a > b` | Bool | a is after b |
-| Less or equal | `a <= b` | Bool | a is at or before b |
-| Greater or equal | `a >= b` | Bool | a is at or after b |
-| Add duration | `a + n` | Timestamp | Add n milliseconds |
-| Subtract duration | `a - n` | Timestamp | Subtract n milliseconds |
-| Difference | `a - b` | Int | Milliseconds between |
-| Current time | `now()` | Timestamp | Current system time |
-
-### 3.6.4 Timestamp Functions
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `now()` | `() → Timestamp` | Current system time |
-| `year(t)` | `Timestamp → Int` | Year (e.g., 2024) |
-| `month(t)` | `Timestamp → Int` | Month (1-12) |
-| `day(t)` | `Timestamp → Int` | Day of month (1-31) |
-| `hour(t)` | `Timestamp → Int` | Hour (0-23) |
-| `minute(t)` | `Timestamp → Int` | Minute (0-59) |
-| `second(t)` | `Timestamp → Int` | Second (0-59) |
-| `millisecond(t)` | `Timestamp → Int` | Millisecond (0-999) |
-| `day_of_week(t)` | `Timestamp → Int` | Day of week (0=Sunday, 6=Saturday) |
-| `timestamp(s)` | `String → Timestamp` | Parse ISO 8601 string |
-
-### 3.6.5 Timestamp Literals
-
-Timestamps can be written directly using the `@` prefix with ISO 8601 format:
-
-```
-TimestampLiteral = "@" ISODate
-ISODate = Date ("T" Time Timezone?)?
-Date = Year "-" Month "-" Day
-Time = Hour ":" Minute (":" Second ("." Milliseconds)?)?
-Timezone = "Z" | ("+" | "-") Hour ":" Minute
-```
-
-**Examples:**
 ```
 @2024-01-15                     -- Date only (midnight UTC)
 @2024-01-15T10:30:00Z           -- Full timestamp with UTC
-@2024-01-15T10:30:00            -- Local time (converted to UTC)
 @2024-01-15T10:30:00+05:30      -- With timezone offset
 @2024-01-15T10:30:00.500Z       -- With milliseconds
 ```
 
-**Usage in observations:**
-```
--- Before (string parsing):
-WHERE t.created_at > timestamp("2024-01-15T00:00:00Z")
-
--- After (literal):
-WHERE t.created_at > @2024-01-15
-
--- Date range:
-WHERE t.created_at >= @2024-01-01 AND t.created_at < @2024-02-01
-
--- Combined with Duration:
-WHERE t.created_at > @2024-01-15 + 12.hours
-```
-
-**Note:** When only a date is provided (no time), midnight UTC is assumed. When no timezone is provided, UTC is assumed.
-
-### 3.6.6 Timestamp Arithmetic
-
-```
-t + 1000          -- 1 second later
-t - 86400000      -- 1 day earlier
-t2 - t1           -- milliseconds between t1 and t2
-
--- With Duration literals (preferred):
-t + 1.day         -- 1 day later
-t - 30.minutes    -- 30 minutes earlier
-```
-
-### 3.6.7 Timezone
-
-All Timestamp operations use UTC (Coordinated Universal Time):
-
-- `now()` returns current UTC time
-- `year(t)`, `month(t)`, `day(t)`, etc. extract UTC components
-- No implicit timezone conversion
-
-Timestamp values themselves are timezone-agnostic (milliseconds since epoch). The UTC specification applies to extraction functions and display.
-
-To work with local time, applications should handle timezone conversion externally.
+All operations use UTC. No timezone is provided → UTC assumed.
 
 ---
 
 ## 3.7 Duration
 
-### 3.7.1 Definition
+Time span in milliseconds.
 
-A `Duration` represents a span of time in milliseconds. Unlike `Timestamp` (a point in time), `Duration` is a relative quantity.
-
-### 3.7.2 Duration Literals
+### 3.7.1 Literals
 
 ```
-DurationLiteral = IntLiteral "." DurationUnit
-
-DurationUnit =
-    "millisecond" | "milliseconds" | "ms"
-  | "second" | "seconds" | "s"
-  | "minute" | "minutes" | "min"
-  | "hour" | "hours" | "h"
-  | "day" | "days" | "d"
-  | "week" | "weeks" | "w"
+1.millisecond | 500.ms | 1.second | 30.s | 5.minutes | 15.min
+1.hour | 2.h | 1.day | 7.days | 1.week
 ```
 
-**Examples:**
-```
-1.millisecond       -- 1 ms
-500.ms              -- 500 ms
-1.second            -- 1000 ms
-30.seconds          -- 30000 ms
-5.s                 -- 5000 ms
-1.minute            -- 60000 ms
-15.min              -- 900000 ms
-1.hour              -- 3600000 ms
-2.h                 -- 7200000 ms
-1.day               -- 86400000 ms
-7.days              -- 604800000 ms
-1.week              -- 604800000 ms
-```
-
-### 3.7.3 Duration Arithmetic
+### 3.7.2 Arithmetic
 
 ```
--- Duration + Duration = Duration
-1.hour + 30.minutes            -- 5400000 ms (1.5 hours)
-
--- Duration - Duration = Duration
-1.day - 1.hour                 -- 82800000 ms (23 hours)
-
--- Duration * Int = Duration
-30.minutes * 4                 -- 7200000 ms (2 hours)
-
--- Duration / Int = Duration
-1.hour / 2                     -- 1800000 ms (30 minutes)
-
--- Timestamp + Duration = Timestamp
-now() + 1.day                  -- tomorrow
-now() - 30.days                -- 30 days ago
-
--- Timestamp - Timestamp = Duration
-t2 - t1                        -- duration between
+Duration + Duration = Duration    -- 1.hour + 30.minutes
+Duration * Int = Duration         -- 30.minutes * 4
+Timestamp + Duration = Timestamp  -- now() + 1.day
+Timestamp - Timestamp = Duration  -- t2 - t1
 ```
 
-### 3.7.4 Duration in Queries
-
-Duration literals make time-based queries more readable:
-
-```
--- Before (magic numbers):
-WHERE t.created_at < now() - 86400000
-
--- After (clear intent):
-WHERE t.created_at < now() - 1.day
-
--- Complex duration:
-WHERE t.created_at > now() - 2.weeks - 3.days
-
--- Timeout:
-TIMEOUT 30.seconds
-```
-
-### 3.7.5 Duration Functions
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `to_milliseconds(d)` | `Duration → Int` | Convert to raw ms |
-| `to_seconds(d)` | `Duration → Float` | Convert to seconds |
-| `to_minutes(d)` | `Duration → Float` | Convert to minutes |
-| `to_hours(d)` | `Duration → Float` | Convert to hours |
-| `to_days(d)` | `Duration → Float` | Convert to days |
-
-### 3.7.6 Duration Constants
-
-| Constant | Value |
-|----------|-------|
-| `1.millisecond` | 1 |
-| `1.second` | 1,000 |
-| `1.minute` | 60,000 |
-| `1.hour` | 3,600,000 |
-| `1.day` | 86,400,000 |
-| `1.week` | 604,800,000 |
+Functions: `to_milliseconds(d)`, `to_seconds(d)`, `to_minutes(d)`, `to_hours(d)`, `to_days(d)`.
 
 ---
 
 ## 3.8 ID
 
-### 3.7.1 Definition
+Opaque identifier for nodes and edges.
 
-An `ID` is an opaque identifier for nodes and edges.
+**Properties:** Immutable, unique, opaque, comparable only for equality (`=`, `!=`). No ordering.
 
-### 3.7.2 Properties
-
-1. IDs are **immutable**: Once assigned, an ID never changes
-2. IDs are **unique**: No two nodes/edges share an ID
-3. IDs are **opaque**: Internal structure is not guaranteed
-4. IDs are **comparable**: Only for equality
-
-### 3.7.3 Operations
-
-| Operation | Syntax | Result Type | Description |
-|-----------|--------|-------------|-------------|
-| Equality | `a = b` | Bool | True if same ID |
-| Inequality | `a != b` | Bool | True if different IDs |
-
-IDs do NOT support ordering (`<`, `>`, etc.).
-
-### 3.7.4 ID Access
-
-Every node and edge has an implicit `id` attribute:
-
-```
-MATCH e: Event
-RETURN e.id
-```
+Every node/edge has implicit `id` attribute: `RETURN e.id`.
 
 ---
 
 ## 3.9 Null Handling
 
-### 3.9.1 Null Semantics
+`null` represents absence of value; valid only for optional types (`T?`).
 
-`null` represents the absence of a value. It is valid only for optional attributes (`T?`).
+**Propagation:** Operations with null return null (`null + 1` → `null`, `length(null)` → `null`).
 
-### 3.9.2 Null Propagation
+**Comparison:** `null = null` → `true`. `null < x` → `false`. `null and x` → `false`. `null or true` → `true`.
 
-Operations involving null generally propagate null:
+**Coalesce:** `coalesce(x, default)` returns `x` if non-null, else `default`.
 
-| Expression | Result |
-|------------|--------|
-| `null + 1` | `null` |
-| `null * 5` | `null` |
-| `null ++ "text"` | `null` |
-| `length(null)` | `null` |
-
-### 3.9.3 Null Comparison
-
-| Expression | Result |
-|------------|--------|
-| `null = null` | `true` |
-| `null != null` | `false` |
-| `x = null` (x not null) | `false` |
-| `x != null` (x not null) | `true` |
-| `null < x` | `false` |
-| `null > x` | `false` |
-| `null <= x` | `false` |
-| `null >= x` | `false` |
-
-### 3.9.4 Null in Logical Operations
-
-When `null` appears in logical operations (typically via `Bool?` values):
-
-| Expression | Result | Explanation |
-|------------|--------|-------------|
-| `null and x` | `false` | null is falsy, short-circuits |
-| `x and null` | `false` | if x is true, null is falsy → false; if x is false, short-circuits |
-| `null or x` | `x` | null is falsy, evaluates second operand |
-| `x or null` | `x` if x true, else `null` | short-circuit or return second |
-| `not null` | `true` | null is falsy |
-
-### 3.9.5 Null Testing
-
-```
-x = null          -- true if x is null
-x != null         -- true if x is not null
-is_null(x)        -- explicit null test (same as x = null)
-coalesce(x, y)    -- returns x if not null, else y
-```
+---
 
 ---
 

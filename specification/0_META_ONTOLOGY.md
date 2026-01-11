@@ -36,7 +36,7 @@ User ontologies cannot declare types, attributes, or variables starting with `_`
 
 ## 1. Scalar Types (Built-in)
 
-These are primitive value types for attributes. They are not node types.
+Primitive value types for attributes. For detailed operations and semantics, see **Part I: Foundations §3**.
 
 ```
 Scalar Types
@@ -48,53 +48,9 @@ Bool        -- true or false
 Timestamp   -- milliseconds since Unix epoch (Int alias with semantic meaning)
 Duration    -- time span in milliseconds (Int alias with semantic meaning)
 ID          -- opaque identifier (internal use)
-
 ```
 
-### 1.1 Scalar operations
-
-Each scalar type supports:
-
-| Type | Operations |
-| --- | --- |
-| String | `=`, `!=`, `<`, `>`, `<=`, `>=` (lexicographic), `++` (concatenation) |
-| Int | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*`, `/`, `%` |
-| Float | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*`, `/` |
-| Bool | `=`, `!=`, `and`, `or`, `not` |
-| Timestamp | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+` (add Duration), `-` (subtract Duration or Timestamp) |
-| Duration | `=`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*` (by Int), `/` (by Int) |
-| ID | `=`, `!=` only |
-
-**String functions**: `length`, `lower`, `upper`, `trim`, `contains`, `starts_with`, `ends_with`, `substring`, `replace`, `split`.
-
-**Timestamp functions**: `now()`, `year()`, `month()`, `day()`, `hour()`, `minute()`, `second()`, `millisecond()`, `day_of_week()`, `timestamp()` (parse ISO 8601).
-
-**Duration functions**: `to_milliseconds()`, `to_seconds()`, `to_minutes()`, `to_hours()`, `to_days()`.
-
-### 1.2 Null semantics
-
-Optional attributes may be unset (null). Null handling:
-
-| Expression | Result | Notes |
-| --- | --- | --- |
-| `null = null` | `true` | Null equals null |
-| `null != null` | `false` | |
-| `x = null` (x not null) | `false` | |
-| `x != null` (x not null) | `true` | |
-| `null < x` | `false` | For any x |
-| `null > x` | `false` | For any x |
-| `null + x` | `null` | Arithmetic propagates null |
-| `null and x` | `false` | Null treated as falsy |
-| `x and null` | `false` if x is false, else `false` | Short-circuits |
-| `null or x` | `x` | Null treated as falsy |
-| `x or null` | `x` if x is true, else `null` | Short-circuits |
-| `not null` | `true` | Null treated as falsy |
-
-**Short-circuit evaluation**: `and` and `or` evaluate left-to-right and stop early:
-- `false and x` → `false` (x not evaluated)
-- `true or x` → `true` (x not evaluated)
-
-### 1.3 Default value serialization
+### 1.1 Default value serialization
 
 The `_AttributeDef.default_value` field stores defaults as JSON-encoded strings:
 
@@ -108,9 +64,7 @@ The `_AttributeDef.default_value` field stores defaults as JSON-encoded strings:
 | Duration | 86400000 | `"86400000"` |
 | (no default) | - | `null` |
 
-The attribute's declared type determines how to parse the serialized value.
-
-### 1.4 Dynamic defaults
+### 1.2 Dynamic defaults
 
 For dynamic defaults like `now()`, the `default_value` field uses a special prefix:
 
@@ -119,7 +73,7 @@ For dynamic defaults like `now()`, the `default_value` field uses a special pref
 | `now()` | `"$now()"` |
 | `now() + 24.hours` | `"$now() + 86400000"` |
 
-The `$` prefix indicates the value should be evaluated at entity creation time rather than parsed as a literal. The engine recognizes `$now()` and evaluates it to the current timestamp when the entity is created.
+The `$` prefix indicates the value should be evaluated at entity creation time.
 
 ---
 
@@ -1191,20 +1145,9 @@ node Person { email: String [required, match: "^.+@.+\\..+$"] }
 
 ## 9. Type Checking Rules
 
-### 9.1 Subtyping
+For general subtyping rules, see **Part I: Foundations §4.8**.
 
-```
-T <: T                                    -- reflexive
-T <: U, U <: V  =>  T <: V               -- transitive
-_type_inherits(T, U)  =>  T <: U         -- inheritance
-T <: T | U                                -- union left
-U <: T | U                                -- union right
-T <: T?                                   -- optional
-any <: any                                -- any is top type for matching
-
-```
-
-### 9.2 Edge type checking
+### 9.1 Edge type checking
 
 When creating edge of type E with targets [t1, t2, ...]:
 
@@ -1215,7 +1158,7 @@ For each position i:
 - Let actual = type of ti
 - Require: actual <: T
 
-### 9.3 Attribute type checking
+### 9.2 Attribute type checking
 
 When setting attribute A on node/edge of type T:
 
@@ -1226,7 +1169,7 @@ When setting attribute A on node/edge of type T:
 - For scalar types: exact match required
 - For node types: subtyping allowed
 
-### 9.4 Edge reference type checking
+### 9.3 Edge reference type checking
 
 When a signature position has type `edge<E>`:
 
@@ -1236,54 +1179,13 @@ When a signature position has type `edge<E>`:
 
 **Note**: Edge types do not support inheritance. Exact type match is required when E is specified.
 
-### 9.5 Edge immutability
+### 9.4 Edge immutability
 
 Edge targets are immutable after creation:
 
 - Once created, an edge's targets cannot be changed
 - To "move" an edge, delete and recreate it
 - This prevents self-referential edges (an edge cannot target itself)
-
-### 9.6 Expression type checking
-
-At pattern/constraint/rule compile time, expressions are type-checked:
-
-**VarRefExpr(var_name)**:
-- Look up variable in pattern's declared variables
-- If not found: compile error
-- Return the variable's declared type
-
-**AttrAccessExpr(base, attr_name)**:
-- Get type T of base expression
-- Look up attr_name on T (including inherited attributes)
-- If not found: compile error "attribute 'attr_name' not found on type T"
-- Return the attribute's scalar type
-
-**BinaryOpExpr(op, left, right)**:
-- Get types of left and right expressions
-- Check operator is valid for those types (see Section 1.1)
-- If invalid: compile error "operator 'op' not valid for types L and R"
-- Return result type:
-  - Comparison operators (`=`, `!=`, `<`, `>`, `<=`, `>=`): Bool
-  - Arithmetic operators (`+`, `-`, `*`, `/`, `%`): same as operand type
-  - Logical operators (`and`, `or`): Bool
-
-**UnaryOpExpr(op, operand)**:
-- Get type of operand
-- Check operator is valid (see Section 1.1)
-- Return result type:
-  - `not`: Bool
-  - `-` (negation): same as operand type
-
-**LiteralExpr(value_type, value_string)**:
-- Return the declared value_type
-
-**ExistsExpr(pattern)**:
-- Recursively type-check the inner pattern
-- Variables from enclosing scope are visible in inner pattern
-- Inner pattern may declare new variables (unique names required—no shadowing)
-- Inner variables are NOT visible outside the EXISTS
-- Return Bool
 
 ---
 
@@ -1595,54 +1497,9 @@ Constraints mentioning `edge<any>` are added to a special set checked on ALL edg
 
 ## 17. Reserved Words
 
-### 17.1 Keywords
+See **Part I: Foundations §2.5** for the complete list of reserved keywords.
 
-Cannot be used as identifiers:
-
-```
--- Ontology DSL
-ontology, node, edge, constraint, rule,
-abstract, sealed, required, unique,
-
--- Observation
-match, walk, from, follow, return,
-as, collect, until, depth, inspect,
-
--- Filtering & Ordering
-where, order, by, asc, desc, limit, offset, distinct,
-
--- Transformation
-spawn, kill, link, unlink, set,
-
--- Transaction
-begin, commit, rollback,
-
--- Schema
-load, extend, show, types, edges, constraints, rules,
-
--- Index
-index, on, drop, indexes,
-
--- Version
-snapshot, checkout, diff, versions, branch, switch, merge,
-
--- Debug
-explain, profile,
-
--- Context
-in, app, scope, using,
-
--- Logic
-and, or, not, exists,
-true, false, null,
-
--- Conditionals
-if, then, else, case, when, end, coalesce
-```
-
-**Note:** Keywords are case-insensitive. Identifiers (type names, variable names, attribute names) are case-sensitive.
-
-### 17.2 Reserved prefixes
+### 17.1 Reserved prefixes
 
 | Prefix | Usage |
 | --- | --- |
