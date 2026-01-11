@@ -1,0 +1,71 @@
+//! Pattern error types.
+
+use thiserror::Error;
+
+/// Errors that can occur during pattern matching.
+#[derive(Debug, Error)]
+pub enum PatternError {
+    /// Unbound variable in expression.
+    #[error("Unbound variable '{name}'")]
+    UnboundVariable { name: String },
+
+    /// Type mismatch in expression.
+    #[error("Type error: {message}")]
+    TypeError { message: String },
+
+    /// Unknown type name.
+    #[error("Unknown type '{name}'")]
+    UnknownType { name: String },
+
+    /// Unknown edge type name.
+    #[error("Unknown edge type '{name}'")]
+    UnknownEdgeType { name: String },
+
+    /// Unknown attribute name.
+    #[error("Unknown attribute '{attr}' on type '{type_name}'")]
+    UnknownAttribute { attr: String, type_name: String },
+
+    /// Invalid operation.
+    #[error("Invalid operation: {message}")]
+    InvalidOperation { message: String },
+
+    /// Division by zero.
+    #[error("Division by zero")]
+    DivisionByZero,
+}
+
+impl PatternError {
+    pub fn unbound_variable(name: impl Into<String>) -> Self {
+        Self::UnboundVariable { name: name.into() }
+    }
+
+    pub fn type_error(message: impl Into<String>) -> Self {
+        Self::TypeError {
+            message: message.into(),
+        }
+    }
+
+    pub fn unknown_type(name: impl Into<String>) -> Self {
+        Self::UnknownType { name: name.into() }
+    }
+
+    pub fn unknown_edge_type(name: impl Into<String>) -> Self {
+        Self::UnknownEdgeType { name: name.into() }
+    }
+
+    pub fn unknown_attribute(attr: impl Into<String>, type_name: impl Into<String>) -> Self {
+        Self::UnknownAttribute {
+            attr: attr.into(),
+            type_name: type_name.into(),
+        }
+    }
+
+    pub fn invalid_operation(message: impl Into<String>) -> Self {
+        Self::InvalidOperation {
+            message: message.into(),
+        }
+    }
+}
+
+/// Result type for pattern operations.
+pub type PatternResult<T> = Result<T, PatternError>;

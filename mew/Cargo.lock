@@ -64,6 +64,8 @@ version = "0.1.0"
 dependencies = [
  "mew-core",
  "mew-graph",
+ "mew-parser",
+ "mew-pattern",
  "mew-registry",
  "thiserror",
 ]
@@ -78,6 +80,7 @@ version = "0.1.0"
 dependencies = [
  "mew-core",
  "mew-graph",
+ "mew-parser",
  "mew-registry",
  "thiserror",
 ]
@@ -88,6 +91,7 @@ version = "0.1.0"
 dependencies = [
  "mew-core",
  "mew-graph",
+ "mew-parser",
  "mew-pattern",
  "mew-registry",
  "thiserror",
