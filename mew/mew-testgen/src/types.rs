@@ -129,6 +129,32 @@ pub enum Value {
     FunctionCall(String),
 }
 
+impl Value {
+    /// Check if this value is dynamic (changes each time it's evaluated)
+    pub fn is_dynamic(&self) -> bool {
+        matches!(self, Value::FunctionCall(_))
+    }
+}
+
+/// A generated value with its kind (static or dynamic)
+#[derive(Debug, Clone)]
+pub struct GeneratedValue {
+    /// The value to use in SPAWN statements
+    pub value: Value,
+    /// Whether this value is dynamic (like now())
+    pub is_dynamic: bool,
+}
+
+impl GeneratedValue {
+    pub fn static_val(value: Value) -> Self {
+        Self { value, is_dynamic: false }
+    }
+
+    pub fn dynamic(value: Value) -> Self {
+        Self { value, is_dynamic: true }
+    }
+}
+
 impl From<&mew_core::Value> for Value {
     fn from(v: &mew_core::Value) -> Self {
         match v {
@@ -195,8 +221,19 @@ pub enum PropertySpec {
 pub struct AnalyzedSchema {
     pub node_types: HashMap<String, NodeTypeInfo>,
     pub edge_types: HashMap<String, EdgeTypeInfo>,
+    pub type_aliases: HashMap<String, TypeAliasInfo>,
     pub constraints: Vec<ConstraintInfo>,
     pub rules: Vec<RuleInfo>,
+}
+
+/// Information about a type alias
+#[derive(Debug, Clone)]
+pub struct TypeAliasInfo {
+    pub name: String,
+    pub base_type: String,
+    pub min: Option<Value>,
+    pub max: Option<Value>,
+    pub allowed_values: Option<Vec<Value>>,
 }
 
 /// Information about a node type
@@ -226,11 +263,44 @@ pub struct AttrInfo {
 
 impl AttrInfo {
     /// Generate a valid value for this attribute
-    pub fn generate_value(&self, rng: &mut impl rand::Rng) -> Value {
+    pub fn generate_value(&self, rng: &mut impl rand::Rng) -> GeneratedValue {
+        self.generate_value_with_aliases(rng, &HashMap::new())
+    }
+
+    /// Generate a valid value for this attribute, resolving type aliases
+    pub fn generate_value_with_aliases(
+        &self,
+        rng: &mut impl rand::Rng,
+        type_aliases: &HashMap<String, TypeAliasInfo>,
+    ) -> GeneratedValue {
+        // First check if this type is an alias
+        if let Some(alias) = type_aliases.get(&self.type_name) {
+            // Use alias constraints
+            if let Some(ref values) = alias.allowed_values {
+                let idx = rng.gen_range(0..values.len());
+                return GeneratedValue::static_val(values[idx].clone());
+            }
+
+            // Create a virtual AttrInfo with the resolved base type and constraints
+            let resolved = AttrInfo {
+                name: self.name.clone(),
+                type_name: alias.base_type.clone(),
+                nullable: self.nullable,
+                required: self.required,
+                unique: self.unique,
+                default: self.default.clone(),
+                min: alias.min.clone().or(self.min.clone()),
+                max: alias.max.clone().or(self.max.clone()),
+                allowed_values: alias.allowed_values.clone().or(self.allowed_values.clone()),
+                pattern: self.pattern.clone(),
+            };
+            return resolved.generate_value_with_aliases(rng, type_aliases);
+        }
+
         // If we have allowed values, pick one
         if let Some(ref values) = self.allowed_values {
             let idx = rng.gen_range(0..values.len());
-            return values[idx].clone();
+            return GeneratedValue::static_val(values[idx].clone());
         }
 
         // Generate based on type
@@ -241,7 +311,7 @@ impl AttrInfo {
                 let s: String = (0..len)
                     .map(|_| rng.gen_range(b'a'..=b'z') as char)
                     .collect();
-                Value::String(s)
+                GeneratedValue::static_val(Value::String(s))
             }
             "Int" => {
                 let min = self.min.as_ref()
@@ -250,7 +320,7 @@ impl AttrInfo {
                 let max = self.max.as_ref()
                     .and_then(|v| if let Value::Int(i) = v { Some(*i) } else { None })
                     .unwrap_or(100);
-                Value::Int(rng.gen_range(min..=max))
+                GeneratedValue::static_val(Value::Int(rng.gen_range(min..=max)))
             }
             "Float" => {
                 let min = self.min.as_ref()
@@ -267,12 +337,12 @@ impl AttrInfo {
                         _ => None,
                     })
                     .unwrap_or(100.0);
-                Value::Float(rng.gen_range(min..=max))
+                GeneratedValue::static_val(Value::Float(rng.gen_range(min..=max)))
             }
-            "Bool" => Value::Bool(rng.gen_bool(0.5)),
-            "Timestamp" => Value::FunctionCall("now".to_string()),
-            "Duration" => Value::Int(rng.gen_range(0..86400000)), // Up to 1 day in ms
-            _ => Value::Null,
+            "Bool" => GeneratedValue::static_val(Value::Bool(rng.gen_bool(0.5))),
+            "Timestamp" => GeneratedValue::dynamic(Value::FunctionCall("now".to_string())),
+            "Duration" => GeneratedValue::static_val(Value::Int(rng.gen_range(0..86400000))), // Up to 1 day in ms
+            _ => GeneratedValue::static_val(Value::Null),
         }
     }
 }
@@ -367,6 +437,20 @@ pub struct GeneratedNode {
     pub var_name: String,
     pub type_name: String,
     pub attrs: HashMap<String, Value>,
+    /// Names of attributes that have dynamic values (like now())
+    pub dynamic_attrs: HashSet<String>,
+}
+
+impl GeneratedNode {
+    /// Check if an attribute has a dynamic value
+    pub fn is_attr_dynamic(&self, attr_name: &str) -> bool {
+        self.dynamic_attrs.contains(attr_name)
+    }
+
+    /// Check if this node has any dynamic attributes
+    pub fn has_dynamic_attrs(&self) -> bool {
+        !self.dynamic_attrs.is_empty()
+    }
 }
 
 /// A generated edge
@@ -377,6 +461,8 @@ pub struct GeneratedEdge {
     pub from_idx: usize,
     pub to_idx: usize,
     pub attrs: HashMap<String, Value>,
+    /// Names of attributes that have dynamic values
+    pub dynamic_attrs: HashSet<String>,
 }
 
 /// Generated query with expected results
