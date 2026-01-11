@@ -571,7 +571,7 @@ constraint <type>_<attr>_unique:
 
 ### 11.3.3 Indexed
 
-Create an index on this attribute for faster queries.
+Create an index on this attribute for faster observations.
 
 ```
 timestamp: Timestamp [indexed]
@@ -583,7 +583,7 @@ timestamp: Timestamp [indexed: desc]  -- sorted descending
 **Notes:**
 - `unique` implies `indexed`
 - `indexed: asc` is default
-- `indexed: desc` for reverse-order queries (e.g., most recent first)
+- `indexed: desc` for reverse-order observations (e.g., most recent first)
 
 ### 11.3.4 Comparison Modifiers
 
@@ -796,7 +796,7 @@ Attribute references and non-pure function calls are not allowed:
 -- Invalid:
 ref: String = other.name          -- ERROR: attribute reference not allowed
 random: Int = random()            -- ERROR: non-deterministic function
-computed: Int = count(...)        -- ERROR: query in default
+computed: Int = count(...)        -- ERROR: observe in default
 ```
 
 For computed defaults, use rules:
@@ -850,7 +850,7 @@ node Person {
   --- Biography (optional, limited length)
   bio: String? [length: 0..2000],
   
-  --- When the account was created (indexed for queries)
+  --- When the account was created (indexed for observations)
   created_at: Timestamp [required, indexed: desc]
 }
 ```
@@ -1851,7 +1851,7 @@ MATCH follows+(a, b) WHERE a.name = "A"
 
 - Transitive patterns cannot bind intermediate nodes (path binding deferred to future version)
 - Transitive patterns in constraints should be used sparingly due to performance cost
-- For complex path queries, use the WALK statement in HOHG Language
+- For complex path observations, use the WALK statement in HOHG Language
 
 ## 13.7 AST
 
@@ -1912,7 +1912,7 @@ constraint:
 
 **Rationale:** 
 - Error messages reference constraint names for debugging
-- Named constraints are queryable and inspectable
+- Named constraints are observable and inspectable
 - Forces developers to think about what the constraint means
 
 **Good naming conventions:**
@@ -2291,7 +2291,7 @@ rule archive_old_tasks [manual]:
 -- External scheduler calls: INVOKE archive_old_tasks
 
 -- Option 2: Application-level time check
--- Application periodically queries and updates
+-- Application periodically observations and updates
 ```
 
 **Rationale:** Continuous time-based evaluation would require the engine to wake up and re-evaluate rules constantly, which is expensive and complex. Trigger-based evaluation is simpler and more predictable.
@@ -2648,7 +2648,7 @@ ontology TaskManagement : Layer0 {
 | Graph-native | All sugar compiles to constraints/rules |
 | Explicit | All behavior is declared |
 | DX-focused | Common patterns are one-liners |
-| Inspectable | Expanded constraints are queryable |
+| Inspectable | Expanded constraints are observable |
 
 ---
 

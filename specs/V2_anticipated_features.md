@@ -15,7 +15,7 @@ edge _scope_parent(child: _Scope, parent: _Scope) {}
 edge _in_scope(entity: any, scope: _Scope) {}
 ```
 
-New query syntax: `IN SCOPE my_scope: MATCH ...`
+New observation syntax: `IN SCOPE my_scope: MATCH ...`
 
 ### 22.2 Scope-Qualified Names
 

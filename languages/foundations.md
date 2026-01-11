@@ -837,7 +837,7 @@ Timezone = "Z" | ("+" | "-") Hour ":" Minute
 @2024-01-15T10:30:00.500Z       -- With milliseconds
 ```
 
-**Usage in queries:**
+**Usage in observations:**
 ```
 -- Before (string parsing):
 WHERE t.created_at > timestamp("2024-01-15T00:00:00Z")

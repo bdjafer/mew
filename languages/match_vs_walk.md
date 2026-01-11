@@ -52,14 +52,14 @@ WALK has the opposite limitation—it requires you to already know your starting
 
 MATCH excels when you're searching without a known entry point, need to count or sum across results, or have a fixed pattern structure with multiple node types and conditions. WALK shines when you're exploring from a specific node, need the actual sequence of nodes and edges traversed, want to dynamically follow different relationship types, or need fine-grained control over how the traversal happens.
 
-For performance, MATCH leverages indexes heavily through the query planner, which can optimize join order and push filters down, though transitive patterns become expensive. WALK starts from a known point so it skips planning overhead, offers predictable costs when depth-bounded, and can short-circuit with UNTIL conditions, but has fewer opportunities for global optimization since traversal is inherently procedural.
+For performance, MATCH leverages indexes heavily through the observation planner, which can optimize join order and push filters down, though transitive patterns become expensive. WALK starts from a known point so it skips planning overhead, offers predictable costs when depth-bounded, and can short-circuit with UNTIL conditions, but has fewer opportunities for global optimization since traversal is inherently procedural.
 
-MATCH excels at multi-entity correlations like finding task-project pairs with matching creation dates, aggregations across statuses, or detecting cycles in graphs. WALK is essential for reachability queries within hop limits and retrieving actual paths between nodes, where the starting point and traversal direction matter more than pattern matching across multiple entity types. ations | Yes | Limited |
+MATCH excels at multi-entity correlations like finding task-project pairs with matching creation dates, aggregations across statuses, or detecting cycles in graphs. WALK is essential for reachability observations within hop limits and retrieving actual paths between nodes, where the starting point and traversal direction matter more than pattern matching across multiple entity types. ations | Yes | Limited |
 | Complex joins | Yes | No |
-| Optimization | Heavy (query planning) | Light (procedural) |
+| Optimization | Heavy (observation planning) | Light (procedural) |
 | Best for | Finding patterns | Exploring from a point |
 
-MATCH and WALK serve different purposes in graph querying. MATCH excels at identifying specific patterns across the entire graph through declarative specifications, while WALK is better suited for navigating outward from a known starting point. Neither can fully replace the other—a comprehensive graph query language requires both approaches to handle the full range of traversal and pattern-matching scenarios.
+MATCH and WALK serve different purposes in graph observationing. MATCH excels at identifying specific patterns across the entire graph through declarative specifications, while WALK is better suited for navigating outward from a known starting point. Neither can fully replace the other—a comprehensive graph observation language requires both approaches to handle the full range of traversal and pattern-matching scenarios.
 # MATCH vs WALK: Fundamental Differences
 
 ## The Core Distinction
@@ -87,7 +87,7 @@ RETURN a, b, c
 
 "Find all triangles in the social graph."
 
-The engine figures out HOW to find them (query planning, index selection, join order).
+The engine figures out HOW to find them (observation planning, index selection, join order).
 
 ### WALK: Navigation
 
@@ -287,7 +287,7 @@ RETURN NODES
 | Scenario | MATCH | WALK |
 |----------|-------|------|
 | Find all X where condition | ✅ Uses indexes | ❌ Must scan |
-| Expand from known node | ⚠️ Still plans full query | ✅ Direct traversal |
+| Expand from known node | ⚠️ Still plans full observation | ✅ Direct traversal |
 | Variable depth exploration | ⚠️ Transitive can be expensive | ✅ Native, bounded |
 | Complex joins | ✅ Optimized | ❌ Can't express |
 | Path finding | ❌ Can't do | ✅ Native |
@@ -302,7 +302,7 @@ RETURN NODES
 2. **Complex conditions across multiple nodes** — Joins with filters
 3. **Aggregations needed** — COUNT, SUM, GROUP BY
 4. **Pattern is fixed and known** — Specific shape to find
-5. **Need query optimization** — Let planner choose best path
+5. **Need observation optimization** — Let planner choose best path
 
 ```
 -- Classic MATCH use cases:

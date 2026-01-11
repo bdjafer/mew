@@ -185,7 +185,7 @@ Ontologies are written in a domain-specific language (DSL) and **compiled** into
 2. Validate the ontology (well-formed, consistent)
 3. Generate Layer 0 graph structure
 4. Build in-memory registries (for type checking, constraint checking)
-5. Create optimized indexes (for query performance)
+5. Create optimized indexes (for observation performance)
 
 **Compilation does not:**
 - Execute at runtime (it runs once when loading)
@@ -266,7 +266,7 @@ All mutations pass through constraint checking. All type signatures are verified
 
 **Semantic integrity:** The graph is always in a valid state. Constraints hold. Types match. No corruption.
 
-**Query performance:** Common patterns are fast. Indexes exist for declared types. The ontology guides optimization.
+**Observation performance:** Common patterns are fast. Indexes exist for declared types. The ontology guides optimization.
 
 **Reasoning transparency:** Every conclusion can be traced. Provenance is native. Meta-queries are supported.
 
@@ -284,7 +284,7 @@ All mutations pass through constraint checking. All type signatures are verified
 
 **Simplicity:** The system has many concepts (types, edges, constraints, rules, patterns, expressions). This complexity serves expressiveness.
 
-**Immediate gratification:** You must design an ontology before storing data. The upfront investment pays off in query performance and data quality.
+**Immediate gratification:** You must design an ontology before storing data. The upfront investment pays off in observation performance and data quality.
 
 ---
 
@@ -733,7 +733,7 @@ Combine all components:
 **For using (user-first):**
 1. Context Document (Part II only)
 2. Ontology Language Reference
-3. Query Language Reference
+3. HOHG Language Reference
 4. Test Ontologies (examples)
 
 ## 8.3 Quick Reference
@@ -748,7 +748,7 @@ Combine all components:
 | Read the formal specification | Layer 0 Specification |
 | Write an ontology | Ontology Language Reference |
 | See ontology examples | Test Ontologies (9 examples) |
-| Write queries | Query Language Reference |
+| Write queries | HOHG Language Reference |
 | Implement the system | Architecture Overview + Implementation Plan |
 | Propose spec changes | Revision Protocol |
 | Look up a term | Glossary |
@@ -763,7 +763,7 @@ This document captures decisions made during the initial design phase. Key decis
 
 **Higher-order choice:** The need to represent confidence, provenance, and meta-reasoning led to higher-order structure. Reification (the RDF approach) was rejected as too awkward.
 
-**Compiled ontology choice:** Schema-less was rejected because query optimization and constraint enforcement require known structure. The upfront cost is worth the runtime benefits.
+**Compiled ontology choice:** Schema-less was rejected because observation optimization and constraint enforcement require known structure. The upfront cost is worth the runtime benefits.
 
 **Pattern-based constraints:** Procedural constraints were rejected because they cannot be inspected, optimized, or reasoned about. Declarative patterns are transparent and composable.
 
@@ -787,7 +787,7 @@ Systems, ideas and theories that relates with this design:
 
 **Type theory:** The importance of types for correctness and reasoning. Layer 0 is essentially a type system for graphs.
 
-**Database theory:** Transaction semantics, constraint enforcement, query optimization. Standard database wisdom applies.
+**Database theory:** Transaction semantics, constraint enforcement, observation optimization. Standard database wisdom applies.
 
 ---
 

@@ -1156,7 +1156,7 @@ The `_instance_of` and `_edge_instance_of` edges are **not created by default**.
 - Lazily materialized when a meta-observation requires them
 - Can be bulk-created via utility function for existing data
 
-**Usage**: These edges enable meta-queries that treat type relationships as graph structure:
+**Usage**: These edges enable meta-observations that treat type relationships as graph structure:
 ```
 -- Find all instances of a type (using _instance_of)
 MATCH n: any, t: _NodeType, _instance_of(n, t)
@@ -1320,7 +1320,7 @@ constraint high_confidence_requires_evidence:
   => EXISTS(ev: Evidence, supports(ev, c))
 ```
 
-### 10.3 Querying edge<any>
+### 10.3 Observing edge<any>
 
 The `edge<any>` type matches any edge. Use it for meta-level edges:
 
@@ -1433,13 +1433,13 @@ Model collections as edges instead:
 node Tag { value: String }
 edge has_tag(Task, Tag)
 
--- Query all tags for a task:
+-- Observe all tags for a task:
 MATCH t: Task, tag: Tag, has_tag(t, tag)
 WHERE t.id = $taskId
 RETURN tag.value
 ```
 
-This keeps the model uniform and queryable.
+This keeps the model uniform and observable.
 
 ---
 
@@ -1666,15 +1666,15 @@ Layer 0 types exist in two senses:
 **2. As instances (for user ontologies)**:
 - When you define `node Event {}`, the compiler creates a _NodeType node with name="Event"
 - This IS stored in the graph
-- This enables querying the ontology structure
+- This enables observing the ontology structure
 
 ### 18.2 The recursion stops
 
 Layer 0 is the axiomatic foundation. Asking "what is the type of _NodeType?" is like asking "what set contains the set of all sets"—the question doesn't apply at this level.
 
-### 18.3 Self-querying capability
+### 18.3 Self-observing capability
 
-User-defined types can be queried because they're stored as nodes:
+User-defined types can be observed because they're stored as nodes:
 
 ```
 -- List all types in the loaded ontology
@@ -1718,9 +1718,9 @@ LINK similar(b, a)  -- Returns existing edge ID, no duplicate created
 -- Stored as similar(min(a.id, b.id), max(a.id, b.id))
 ```
 
-**Matching**: Queries match regardless of argument order:
+**Matching**: Observations match regardless of argument order:
 ```
--- Both queries find the same edge:
+-- Both observations find the same edge:
 MATCH similar(x, y) WHERE x.name = "A"
 MATCH similar(y, x) WHERE x.name = "A"
 ```
@@ -1812,6 +1812,6 @@ This is complete and self-contained. An implementation that correctly handles al
 - Enforce user constraints
 - Execute user rewrite rules
 - Support versioning and transactions
-- Query its own ontology structure (self-model)
+- Observe its own ontology structure (self-model)
 
 ---

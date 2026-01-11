@@ -632,7 +632,7 @@ RETURN t  -- highest priority task
 ## 20.9 Complete Examples
 
 ```
--- Complex query with all clauses
+-- Complex observation with all clauses
 MATCH t: Task, p: Project, person: Person,
       belongs_to(t, p),
       assigned_to(t, person) AS a
@@ -655,7 +655,7 @@ RETURN p.name AS project,
 ORDER BY total DESC
 LIMIT 10
 
--- Path query
+-- Path observation
 MATCH start: Person, end: Person, follows+(start, end) [depth: 3]
 WHERE start.name = "Alice"
 RETURN end.name, end.email
@@ -2181,14 +2181,14 @@ interface SetStmt {
 
 ## 27.10.1 Overview
 
-Parameterized queries allow safe, reusable queries with external values. Parameters prevent injection attacks and enable query plan caching.
+Parameterized queries allow safe, reusable queries with external values. Parameters prevent injection attacks and enable observation plan caching.
 
 ## 27.10.2 Syntax
 
 ```
 Parameter = "$" Identifier
 
--- In queries:
+-- In observations:
 MATCH t: Task WHERE t.id = $taskId RETURN t
 SPAWN t: Task { title = $title, priority = $priority }
 LINK assigned_to(#task_123, $personId)
@@ -2263,7 +2263,7 @@ DROP PREPARED find_tasks
 ```
 
 **Benefits:**
-- Query parsed once, executed many times
+- Queries parsed once, executed many times
 - Plan caching for performance
 - Type checking at prepare time
 
@@ -2920,9 +2920,9 @@ CHECKOUT "v_abc123" READONLY
 -- Now queries return data from that snapshot
 MATCH t: Task RETURN t  -- shows tasks from v_abc123
 
--- Mutations are blocked
+-- Transformations are blocked
 SPAWN t: Task { title = "Test" }
--- ERROR: Cannot mutate in readonly checkout mode
+-- ERROR: Cannot transform in readonly checkout mode
 
 -- Return to current
 CHECKOUT ~HEAD
@@ -3648,7 +3648,7 @@ ExplainStmt      = "explain" Statement
 ProfileStmt      = "profile" Statement
 DryRunStmt       = "dry" "run" TransformationStmt
 
-(* Query Control *)
+(* Observation Control *)
 TimeoutClause    = "timeout" Duration
 Duration         = IntLiteral TimeUnit
 TimeUnit         = "ms" | "s" | "min" | "h"
@@ -4084,7 +4084,7 @@ ERROR [E4001] NOT_FOUND
 ```
 WARNING [E5001] LIMIT_EXCEEDED
 
-  Query result limit reached
+  Observation result limit reached
   
   At: MATCH t: Task RETURN t
   

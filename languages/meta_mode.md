@@ -54,7 +54,7 @@ Meta Mode enables **reflection** — the ability to reason about and manipulate 
 │ • causes(#event_a, #event_b)                                       │
 │ • confidence(#causes_edge, 0.9) ← higher-order, same level        │
 │                                                                      │
-│ Queried and modified via Normal mode. Full optimization.           │
+│ Observed and modified via Normal mode. Full optimization.           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -97,9 +97,9 @@ MetaStatement =
 
 | Situation | META Required? |
 |-----------|----------------|
-| Query with known types | No |
-| Query higher-order with known types | No |
-| Query with `edge<any>` wildcard | Yes |
+| Observation with known types | No |
+| Observation higher-order with known types | No |
+| Observation with `edge<any>` wildcard | Yes |
 | Use introspection functions on unbound | Yes |
 | Access Layer 0 types | Yes |
 | Access Level 1 schema | Yes |
@@ -274,7 +274,7 @@ META MATCH e: edge<any>
 WHERE arity(e) > 2
 RETURN e
 
--- Requires META: structural query
+-- Requires META: structural observation
 META MATCH e: edge<any>
 WHERE has_target(e, #alice) AND edge_type(e) != "causes"
 RETURN e
@@ -698,7 +698,7 @@ All MATCH syntax is valid after META, plus:
 
 ## 38.2 Instance-Level Meta Queries
 
-Query instances with generic patterns:
+Observation instances with generic patterns:
 
 ```
 -- All edges from a node
@@ -725,7 +725,7 @@ RETURN e
 
 ## 38.3 Schema-Level Queries (Level 1)
 
-Query the ontology structure:
+Observation the ontology structure:
 
 ```
 -- All node types
@@ -771,7 +771,7 @@ RETURN c.name, c.hard
 
 ## 38.4 Meta-Schema Queries (Level 0)
 
-Query the structure of Layer 0 itself:
+Observation the structure of Layer 0 itself:
 
 ```
 -- All Layer 0 node types
@@ -790,13 +790,13 @@ RETURN a.name
 
 ## 38.5 Combined Queries
 
-Mix instance and schema queries:
+Mix instance and schema observations:
 
 ```
 -- Find instances of dynamically-discovered types
 META MATCH t: _NodeType
 WHERE t.name LIKE "Learned%"
--- Then for each type, query instances:
+-- Then for each type, observation instances:
 -- (This would be a programmatic pattern)
 
 -- Find edges that match a schema pattern
@@ -943,7 +943,7 @@ RETURN PATH
 
 # 39.7 META DESCRIBE
 
-The DESCRIBE command provides quick access to type structures, edge signatures, and instance details. It's syntactic sugar over META MATCH queries but essential for tooling and REPL workflows.
+The DESCRIBE command provides quick access to type structures, edge signatures, and instance details. It's syntactic sugar over META MATCH observations but essential for tooling and REPL workflows.
 
 ## 39.7.1 Syntax
 
@@ -1619,7 +1619,7 @@ Schema modifications trigger recompilation:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 1. Acquire schema lock (blocks new queries)                         │
+│ 1. Acquire schema lock (blocks new observations)                    │
 │ 2. Validate modification                                            │
 │ 3. Update Layer 0 graph                                            │
 │ 4. Rebuild affected registries                                     │
@@ -1632,12 +1632,12 @@ Schema modifications trigger recompilation:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## 41.3 In-Progress Query Handling
+## 41.3 In-Progress Observation Handling
 
 Queries in progress when recompilation starts:
-- **Read queries:** Complete with old schema
-- **Write queries:** Block until recompilation complete
-- **New queries:** Wait for recompilation
+- **Read observations:** Complete with old schema
+- **Write observations:** Block until recompilation complete
+- **New observations:** Wait for recompilation
 
 ## 41.4 Batching Modifications
 
@@ -1666,7 +1666,7 @@ BEGIN
   SPAWN t: Task { title = "Test" }
   LINK belongs_to(#t, #project)
   
-  -- META operations (schema queries only with META READ)
+  -- META operations (schema observations only with META READ)
   LET type_info = META DESCRIBE Task
   
   -- More normal operations
@@ -1730,9 +1730,9 @@ COMMIT
 
 | Scenario | Behavior |
 |----------|----------|
-| Read query during META transaction | Uses old schema |
-| Write query during META transaction | Blocks until commit |
-| META query during normal transaction | Uses current schema |
+| Read observation during META transaction | Uses old schema |
+| Write observation during META transaction | Blocks until commit |
+| META observation during normal transaction | Uses current schema |
 | META write during normal transaction | Deferred until commit |
 
 ---
@@ -1748,7 +1748,7 @@ COMMIT
 │ NONE (default)            │ Normal mode only                        │
 │                           │ No META operations                      │
 ├───────────────────────────┼─────────────────────────────────────────┤
-│ META READ                 │ META MATCH (schema queries)             │
+│ META READ                 │ META MATCH (schema observations)             │
 │                           │ META WALK (schema traversal)            │
 │                           │ Introspection functions                 │
 │                           │ Cannot modify schema                    │
@@ -1937,7 +1937,7 @@ META SET #_NodeType.name = "RenamedNodeType"
 These invariants exist because:
 
 1. **Bootstrap dependency:** The engine needs these types to function
-2. **Query correctness:** Compiled queries assume these structures
+2. **Observation correctness:** Compiled observations assume these structures
 3. **Constraint checking:** The constraint system depends on these types
 4. **Self-consistency:** The system must be able to describe itself
 
@@ -2062,7 +2062,7 @@ The typical AGI learning loop uses all three tiers:
 │ 2. REFLECT (Meta Mode - Observe)                                      │
 │                                                                      │
 │    Check if pattern is already known                                │
-│    Schema queries, introspection                                    │
+│    Schema observations, introspection                                    │
 │                                                                      │
 │    META MATCH e: _EdgeType                                          │
 │    WHERE e.name = "learned_" ++ pattern_signature                  │
@@ -2232,8 +2232,8 @@ META COMMIT  -- single recompile
 
 | Situation | Recommendation |
 |-----------|----------------|
-| Known types, instance queries | Normal mode |
-| Known types, higher-order queries | Normal mode |
+| Known types, instance observations | Normal mode |
+| Known types, higher-order observations | Normal mode |
 | Schema exploration, tooling | META mode |
 | Dynamic type discovery | META mode |
 | AGI learning loop | META mode (reflect/learn phases) |
@@ -2356,7 +2356,7 @@ Layer0EdgeTypes  = "_type_has_attribute" | "_type_inherits" | "_edge_has_positio
 
 | Operation | Purpose | Permission |
 |-----------|---------|------------|
-| META MATCH | Query with generic patterns / schema access | META READ |
+| META MATCH | Observation with generic patterns / schema access | META READ |
 | META WALK | Traverse with generic edges / from edges | META READ |
 | META DESCRIBE | Inspect type/instance structure | META READ |
 | META DRY RUN | Preview schema modification effects | META READ |
