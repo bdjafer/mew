@@ -403,7 +403,9 @@ pub struct NodeTypeDef {
 pub struct AttrDef {
     pub name: String,
     pub type_name: String,
+    pub nullable: bool,
     pub modifiers: Vec<AttrModifier>,
+    pub default_value: Option<Expr>,
     pub span: Span,
 }
 
@@ -424,6 +426,7 @@ pub enum AttrModifier {
 pub struct EdgeTypeDef {
     pub name: String,
     pub params: Vec<(String, String)>,
+    pub attrs: Vec<AttrDef>,
     pub modifiers: Vec<EdgeModifier>,
     pub span: Span,
 }

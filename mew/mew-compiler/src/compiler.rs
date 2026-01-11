@@ -135,6 +135,24 @@ impl Compiler {
         for attr_def in &node_def.attrs {
             let mut attr = AttrDef::new(&attr_def.name, &attr_def.type_name);
 
+            // Handle nullable types
+            if attr_def.nullable {
+                attr = attr.nullable();
+            }
+
+            // Handle inline default value (= expr)
+            if let Some(default_expr) = &attr_def.default_value {
+                if let Some(value) = expr_to_value(default_expr) {
+                    attr = attr.with_default(value);
+                }
+                // For now(), we need special handling - just mark as having default
+                // The actual now() value would be computed at runtime
+                if is_now_call(default_expr) {
+                    // Mark as having a timestamp default (computed at runtime)
+                    attr = attr.with_default(Value::Timestamp(0)); // Placeholder
+                }
+            }
+
             // Process modifiers and expand to constraints
             for modifier in &attr_def.modifiers {
                 match modifier {
@@ -214,7 +232,51 @@ impl Compiler {
             edge_builder = edge_builder.param(param_name, param_type);
         }
 
-        // Process modifiers
+        // Process edge attributes
+        for attr_def in &edge_def.attrs {
+            let mut attr = AttrDef::new(&attr_def.name, &attr_def.type_name);
+
+            // Handle nullable types
+            if attr_def.nullable {
+                attr = attr.nullable();
+            }
+
+            // Handle inline default value
+            if let Some(default_expr) = &attr_def.default_value {
+                if let Some(value) = expr_to_value(default_expr) {
+                    attr = attr.with_default(value);
+                }
+                if is_now_call(default_expr) {
+                    attr = attr.with_default(Value::Timestamp(0)); // Placeholder
+                }
+            }
+
+            // Process modifiers
+            for modifier in &attr_def.modifiers {
+                match modifier {
+                    AttrModifier::Required => {
+                        attr = attr.required();
+                    }
+                    AttrModifier::Unique => {
+                        attr = attr.unique();
+                    }
+                    AttrModifier::Default(expr) => {
+                        if let Some(value) = expr_to_value(expr) {
+                            attr = attr.with_default(value);
+                        }
+                    }
+                    AttrModifier::Range { min, max } => {
+                        let min_val = min.as_ref().and_then(expr_to_value);
+                        let max_val = max.as_ref().and_then(expr_to_value);
+                        attr = attr.with_range(min_val, max_val);
+                    }
+                }
+            }
+
+            edge_builder = edge_builder.attr(attr);
+        }
+
+        // Process edge modifiers
         for modifier in &edge_def.modifiers {
             match modifier {
                 EdgeModifier::Acyclic => {
@@ -263,6 +325,11 @@ fn expr_to_value(expr: &mew_parser::Expr) -> Option<Value> {
         },
         _ => None,
     }
+}
+
+/// Check if an expression is a `now()` function call.
+fn is_now_call(expr: &mew_parser::Expr) -> bool {
+    matches!(expr, mew_parser::Expr::FnCall(fc) if fc.name.eq_ignore_ascii_case("now") && fc.args.is_empty())
 }
 
 /// Compile ontology source into a Registry.

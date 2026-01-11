@@ -1039,11 +1039,26 @@ pub fn parse_ontology(input: &str) -> ParseResult<Vec<OntologyDef>> {
 
 impl Parser {
     /// Parse multiple ontology definitions.
+    /// Supports both bare definitions and `ontology Name { ... }` wrapper syntax.
     pub fn parse_ontology_defs(&mut self) -> ParseResult<Vec<OntologyDef>> {
         let mut defs = Vec::new();
 
         while !self.check(&TokenKind::Eof) {
-            defs.push(self.parse_ontology_def()?);
+            // Check for ontology wrapper
+            if self.check(&TokenKind::Ontology) {
+                self.advance(); // consume 'ontology'
+                let _name = self.expect_ident()?; // consume name (ignored for now)
+                self.expect(&TokenKind::LBrace)?;
+
+                // Parse definitions inside the wrapper
+                while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+                    defs.push(self.parse_ontology_def()?);
+                }
+
+                self.expect(&TokenKind::RBrace)?;
+            } else {
+                defs.push(self.parse_ontology_def()?);
+            }
         }
 
         Ok(defs)
@@ -1099,12 +1114,20 @@ impl Parser {
         Ok(attrs)
     }
 
-    /// Parse a single attribute definition: name: Type [modifiers]
+    /// Parse a single attribute definition: name: Type? [modifiers] = default
     fn parse_attr_def(&mut self) -> ParseResult<AttrDef> {
         let start = self.peek().span;
         let name = self.expect_ident()?;
         self.expect(&TokenKind::Colon)?;
         let type_name = self.expect_ident()?;
+
+        // Parse optional nullable marker (?)
+        let nullable = if self.check(&TokenKind::Question) {
+            self.advance();
+            true
+        } else {
+            false
+        };
 
         // Parse optional modifiers in brackets
         let modifiers = if self.check(&TokenKind::LBracket) {
@@ -1113,11 +1136,21 @@ impl Parser {
             Vec::new()
         };
 
+        // Parse optional default value (= expr)
+        let default_value = if self.check(&TokenKind::Eq) {
+            self.advance();
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
         let span = self.span_from(start);
         Ok(AttrDef {
             name,
             type_name,
+            nullable,
             modifiers,
+            default_value,
             span,
         })
     }
@@ -1176,7 +1209,7 @@ impl Parser {
     }
 
     /// Parse an edge type definition.
-    /// Syntax: edge EdgeName(param: Type, ...) [modifiers]
+    /// Syntax: edge EdgeName(param: Type, ...) [modifiers] { attrs }
     fn parse_edge_type_def(&mut self) -> ParseResult<EdgeTypeDef> {
         let start = self.expect(&TokenKind::Edge)?.span;
         let name = self.expect_ident()?;
@@ -1201,17 +1234,30 @@ impl Parser {
         }
         self.expect(&TokenKind::RParen)?;
 
-        // Parse optional modifiers
-        let modifiers = if self.check(&TokenKind::LBracket) {
+        // Parse optional modifiers (can come before or after attrs)
+        let mut modifiers = if self.check(&TokenKind::LBracket) {
             self.parse_edge_modifiers()?
         } else {
             Vec::new()
         };
 
+        // Parse optional attributes in braces
+        let attrs = if self.check(&TokenKind::LBrace) {
+            self.parse_attr_defs()?
+        } else {
+            Vec::new()
+        };
+
+        // Parse optional modifiers after attrs (if not already parsed)
+        if modifiers.is_empty() && self.check(&TokenKind::LBracket) {
+            modifiers = self.parse_edge_modifiers()?;
+        }
+
         let span = self.span_from(start);
         Ok(EdgeTypeDef {
             name,
             params,
+            attrs,
             modifiers,
             span,
         })
