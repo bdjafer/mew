@@ -73,8 +73,8 @@ impl<'a> MutationGenerator<'a> {
         let mut attrs = Vec::new();
         for attr in &type_info.attrs {
             if attr.required || rng.gen_bool(0.5) {
-                let value = attr.generate_value(rng);
-                attrs.push((attr.name.clone(), self.value_to_mew(&value)));
+                let gen_value = attr.generate_value_with_aliases(rng, &self.schema.type_aliases);
+                attrs.push((attr.name.clone(), self.value_to_mew(&gen_value.value)));
             }
         }
 
@@ -121,11 +121,12 @@ impl<'a> MutationGenerator<'a> {
             .find(|a| a.required)?;
 
         // Generate other attrs but skip required one
+        let type_aliases = &self.schema.type_aliases;
         let attrs: Vec<(String, String)> = type_info.attrs.iter()
             .filter(|a| a.name != required_attr.name && !a.required)
             .map(|a| {
-                let value = a.generate_value(rng);
-                (a.name.clone(), self.value_to_mew(&value))
+                let gen_value = a.generate_value_with_aliases(rng, type_aliases);
+                (a.name.clone(), self.value_to_mew(&gen_value.value))
             })
             .collect();
 
@@ -185,8 +186,8 @@ impl<'a> MutationGenerator<'a> {
             if attr.name == range_attr.name {
                 attrs.push((attr.name.clone(), self.value_to_mew(&out_of_range)));
             } else if attr.required {
-                let value = attr.generate_value(rng);
-                attrs.push((attr.name.clone(), self.value_to_mew(&value)));
+                let gen_value = attr.generate_value_with_aliases(rng, &self.schema.type_aliases);
+                attrs.push((attr.name.clone(), self.value_to_mew(&gen_value.value)));
             }
         }
 
@@ -290,6 +291,7 @@ impl<'a> MutationGenerator<'a> {
             Value::Float(f) => f.to_string(),
             Value::String(s) => format!("\"{}\"", s),
             Value::Id(id) => format!("#{}", id),
+            Value::FunctionCall(name) => format!("{}()", name),
         }
     }
 }

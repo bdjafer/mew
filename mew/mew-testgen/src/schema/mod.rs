@@ -15,6 +15,7 @@ impl SchemaAnalyzer {
         let mut schema = AnalyzedSchema {
             node_types: HashMap::new(),
             edge_types: HashMap::new(),
+            type_aliases: HashMap::new(),
             constraints: Vec::new(),
             rules: Vec::new(),
         };
@@ -38,6 +39,14 @@ impl SchemaAnalyzer {
 
             // Handle ontology wrapper
             if line.starts_with("ontology ") && line.ends_with('{') {
+                continue;
+            }
+
+            // Parse type alias: type Name = BaseType [constraints]
+            if line.starts_with("type ") {
+                if let Some(alias) = Self::parse_type_alias(line) {
+                    schema.type_aliases.insert(alias.name.clone(), alias);
+                }
                 continue;
             }
 
@@ -168,6 +177,9 @@ impl SchemaAnalyzer {
             }
         }
 
+        // Propagate inherited attributes from parent to child types
+        Self::resolve_inheritance(&mut schema);
+
         if schema.node_types.is_empty() && schema.edge_types.is_empty() {
             return Err(TestGenError::SchemaError(
                 "No types found in ontology".to_string()
@@ -175,6 +187,153 @@ impl SchemaAnalyzer {
         }
 
         Ok(schema)
+    }
+
+    /// Resolve inheritance by copying parent attributes to child types
+    /// Handles deep inheritance hierarchies (e.g., Executive -> Manager -> Employee -> Person)
+    fn resolve_inheritance(schema: &mut AnalyzedSchema) {
+        // Build a map of type -> all inherited attrs (recursively)
+        let type_names: Vec<String> = schema.node_types.keys().cloned().collect();
+
+        for type_name in type_names {
+            let inherited = Self::collect_inherited_attrs(&type_name, schema, &mut vec![]);
+            if !inherited.is_empty() {
+                if let Some(type_info) = schema.node_types.get_mut(&type_name) {
+                    // Filter out attrs that the child already defines
+                    let own_attr_names: std::collections::HashSet<_> =
+                        type_info.attrs.iter().map(|a| a.name.clone()).collect();
+                    let new_inherited: Vec<_> = inherited
+                        .into_iter()
+                        .filter(|a| !own_attr_names.contains(&a.name))
+                        .collect();
+
+                    // Prepend inherited attrs
+                    let mut all_attrs = new_inherited;
+                    all_attrs.extend(type_info.attrs.drain(..));
+                    type_info.attrs = all_attrs;
+                }
+            }
+        }
+    }
+
+    /// Recursively collect all inherited attributes from the entire parent chain
+    fn collect_inherited_attrs(
+        type_name: &str,
+        schema: &AnalyzedSchema,
+        visited: &mut Vec<String>,
+    ) -> Vec<AttrInfo> {
+        // Prevent infinite loops from circular inheritance
+        if visited.contains(&type_name.to_string()) {
+            return Vec::new();
+        }
+        visited.push(type_name.to_string());
+
+        let type_info = match schema.node_types.get(type_name) {
+            Some(info) => info,
+            None => return Vec::new(),
+        };
+
+        if type_info.parents.is_empty() {
+            return Vec::new();
+        }
+
+        let mut all_inherited = Vec::new();
+
+        for parent_name in &type_info.parents {
+            // First get grandparent attrs recursively
+            let grandparent_attrs = Self::collect_inherited_attrs(parent_name, schema, visited);
+            for attr in grandparent_attrs {
+                if !all_inherited.iter().any(|a: &AttrInfo| a.name == attr.name) {
+                    all_inherited.push(attr);
+                }
+            }
+
+            // Then add parent's own attrs
+            if let Some(parent_info) = schema.node_types.get(parent_name) {
+                for attr in &parent_info.attrs {
+                    if !all_inherited.iter().any(|a| a.name == attr.name) {
+                        all_inherited.push(attr.clone());
+                    }
+                }
+            }
+        }
+
+        all_inherited
+    }
+
+    /// Parse a type alias definition
+    fn parse_type_alias(line: &str) -> Option<TypeAliasInfo> {
+        // type Name = BaseType [constraints]
+        let rest = line.strip_prefix("type ")?.trim();
+
+        // Find the equals sign
+        let eq_pos = rest.find('=')?;
+        let name = rest[..eq_pos].trim().to_string();
+        let after_eq = rest[eq_pos + 1..].trim();
+
+        // Find base type (before constraints)
+        let base_end = after_eq.find('[').unwrap_or(after_eq.len());
+        let base_type = after_eq[..base_end].trim().to_string();
+
+        let mut min = None;
+        let mut max = None;
+        let mut allowed_values = None;
+
+        // Parse constraints if present
+        if let Some(bracket_start) = after_eq.find('[') {
+            if let Some(bracket_end) = after_eq.rfind(']') {
+                let mods = &after_eq[bracket_start + 1..bracket_end];
+
+                // Check for >= constraint (minimum)
+                if mods.starts_with(">=") {
+                    let value_str = mods[2..].trim();
+                    min = Self::parse_value(value_str);
+                }
+
+                // Check for <= constraint (maximum)
+                if mods.starts_with("<=") {
+                    let value_str = mods[2..].trim();
+                    max = Self::parse_value(value_str);
+                }
+
+                // Check for range shorthand: 1..5
+                if mods.contains("..") && !mods.contains("in:") && !mods.contains("match:") {
+                    let parts: Vec<&str> = mods.split("..").collect();
+                    if parts.len() == 2 {
+                        min = Self::parse_value(parts[0].trim());
+                        max = Self::parse_value(parts[1].trim());
+                    }
+                }
+
+                // Check for in: constraint
+                if let Some(in_start) = mods.find("in:") {
+                    let values_str = mods[in_start + 3..].trim();
+                    // Find the matching bracket
+                    if values_str.starts_with('[') {
+                        if let Some(end) = values_str.find(']') {
+                            let inner = &values_str[1..end];
+                            let values: Vec<Value> = inner.split(',')
+                                .filter_map(|v| Self::parse_value(v.trim()))
+                                .collect();
+                            if !values.is_empty() {
+                                allowed_values = Some(values);
+                            }
+                        }
+                    }
+                }
+
+                // Note: match: pattern constraints are recognized but not enforced in generation
+                // The testgen generates random values anyway for testing constraint validation
+            }
+        }
+
+        Some(TypeAliasInfo {
+            name,
+            base_type,
+            min,
+            max,
+            allowed_values,
+        })
     }
 
     fn parse_node_header(rest: &str) -> (String, Vec<String>) {
@@ -300,11 +459,11 @@ impl SchemaAnalyzer {
         let mut allowed_values = None;
         let mut pattern = None;
 
-        // Find inline default
-        if let Some(eq_pos) = after_colon.find('=') {
-            let after_eq = &after_colon[eq_pos + 1..];
-            let val_end = after_eq.find('[').unwrap_or(after_eq.len());
-            let val_str = after_eq[..val_end].trim();
+        // Find inline default (only look before the bracket, not inside constraints like >=)
+        let bracket_pos = after_colon.find('[').unwrap_or(after_colon.len());
+        let before_bracket = &after_colon[..bracket_pos];
+        if let Some(eq_pos) = before_bracket.find('=') {
+            let val_str = before_bracket[eq_pos + 1..].trim();
             default = Self::parse_value(val_str);
         }
 
@@ -403,6 +562,11 @@ impl SchemaAnalyzer {
         if s == "false" {
             return Some(Value::Bool(false));
         }
+        // Function call like now()
+        if s.ends_with("()") && !s.starts_with('"') {
+            let func_name = &s[..s.len() - 2];
+            return Some(Value::FunctionCall(func_name.to_string()));
+        }
         if let Ok(i) = s.parse::<i64>() {
             return Some(Value::Int(i));
         }
@@ -495,5 +659,38 @@ mod tests {
         assert!(rel.acyclic);
         assert!(rel.no_self);
         assert!(!rel.symmetric);
+    }
+
+    #[test]
+    fn test_float_with_min_constraint() {
+        // Test that Float [>= 0] parses correctly and doesn't confuse the '=' in '>=' with a default value
+        let source = r#"
+            node Contractor {
+                hourly_rate: Float [>= 0]
+            }
+        "#;
+
+        let schema = SchemaAnalyzer::analyze(source).unwrap();
+        let contractor = &schema.node_types["Contractor"];
+        assert_eq!(contractor.attrs.len(), 1);
+
+        let rate = &contractor.attrs[0];
+        assert_eq!(rate.name, "hourly_rate");
+        assert_eq!(rate.type_name, "Float");
+        assert!(rate.allowed_values.is_none());
+        assert!(rate.min.is_some());
+        assert!(rate.default.is_none(), "Should not have a default value");
+
+        // Generate a value and verify it's a Float
+        use rand::SeedableRng;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let gen_value = rate.generate_value(&mut rng);
+
+        match gen_value.value {
+            crate::types::Value::Float(f) => {
+                assert!(f >= 0.0, "Generated float should be >= 0");
+            }
+            other => panic!("Expected Float, got {:?}", other),
+        }
     }
 }

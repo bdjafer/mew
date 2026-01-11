@@ -98,8 +98,17 @@ impl<'a> QueryGenerator<'a> {
 
         let target_node = nodes[rng.gen_range(0..nodes.len())];
 
-        // Pick an attribute that this node has
-        let attr_name = target_node.attrs.keys().next()?;
+        // Pick a STATIC attribute that this node has (skip dynamic ones like now())
+        let static_attrs: Vec<&String> = target_node.attrs.keys()
+            .filter(|k| !target_node.is_attr_dynamic(k))
+            .collect();
+
+        if static_attrs.is_empty() {
+            // Fall back to a simple MATCH ALL if no static attrs
+            return self.gen_match_all(rng);
+        }
+
+        let attr_name = static_attrs[rng.gen_range(0..static_attrs.len())];
         let attr_value = target_node.attrs.get(attr_name)?;
 
         let var = type_name.chars().next()?.to_lowercase().to_string();
@@ -143,7 +152,25 @@ impl<'a> QueryGenerator<'a> {
             var, type_name, var, attr.name
         );
 
-        // Build expected rows
+        // Check if any nodes have this attribute as dynamic
+        let has_dynamic = self.world
+            .nodes_of_type(type_name)
+            .any(|n| n.is_attr_dynamic(&attr.name));
+
+        // If the attribute can be dynamic, use Count expectation (can't compare values)
+        if has_dynamic {
+            let count = self.world.nodes_of_type(type_name).count();
+            return Some(GeneratedQuery {
+                statement,
+                required_setup: self.setup_statements(),
+                expected: Expected::Count(count),
+                trust_level: TrustLevel::Constructive,
+                complexity: Complexity::simple(),
+                tags: vec!["match".to_string(), "projection".to_string()],
+            });
+        }
+
+        // Build expected rows for static attributes
         let rows: Vec<Row> = self.world
             .nodes_of_type(type_name)
             .map(|n| {
@@ -256,6 +283,7 @@ impl<'a> QueryGenerator<'a> {
             Value::Float(f) => f.to_string(),
             Value::String(s) => format!("\"{}\"", s),
             Value::Id(id) => format!("#{}", id),
+            Value::FunctionCall(name) => format!("{}()", name),
         }
     }
 }

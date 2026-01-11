@@ -36,10 +36,11 @@ impl Oracle {
                 VerifyResult::Pass
             }
             (Expected::Error(pattern), ActualResult::Error(msg)) => {
-                // Check if error message matches pattern (simple contains check)
+                // Check if error message matches pattern
+                // Supports: simple contains, or patterns with .* wildcards
                 let patterns: Vec<&str> = pattern.split('|').collect();
                 let matches = patterns.iter().any(|p| {
-                    msg.to_lowercase().contains(&p.to_lowercase())
+                    Self::pattern_matches(p, msg)
                 });
                 if matches {
                     VerifyResult::Pass
@@ -60,6 +61,34 @@ impl Oracle {
                     std::mem::discriminant(actual)
                 ))
             }
+        }
+    }
+
+    /// Check if a pattern matches a message
+    /// Supports simple contains and .* wildcard patterns
+    fn pattern_matches(pattern: &str, msg: &str) -> bool {
+        let pattern_lower = pattern.to_lowercase();
+        let msg_lower = msg.to_lowercase();
+
+        if pattern_lower.contains(".*") {
+            // Handle .* as "anything in between"
+            // Split by .* and check all parts exist in order
+            let parts: Vec<&str> = pattern_lower.split(".*").collect();
+            let mut pos = 0;
+            for part in parts {
+                if part.is_empty() {
+                    continue;
+                }
+                if let Some(found) = msg_lower[pos..].find(part) {
+                    pos += found + part.len();
+                } else {
+                    return false;
+                }
+            }
+            true
+        } else {
+            // Simple contains check
+            msg_lower.contains(&pattern_lower)
         }
     }
 

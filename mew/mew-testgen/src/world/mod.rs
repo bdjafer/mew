@@ -3,7 +3,7 @@
 use crate::config::TestConfig;
 use crate::types::*;
 use rand::Rng;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Generates a valid world state from a schema
 pub struct WorldGenerator<'a> {
@@ -49,6 +49,7 @@ impl<'a> WorldGenerator<'a> {
     ) -> GeneratedNode {
         let var_name = self.next_var(type_name);
         let mut attrs = HashMap::new();
+        let mut dynamic_attrs = HashSet::new();
 
         // Generate all attributes (including inherited)
         let all_attrs = self.collect_attrs(type_info);
@@ -62,20 +63,28 @@ impl<'a> WorldGenerator<'a> {
             // Use default if available and random says so
             if let Some(ref default) = attr.default {
                 if rng.gen_bool(0.5) {
+                    // Check if default is dynamic
+                    if default.is_dynamic() {
+                        dynamic_attrs.insert(attr.name.clone());
+                    }
                     attrs.insert(attr.name.clone(), default.clone());
                     continue;
                 }
             }
 
-            // Generate a value
-            let value = attr.generate_value(rng);
-            attrs.insert(attr.name.clone(), value);
+            // Generate a value using type aliases for proper enum/range handling
+            let gen_value = attr.generate_value_with_aliases(rng, &self.schema.type_aliases);
+            if gen_value.is_dynamic {
+                dynamic_attrs.insert(attr.name.clone());
+            }
+            attrs.insert(attr.name.clone(), gen_value.value);
         }
 
         GeneratedNode {
             var_name,
             type_name: type_name.to_string(),
             attrs,
+            dynamic_attrs,
         }
     }
 
@@ -148,9 +157,13 @@ impl<'a> WorldGenerator<'a> {
 
             // Generate edge attributes
             let mut attrs = HashMap::new();
+            let mut dynamic_attrs = HashSet::new();
             for attr in &edge_info.attrs {
-                let value = attr.generate_value(rng);
-                attrs.insert(attr.name.clone(), value);
+                let gen_value = attr.generate_value_with_aliases(rng, &self.schema.type_aliases);
+                if gen_value.is_dynamic {
+                    dynamic_attrs.insert(attr.name.clone());
+                }
+                attrs.insert(attr.name.clone(), gen_value.value);
             }
 
             let edge = GeneratedEdge {
@@ -159,6 +172,7 @@ impl<'a> WorldGenerator<'a> {
                 from_idx,
                 to_idx,
                 attrs: attrs.clone(),
+                dynamic_attrs: dynamic_attrs.clone(),
             };
 
             world.add_edge(edge);
@@ -173,6 +187,7 @@ impl<'a> WorldGenerator<'a> {
                         from_idx: to_idx,
                         to_idx: from_idx,
                         attrs,
+                        dynamic_attrs,
                     };
                     world.add_edge(reverse);
                 }

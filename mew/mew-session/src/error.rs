@@ -17,6 +17,10 @@ pub enum SessionError {
     #[error("query error: {0}")]
     QueryError(#[from] mew_query::QueryError),
 
+    /// Mutation error.
+    #[error("mutation error: {0}")]
+    MutationError(#[from] mew_mutation::MutationError),
+
     /// Transaction error.
     #[error("transaction error: {0}")]
     TransactionError(#[from] mew_transaction::TransactionError),

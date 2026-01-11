@@ -123,6 +123,59 @@ impl Registry {
         self.edge_types.len()
     }
 
+    /// Get an attribute definition from a type, including inherited attributes.
+    pub fn get_type_attr(&self, type_id: TypeId, attr_name: &str) -> Option<&crate::AttrDef> {
+        // Check own attributes first
+        if let Some(type_def) = self.types.get(&type_id) {
+            if let Some(attr) = type_def.get_attr(attr_name) {
+                return Some(attr);
+            }
+            // Check parent types
+            for &parent_id in &type_def.parent_ids {
+                if let Some(attr) = self.get_type_attr(parent_id, attr_name) {
+                    return Some(attr);
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if a type has an attribute (including inherited).
+    pub fn type_has_attr(&self, type_id: TypeId, attr_name: &str) -> bool {
+        self.get_type_attr(type_id, attr_name).is_some()
+    }
+
+    /// Get all attributes for a type including inherited ones.
+    pub fn get_all_type_attrs(&self, type_id: TypeId) -> Vec<&crate::AttrDef> {
+        let mut result = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        self.collect_type_attrs(type_id, &mut result, &mut seen);
+        result
+    }
+
+    /// Helper to collect attributes from type and parents.
+    fn collect_type_attrs<'a>(
+        &'a self,
+        type_id: TypeId,
+        result: &mut Vec<&'a crate::AttrDef>,
+        seen: &mut std::collections::HashSet<String>,
+    ) {
+        if let Some(type_def) = self.types.get(&type_id) {
+            // First collect from parents
+            for &parent_id in &type_def.parent_ids {
+                self.collect_type_attrs(parent_id, result, seen);
+            }
+            // Then add own attrs (may override parent attrs)
+            for (name, attr) in &type_def.attributes {
+                if !seen.contains(name) {
+                    seen.insert(name.clone());
+                    result.push(attr);
+                }
+            }
+        }
+    }
+
     // ==================== Subtype Queries ====================
 
     /// Check if `sub` is a subtype of `super_type`.
