@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "mew-core",
+    "mew-graph",
+    "mew-parser",
+    "mew-analyzer",
+    "mew-registry",
+    "mew-compiler",
+    "mew-pattern",
+    "mew-constraint",
+    "mew-rule",
+    "mew-query",
+    "mew-mutation",
+    "mew-transaction",
+    "mew-journal",
+    "mew-session",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["MEW Contributors"]
+license = "MIT"
+repository = "https://github.com/mew/mew"
+
+[workspace.dependencies]
+# Internal crates
+mew-core = { path = "mew-core" }
+mew-graph = { path = "mew-graph" }
+mew-parser = { path = "mew-parser" }
+mew-analyzer = { path = "mew-analyzer" }
+mew-registry = { path = "mew-registry" }
+mew-compiler = { path = "mew-compiler" }
+mew-pattern = { path = "mew-pattern" }
+mew-constraint = { path = "mew-constraint" }
+mew-rule = { path = "mew-rule" }
+mew-query = { path = "mew-query" }
+mew-mutation = { path = "mew-mutation" }
+mew-transaction = { path = "mew-transaction" }
+mew-journal = { path = "mew-journal" }
+mew-session = { path = "mew-session" }
+
+# External dependencies
+thiserror = "1.0"

@@ -1,0 +1,14 @@
+[package]
+name = "mew-session"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mew-core.workspace = true
+mew-graph.workspace = true
+mew-parser.workspace = true
+mew-analyzer.workspace = true
+mew-compiler.workspace = true
+mew-query.workspace = true
+mew-transaction.workspace = true
+thiserror.workspace = true

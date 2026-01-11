@@ -1,0 +1,9 @@
+[package]
+name = "mew-analyzer"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mew-core.workspace = true
+mew-registry.workspace = true
+thiserror.workspace = true
