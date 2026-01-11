@@ -343,11 +343,82 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
                     actual_type,
                 ));
             }
+
+            // Check range constraints (min/max)
+            self.validate_range(attr_name, value, &attr_def.min, &attr_def.max)?;
         } else {
             return Err(MutationError::unknown_attribute(type_name, attr_name));
         }
 
         Ok(())
+    }
+
+    /// Validate range constraints (min/max) for a value.
+    fn validate_range(
+        &self,
+        attr_name: &str,
+        value: &Value,
+        min: &Option<Value>,
+        max: &Option<Value>,
+    ) -> MutationResult<()> {
+        // Skip null values - they don't violate range constraints
+        if matches!(value, Value::Null) {
+            return Ok(());
+        }
+
+        // Check minimum constraint
+        if let Some(min_val) = min {
+            if !self.value_gte(value, min_val) {
+                let range_desc = match max {
+                    Some(max_val) => format!(" [{:?}..{:?}]", min_val, max_val),
+                    None => format!(" [>= {:?}]", min_val),
+                };
+                return Err(MutationError::range_violation(
+                    attr_name,
+                    format!("{:?}", value),
+                    range_desc,
+                ));
+            }
+        }
+
+        // Check maximum constraint
+        if let Some(max_val) = max {
+            if !self.value_lte(value, max_val) {
+                let range_desc = match min {
+                    Some(min_val) => format!(" [{:?}..{:?}]", min_val, max_val),
+                    None => format!(" [<= {:?}]", max_val),
+                };
+                return Err(MutationError::range_violation(
+                    attr_name,
+                    format!("{:?}", value),
+                    range_desc,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if value >= min_val.
+    fn value_gte(&self, value: &Value, min_val: &Value) -> bool {
+        match (value, min_val) {
+            (Value::Int(v), Value::Int(m)) => *v >= *m,
+            (Value::Float(v), Value::Float(m)) => *v >= *m,
+            (Value::Int(v), Value::Float(m)) => (*v as f64) >= *m,
+            (Value::Float(v), Value::Int(m)) => *v >= (*m as f64),
+            _ => true, // Non-numeric types pass
+        }
+    }
+
+    /// Check if value <= max_val.
+    fn value_lte(&self, value: &Value, max_val: &Value) -> bool {
+        match (value, max_val) {
+            (Value::Int(v), Value::Int(m)) => *v <= *m,
+            (Value::Float(v), Value::Float(m)) => *v <= *m,
+            (Value::Int(v), Value::Float(m)) => (*v as f64) <= *m,
+            (Value::Float(v), Value::Int(m)) => *v <= (*m as f64),
+            _ => true, // Non-numeric types pass
+        }
     }
 
     /// Check that all required attributes are present.

@@ -62,6 +62,13 @@ pub enum MutationError {
 
     #[error("Evaluation error: {message}")]
     EvalError { message: String },
+
+    #[error("Range constraint violated: {attr} value {value} is out of range{range_desc}")]
+    RangeViolation {
+        attr: String,
+        value: String,
+        range_desc: String,
+    },
 }
 
 impl MutationError {
@@ -144,6 +151,18 @@ impl MutationError {
     pub fn eval_error(message: impl Into<String>) -> Self {
         Self::EvalError {
             message: message.into(),
+        }
+    }
+
+    pub fn range_violation(
+        attr: impl Into<String>,
+        value: impl Into<String>,
+        range_desc: impl Into<String>,
+    ) -> Self {
+        Self::RangeViolation {
+            attr: attr.into(),
+            value: value.into(),
+            range_desc: range_desc.into(),
         }
     }
 }
