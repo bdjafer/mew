@@ -1,0 +1,283 @@
+-- ===========================================================================
+-- ONTOLOGY: 4L_Argumentation
+-- LEVEL: 4 (Higher-Order)
+-- SIZE: Long
+-- DOMAIN: Argumentation theory with attacks, supports, and debates
+-- 
+-- FEATURES TESTED:
+--   • Complex higher-order patterns
+--   • Attacks and supports between claims AND arguments
+--   • Stance modeling
+--   • Debate structure
+--   • Argument strength propagation
+--   • Soft constraints for argument quality
+--   • Manual rules for moderator actions
+--   • Full provenance
+--
+-- @test:parse
+-- @test:compile
+-- @test:spawn
+-- @test:link
+-- @test:higher-order
+-- @test:query:pattern
+-- @test:query:transitive
+-- @test:rule:chain
+-- ===========================================================================
+
+ontology Argumentation {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+  
+  type Strength = Float [>= 0, <= 1]
+  type StanceType = String [in: ["support", "oppose", "neutral", "undecided"]]
+  type ArgumentStatus = String [in: ["active", "defeated", "withdrawn", "accepted"]]
+  type ClaimStatus = String [in: ["open", "accepted", "rejected", "contested"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- A claim or proposition that can be argued
+  node Claim {
+    statement: String [required],
+    status: ClaimStatus = "open",
+    created_at: Timestamp = now(),
+    resolved_at: Timestamp?
+  }
+
+  --- An argument supporting or attacking something
+  node Argument {
+    content: String [required],
+    argument_type: String?,
+    status: ArgumentStatus = "active",
+    created_at: Timestamp = now()
+  }
+
+  --- Evidence or source supporting an argument
+  node Evidence {
+    description: String [required],
+    source_type: String?,
+    source_url: String?,
+    reliability: Strength = 0.5,
+    added_at: Timestamp = now()
+  }
+
+  --- A participant in debates
+  node Participant {
+    name: String [required],
+    reputation: Strength = 0.5,
+    joined_at: Timestamp = now()
+  }
+
+  --- A structured debate on a topic
+  node Debate {
+    title: String [required],
+    description: String?,
+    topic_claim: String?,
+    status: String = "open",
+    started_at: Timestamp = now(),
+    ended_at: Timestamp?
+  }
+
+  --- A rebuttal specifically countering an argument
+  node Rebuttal : Argument {
+    targets_weakness: String?
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Argument addresses a claim (supports or attacks)
+  edge addresses(argument: Argument, claim: Claim) {
+    stance: StanceType [required],
+    relevance: Strength = 0.5
+  }
+
+  --- Argument attacks another argument
+  edge attacks(attacker: Argument, target: Argument) [no_self] {
+    attack_type: String?,
+    effectiveness: Strength = 0.5
+  }
+
+  --- Argument supports another argument
+  edge reinforces(supporter: Argument, target: Argument) [no_self] {
+    relevance: Strength = 0.5
+  }
+
+  --- Evidence backs an argument
+  edge backed_by(argument: Argument, evidence: Evidence) {
+    relevance: Strength = 0.5
+  }
+
+  --- Participant made an argument
+  edge authored_by(argument: Argument, participant: Participant) {
+    authored_at: Timestamp = now()
+  }
+
+  --- Participant takes stance on claim
+  edge takes_stance(participant: Participant, claim: Claim) {
+    stance: StanceType [required],
+    confidence: Strength = 0.5,
+    stated_at: Timestamp = now()
+  }
+
+  --- Debate centers on claim
+  edge debates(debate: Debate, claim: Claim)
+
+  --- Argument is part of debate
+  edge in_debate(argument: Argument, debate: Debate)
+
+  -- =========================================================================
+  -- HIGHER-ORDER EDGES
+  -- =========================================================================
+
+  --- Strength assessment of an addresses relationship
+  edge argument_strength(about: edge<addresses>) {
+    computed_strength: Strength [required],
+    computed_at: Timestamp = now(),
+    methodology: String?
+  }
+
+  --- Attack effectiveness assessment
+  edge attack_assessment(about: edge<attacks>) {
+    success: Bool?,
+    assessed_by: String?,
+    assessed_at: Timestamp = now()
+  }
+
+  --- Agreement/disagreement with a stance
+  edge stance_reaction(reactor: Participant, about: edge<takes_stance>) {
+    agrees: Bool [required],
+    reacted_at: Timestamp = now()
+  }
+
+  --- Credibility of evidence for specific argument use
+  edge evidence_credibility(about: edge<backed_by>) {
+    credibility: Strength [required],
+    verified: Bool = false,
+    verified_by: String?
+  }
+
+  -- =========================================================================
+  -- CONSTRAINTS
+  -- =========================================================================
+
+  --- Argument cannot attack and reinforce the same target
+  constraint no_attack_and_support [message: "Argument cannot both attack and support the same target"]:
+    a1: Argument, a2: Argument,
+    attacks(a1, a2), reinforces(a1, a2)
+    => false
+
+  --- Rebuttal must attack something
+  constraint rebuttal_must_attack [message: "Rebuttal must attack at least one argument"]:
+    r: Rebuttal
+    => EXISTS(target: Argument, attacks(r, target))
+
+  --- Active argument should have author (soft)
+  constraint argument_has_author [soft, message: "Arguments should have an author"]:
+    a: Argument
+    WHERE a.status = "active"
+    => EXISTS(p: Participant, authored_by(a, p))
+
+  --- Accepted claims should have supporting arguments (soft)
+  constraint accepted_has_support [soft, message: "Accepted claims should have supporting arguments"]:
+    c: Claim
+    WHERE c.status = "accepted"
+    => EXISTS(
+      a: Argument, addresses(a, c) AS addr
+      WHERE addr.stance = "support" AND a.status = "active"
+    )
+
+  --- Defeated arguments should have successful attack
+  constraint defeated_has_attack [message: "Defeated argument must have successful attack"]:
+    a: Argument
+    WHERE a.status = "defeated"
+    => EXISTS(
+      attacker: Argument,
+      attacks(attacker, a) AS atk,
+      attack_assessment(atk) AS assess
+      WHERE assess.success = true
+    )
+
+  -- =========================================================================
+  -- RULES
+  -- =========================================================================
+
+  --- Compute argument strength based on evidence
+  rule compute_argument_strength [priority: 20]:
+    a: Argument, c: Claim,
+    addresses(a, c) AS addr
+    WHERE NOT EXISTS(argument_strength(addr))
+      AND EXISTS(e: Evidence, backed_by(a, e))
+    =>
+    LINK argument_strength(addr) { 
+      computed_strength = 0.5, 
+      computed_at = now(),
+      methodology = "auto:evidence_based" 
+    }
+
+  --- When argument is defeated, reduce its strength
+  rule reduce_defeated_strength [priority: 15]:
+    a: Argument, c: Claim,
+    addresses(a, c) AS addr,
+    argument_strength(addr) AS str
+    WHERE a.status = "defeated" AND str.computed_strength > 0.2
+    =>
+    SET str.computed_strength = 0.1,
+    SET str.computed_at = now()
+
+  --- When all supporting arguments defeated, mark claim as contested
+  rule contest_unsupported_claim [priority: 10]:
+    c: Claim
+    WHERE c.status = "open"
+      AND NOT EXISTS(
+        a: Argument, addresses(a, c) AS addr
+        WHERE addr.stance = "support" AND a.status = "active"
+      )
+      AND EXISTS(
+        a: Argument, addresses(a, c) AS addr
+        WHERE addr.stance = "support"
+      )
+    =>
+    SET c.status = "contested"
+
+  --- Manual rule: Moderator accepts a claim
+  rule accept_claim [manual]:
+    c: Claim
+    WHERE c.status = "open" OR c.status = "contested"
+    =>
+    SET c.status = "accepted",
+    SET c.resolved_at = now()
+
+  --- Manual rule: Moderator rejects a claim
+  rule reject_claim [manual]:
+    c: Claim
+    WHERE c.status = "open" OR c.status = "contested"
+    =>
+    SET c.status = "rejected",
+    SET c.resolved_at = now()
+
+  --- Manual rule: Moderator defeats an argument
+  rule defeat_argument [manual]:
+    a: Argument
+    WHERE a.status = "active"
+    =>
+    SET a.status = "defeated"
+
+  --- Participant changes stance when their arguments defeated
+  rule update_stance_on_defeat [priority: 5]:
+    p: Participant, c: Claim, a: Argument,
+    takes_stance(p, c) AS stance,
+    authored_by(a, p),
+    addresses(a, c) AS addr
+    WHERE a.status = "defeated" 
+      AND stance.stance = addr.stance
+      AND stance.stance != "undecided"
+    =>
+    SET stance.stance = "undecided",
+    SET stance.stated_at = now()
+
+}

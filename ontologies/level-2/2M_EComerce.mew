@@ -1,0 +1,121 @@
+-- ===========================================================================
+-- ONTOLOGY: 2M_Ecommerce
+-- LEVEL: 2 (Structure)
+-- SIZE: Medium
+-- DOMAIN: E-commerce product catalog with reviews
+-- 
+-- FEATURES TESTED:
+--   • Type inheritance hierarchy
+--   • [unique] constraints
+--   • [indexed] attributes
+--   • Range constraints (Float for price, Int for rating)
+--   • [match] regex for SKU format
+--   • Multiple enum constraints
+--   • [no_self] on edges
+--
+-- @test:parse
+-- @test:compile
+-- @test:spawn
+-- @test:constraint:pass
+-- @test:constraint:fail - Invalid SKU format, rating out of range
+-- ===========================================================================
+
+ontology Ecommerce {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+  
+  type SKU = String [match: "^[A-Z]{2,4}-[0-9]{4,8}$"]
+  type Price = Float [>= 0]
+  type Rating = Int [1..5]
+  type ProductStatus = String [in: ["draft", "active", "discontinued", "out_of_stock"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- Base product type
+  node Product {
+    sku: SKU [required, unique],
+    name: String [required],
+    description: String?,
+    price: Price [required],
+    status: ProductStatus = "draft",
+    created_at: Timestamp = now(),
+    updated_at: Timestamp = now()
+  }
+
+  --- Physical product with shipping attributes
+  node PhysicalProduct : Product {
+    weight_kg: Float [>= 0],
+    length_cm: Float [>= 0],
+    width_cm: Float [>= 0],
+    height_cm: Float [>= 0],
+    requires_shipping: Bool = true
+  }
+
+  --- Digital product (downloadable)
+  node DigitalProduct : Product {
+    file_size_mb: Float [>= 0],
+    download_url: String?,
+    requires_shipping: Bool = false
+  }
+
+  --- Product category
+  node Category {
+    name: String [required],
+    slug: String [required, unique, match: "^[a-z0-9-]+$"],
+    description: String?,
+    is_active: Bool = true
+  }
+
+  --- A customer who can purchase and review
+  node Customer {
+    email: String [required, unique, match: "^.+@.+\\..+$"],
+    name: String [required],
+    joined_at: Timestamp = now(),
+    is_verified: Bool = false
+  }
+
+  --- A product review by a customer
+  node Review {
+    rating: Rating [required],
+    title: String?,
+    body: String?,
+    is_verified_purchase: Bool = false,
+    created_at: Timestamp = now(),
+    helpful_count: Int = 0
+  }
+
+  --- A product image
+  node ProductImage {
+    url: String [required],
+    alt_text: String?,
+    position: Int = 0,
+    is_primary: Bool = false
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Product belongs to category
+  edge in_category(product: Product, category: Category)
+
+  --- Category has parent category
+  edge parent_category(child: Category, parent: Category) [no_self]
+
+  --- Review is for a product
+  edge review_of(review: Review, product: Product)
+
+  --- Review written by customer
+  edge reviewed_by(review: Review, customer: Customer)
+
+  --- Product has image
+  edge has_image(product: Product, image: ProductImage)
+
+  --- Related products
+  edge related_to(product1: Product, product2: Product) [no_self]
+
+}

@@ -1,0 +1,270 @@
+-- ===========================================================================
+-- ONTOLOGY: 5M_BDI
+-- LEVEL: 5 (AGI-Ready)
+-- SIZE: Medium
+-- DOMAIN: BDI agent architecture
+-- 
+-- FEATURES TESTED:
+--   • Classic BDI agent model
+--   • Beliefs with confidence and revision
+--   • Goals with priorities and dependencies
+--   • Plans with preconditions and effects
+--   • Temporal reasoning (deadlines, durations)
+--   • Intention commitment
+--   • Complex rule interactions
+--
+-- @test:parse
+-- @test:compile
+-- @test:spawn
+-- @test:link
+-- @test:higher-order
+-- @test:query:pattern
+-- @test:rule:chain
+-- ===========================================================================
+
+ontology BDI {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+  
+  type Confidence = Float [>= 0, <= 1]
+  type Priority = Float [>= 0, <= 1]
+  type GoalStatus = String [in: ["active", "achieved", "failed", "suspended", "dropped"]]
+  type PlanStatus = String [in: ["available", "executing", "completed", "failed", "aborted"]]
+  type IntentionStatus = String [in: ["committed", "executing", "achieved", "failed", "reconsidering"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- An agent with beliefs, desires, and intentions
+  node Agent {
+    name: String [required],
+    agent_type: String = "rational",
+    created_at: Timestamp = now(),
+    last_reasoning_cycle: Timestamp?
+  }
+
+  --- A belief held by an agent
+  node Belief {
+    content: String [required],
+    confidence: Confidence = 1.0,
+    acquired_at: Timestamp = now(),
+    source: String?,
+    is_perception: Bool = false,
+    last_verified: Timestamp?
+  }
+
+  --- A goal (desire) that an agent wants to achieve
+  node Goal {
+    description: String [required],
+    status: GoalStatus = "active",
+    priority: Priority = 0.5,
+    deadline: Timestamp?,
+    created_at: Timestamp = now(),
+    achieved_at: Timestamp?,
+    utility: Float = 1.0
+  }
+
+  --- A plan to achieve a goal
+  node Plan {
+    name: String [required],
+    description: String?,
+    status: PlanStatus = "available",
+    estimated_duration: Duration?,
+    success_rate: Confidence = 0.5,
+    last_executed: Timestamp?
+  }
+
+  --- An action within a plan
+  node Action {
+    name: String [required],
+    description: String?,
+    duration: Duration?,
+    order: Int = 0,
+    is_primitive: Bool = true
+  }
+
+  --- An intention (committed goal with plan)
+  node Intention {
+    status: IntentionStatus = "committed",
+    committed_at: Timestamp = now(),
+    started_at: Timestamp?,
+    completed_at: Timestamp?
+  }
+
+  --- A percept from the environment
+  node Percept {
+    content: String [required],
+    perceived_at: Timestamp = now(),
+    confidence: Confidence = 0.9,
+    sensor: String?
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Agent holds belief
+  edge believes(agent: Agent, belief: Belief) {
+    since: Timestamp = now()
+  }
+
+  --- Agent has goal
+  edge desires(agent: Agent, goal: Goal) {
+    adopted_at: Timestamp = now()
+  }
+
+  --- Agent has intention
+  edge intends(agent: Agent, intention: Intention)
+
+  --- Intention is for goal
+  edge intention_for(intention: Intention, goal: Goal)
+
+  --- Intention uses plan
+  edge using_plan(intention: Intention, plan: Plan)
+
+  --- Plan achieves goal
+  edge achieves(plan: Plan, goal: Goal) {
+    probability: Confidence = 0.5
+  }
+
+  --- Plan has action
+  edge has_action(plan: Plan, action: Action)
+
+  --- Action requires belief (precondition)
+  edge requires_belief(action: Action, belief_pattern: String) {
+    must_be_true: Bool = true
+  }
+
+  --- Action produces belief (effect)  
+  edge produces_belief(action: Action, belief_content: String) {
+    probability: Confidence = 1.0
+  }
+
+  --- Goal depends on another goal
+  edge depends_on(dependent: Goal, dependency: Goal) [no_self, acyclic]
+
+  --- Goal conflicts with another goal
+  edge conflicts_with(goal1: Goal, goal2: Goal) [symmetric, no_self]
+
+  --- Percept updates belief
+  edge updates(percept: Percept, belief: Belief) {
+    update_type: String = "revision"
+  }
+
+  --- Belief supports belief (inference)
+  edge supports_belief(premise: Belief, conclusion: Belief) {
+    inference_strength: Confidence = 0.8
+  }
+
+  -- =========================================================================
+  -- HIGHER-ORDER EDGES
+  -- =========================================================================
+
+  --- Confidence in belief relationship
+  edge belief_confidence(about: edge<believes>) {
+    level: Confidence [required],
+    last_updated: Timestamp = now()
+  }
+
+  --- Commitment strength to intention
+  edge commitment_strength(about: edge<intends>) {
+    level: Confidence = 1.0,
+    reassessed_at: Timestamp?
+  }
+
+  -- =========================================================================
+  -- CONSTRAINTS
+  -- =========================================================================
+
+  --- Agent cannot intend conflicting goals
+  constraint no_conflicting_intentions [message: "Cannot intend conflicting goals"]:
+    a: Agent, i1: Intention, i2: Intention, g1: Goal, g2: Goal,
+    intends(a, i1), intends(a, i2),
+    intention_for(i1, g1), intention_for(i2, g2),
+    conflicts_with(g1, g2)
+    WHERE i1.status = "committed" AND i2.status = "committed"
+    => false
+
+  --- Intention must have a plan
+  constraint intention_has_plan [message: "Committed intention must have a plan"]:
+    i: Intention
+    WHERE i.status = "committed" OR i.status = "executing"
+    => EXISTS(p: Plan, using_plan(i, p))
+
+  --- Active goal should be desired by some agent (soft)
+  constraint active_goal_is_desired [soft]:
+    g: Goal
+    WHERE g.status = "active"
+    => EXISTS(a: Agent, desires(a, g))
+
+  -- =========================================================================
+  -- RULES
+  -- =========================================================================
+
+  --- When percept arrives, create or update belief
+  rule process_percept [priority: 100]:
+    a: Agent, p: Percept
+    WHERE NOT EXISTS(b: Belief, updates(p, b))
+    =>
+    SPAWN b: Belief { 
+      content = p.content, 
+      confidence = p.confidence,
+      is_perception = true,
+      source = p.sensor
+    },
+    LINK believes(a, b),
+    LINK updates(p, b)
+
+  --- When goal achieved, update status
+  rule mark_goal_achieved [priority: 50]:
+    a: Agent, g: Goal, i: Intention,
+    desires(a, g),
+    intends(a, i),
+    intention_for(i, g)
+    WHERE g.status = "active" AND i.status = "achieved"
+    =>
+    SET g.status = "achieved",
+    SET g.achieved_at = now()
+
+  --- When intention fails, reconsider goal
+  rule reconsider_failed_intention [priority: 40]:
+    a: Agent, g: Goal, i: Intention,
+    desires(a, g),
+    intends(a, i),
+    intention_for(i, g)
+    WHERE i.status = "failed" AND g.status = "active"
+    =>
+    SET i.status = "reconsidering"
+
+  --- Drop low-priority goals when deadline passed
+  rule drop_expired_goals [priority: 30]:
+    g: Goal
+    WHERE g.status = "active" 
+      AND g.deadline != null 
+      AND g.deadline < now()
+      AND g.priority < 0.8
+    =>
+    SET g.status = "dropped"
+
+  --- Suspend goals that depend on failed goals
+  rule suspend_dependent_goals [priority: 20]:
+    dependent: Goal, dependency: Goal,
+    depends_on(dependent, dependency)
+    WHERE dependency.status = "failed" AND dependent.status = "active"
+    =>
+    SET dependent.status = "suspended"
+
+  --- Update belief confidence from supporting beliefs
+  rule propagate_belief_confidence [priority: 10]:
+    a: Agent, premise: Belief, conclusion: Belief,
+    believes(a, premise), believes(a, conclusion),
+    supports_belief(premise, conclusion) AS sup
+    WHERE premise.confidence > conclusion.confidence
+    =>
+    SET conclusion.confidence = premise.confidence * sup.inference_strength,
+    SET conclusion.last_verified = now()
+
+}

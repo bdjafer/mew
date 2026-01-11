@@ -1,0 +1,93 @@
+-- ===========================================================================
+-- ONTOLOGY: 4S_FactBase
+-- LEVEL: 4 (Higher-Order)
+-- SIZE: Short
+-- DOMAIN: Simple fact storage with confidence and evidence
+-- 
+-- FEATURES TESTED:
+--   • Higher-order edges (edge<T>)
+--   • Confidence on relationships
+--   • Evidence supporting claims
+--   • Basic provenance
+--
+-- @test:parse
+-- @test:compile
+-- @test:spawn
+-- @test:link
+-- @test:higher-order - Create edge about edge
+-- @test:query:pattern - Query edges with their confidence
+-- ===========================================================================
+
+ontology FactBase {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+  
+  type Confidence = Float [>= 0, <= 1]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- An entity that can be related to other entities
+  node Entity {
+    name: String [required],
+    entity_type: String?,
+    description: String?,
+    created_at: Timestamp = now()
+  }
+
+  --- A piece of evidence supporting facts
+  node Evidence {
+    source: String [required],
+    description: String?,
+    reliability: Confidence = 0.5,
+    collected_at: Timestamp = now()
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- A claimed relationship between entities
+  edge relates_to(subject: Entity, object: Entity) {
+    relation_type: String [required],
+    created_at: Timestamp = now()
+  }
+
+  --- Confidence level on a relationship (higher-order)
+  edge confidence(about: edge<relates_to>) {
+    level: Confidence [required],
+    assessed_at: Timestamp = now(),
+    assessor: String?
+  }
+
+  --- Evidence supports a relationship (higher-order)
+  edge supports(evidence: Evidence, claim: edge<relates_to>) {
+    strength: Confidence = 0.5
+  }
+
+  -- =========================================================================
+  -- CONSTRAINTS
+  -- =========================================================================
+
+  --- Relationship should have at least one confidence assessment (soft)
+  constraint relationship_has_confidence [soft, message: "Relationships should have confidence"]:
+    e1: Entity, e2: Entity, relates_to(e1, e2) AS r
+    => EXISTS(confidence(r) AS c)
+
+  -- =========================================================================
+  -- RULES
+  -- =========================================================================
+
+  --- When evidence supports a claim, boost confidence
+  rule evidence_boosts_confidence [priority: 10]:
+    ev: Evidence, e1: Entity, e2: Entity,
+    relates_to(e1, e2) AS r,
+    supports(ev, r) AS sup
+    WHERE NOT EXISTS(confidence(r))
+    =>
+    LINK confidence(r) { level = ev.reliability * sup.strength, assessed_at = now() }
+
+}

@@ -1,0 +1,185 @@
+-- ===========================================================================
+-- ONTOLOGY: 4M_Scientific
+-- LEVEL: 4 (Higher-Order)
+-- SIZE: Medium
+-- DOMAIN: Scientific hypothesis and evidence management
+-- 
+-- FEATURES TESTED:
+--   • Multi-level higher-order (edges about edges about edges)
+--   • Symmetric edges (correlation)
+--   • Complex provenance chains
+--   • Confidence aggregation
+--   • Manual rules for assessment
+--   • Hyperedge (experiment with multiple variables)
+--
+-- @test:parse
+-- @test:compile
+-- @test:spawn
+-- @test:link
+-- @test:higher-order
+-- @test:query:pattern
+-- @test:query:transitive
+-- ===========================================================================
+
+ontology Scientific {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+  
+  type Confidence = Float [>= 0, <= 1]
+  type PValue = Float [>= 0, <= 1]
+  type ClaimStatus = String [in: ["proposed", "supported", "contested", "refuted", "established"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- A scientific concept or phenomenon
+  node Concept {
+    name: String [required],
+    definition: String?,
+    domain: String?,
+    created_at: Timestamp = now()
+  }
+
+  --- A hypothesis about relationships
+  node Hypothesis {
+    statement: String [required],
+    status: ClaimStatus = "proposed",
+    proposed_at: Timestamp = now(),
+    proposed_by: String?
+  }
+
+  --- An experiment testing hypotheses
+  node Experiment {
+    title: String [required],
+    methodology: String?,
+    sample_size: Int?,
+    conducted_at: Timestamp?,
+    published_at: Timestamp?,
+    doi: String?
+  }
+
+  --- A researcher or research group
+  node Researcher {
+    name: String [required],
+    institution: String?,
+    email: String?,
+    orcid: String?
+  }
+
+  --- A publication containing research
+  node Publication {
+    title: String [required],
+    journal: String?,
+    year: Int?,
+    doi: String [unique],
+    abstract: String?
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Hypothesis proposes that concept A causes concept B
+  edge proposes_causation(hypothesis: Hypothesis, cause: Concept, effect: Concept)
+
+  --- Concepts are correlated (symmetric - no direction implied)
+  edge correlated(concept1: Concept, concept2: Concept) [symmetric, no_self] {
+    correlation_coefficient: Float?,
+    discovered_at: Timestamp?
+  }
+
+  --- Experiment tests hypothesis
+  edge tests(experiment: Experiment, hypothesis: Hypothesis) {
+    result: String?,
+    p_value: PValue?,
+    effect_size: Float?
+  }
+
+  --- Experiment conducted by researcher
+  edge conducted_by(experiment: Experiment, researcher: Researcher) {
+    role: String = "author"
+  }
+
+  --- Experiment published in publication
+  edge published_in(experiment: Experiment, publication: Publication)
+
+  --- Researcher authored publication
+  edge authored(researcher: Researcher, publication: Publication) {
+    position: Int?,
+    corresponding: Bool = false
+  }
+
+  --- Evidence relationship: experiment supports/refutes hypothesis (higher-order)
+  edge evidence_for(experiment: Experiment, claim: edge<proposes_causation>) {
+    direction: String [in: ["supports", "refutes", "neutral"]],
+    strength: Confidence = 0.5
+  }
+
+  --- Confidence assessment on a causation claim (higher-order)
+  edge confidence(about: edge<proposes_causation>) {
+    level: Confidence [required],
+    assessed_at: Timestamp = now(),
+    methodology: String?
+  }
+
+  --- Confidence assessment based on evidence (higher-order - about evidence_for)
+  edge confidence_source(conf: edge<confidence>, evidence: edge<evidence_for>)
+
+  --- Replication relationship (higher-order)
+  edge replicates(replication: edge<tests>, original: edge<tests>) {
+    success: Bool?,
+    similarity: Confidence?
+  }
+
+  -- =========================================================================
+  -- CONSTRAINTS
+  -- =========================================================================
+
+  --- Causation claim must involve different concepts
+  constraint causation_different_concepts [message: "Cause and effect must be different concepts"]:
+    h: Hypothesis, c1: Concept, c2: Concept,
+    proposes_causation(h, c1, c2)
+    => c1.id != c2.id
+
+  --- Established hypotheses should have high confidence
+  constraint established_requires_confidence [soft, message: "Established claims should have confidence >= 0.8"]:
+    h: Hypothesis, c1: Concept, c2: Concept,
+    proposes_causation(h, c1, c2) AS claim,
+    confidence(claim) AS conf
+    WHERE h.status = "established"
+    => conf.level >= 0.8
+
+  -- =========================================================================
+  -- RULES
+  -- =========================================================================
+
+  --- When multiple experiments support a claim, increase confidence
+  rule aggregate_supporting_evidence [priority: 10]:
+    h: Hypothesis, c1: Concept, c2: Concept,
+    proposes_causation(h, c1, c2) AS claim
+    WHERE NOT EXISTS(confidence(claim))
+      AND EXISTS(
+        e: Experiment, evidence_for(e, claim) AS ev
+        WHERE ev.direction = "supports"
+      )
+    =>
+    LINK confidence(claim) { level = 0.6, assessed_at = now(), methodology = "auto:evidence_count" }
+
+  --- When experiment refutes with low p-value, mark as contested
+  rule refutation_contests [priority: 5]:
+    h: Hypothesis, c1: Concept, c2: Concept, exp: Experiment,
+    proposes_causation(h, c1, c2) AS claim,
+    tests(exp, h) AS test,
+    evidence_for(exp, claim) AS ev
+    WHERE ev.direction = "refutes" 
+      AND test.p_value != null 
+      AND test.p_value < 0.05
+      AND h.status != "refuted"
+      AND h.status != "contested"
+    =>
+    SET h.status = "contested"
+
+}

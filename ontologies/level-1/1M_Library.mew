@@ -1,0 +1,95 @@
+-- ===========================================================================
+-- ONTOLOGY: 1M_Library
+-- LEVEL: 1 (Fundamentals)
+-- SIZE: Medium
+-- DOMAIN: Library catalog and loan management
+-- 
+-- FEATURES TESTED:
+--   • Multiple node types (5)
+--   • Timestamp attributes
+--   • Indexed attributes
+--   • Multiple edge types (5)
+--   • Edge representing temporal state (loans)
+--
+-- @test:parse
+-- @test:compile
+-- @test:spawn
+-- @test:link
+-- @test:query:simple
+-- @test:query:pattern
+-- ===========================================================================
+
+ontology Library {
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- A book in the library collection
+  node Book {
+    isbn: String [required],
+    title: String [required],
+    publication_year: Int?,
+    page_count: Int?,
+    language: String = "English",
+    added_at: Timestamp = now()
+  }
+
+  --- An author of books
+  node Author {
+    name: String [required],
+    birth_year: Int?,
+    nationality: String?,
+    biography: String?
+  }
+
+  --- A genre or category
+  node Genre {
+    name: String [required],
+    description: String?
+  }
+
+  --- A library member who can borrow books
+  node Member {
+    member_id: String [required],
+    name: String [required],
+    email: String?,
+    phone: String?,
+    joined_at: Timestamp = now(),
+    active: Bool = true
+  }
+
+  --- A physical copy of a book
+  node Copy {
+    barcode: String [required],
+    condition: String = "good",
+    acquired_at: Timestamp = now(),
+    is_available: Bool = true
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Book written by author
+  edge written_by(book: Book, author: Author)
+
+  --- Book belongs to genre
+  edge in_genre(book: Book, genre: Genre)
+
+  --- Copy is of a book
+  edge copy_of(copy: Copy, book: Book)
+
+  --- Member has borrowed a copy (active loan)
+  edge borrowed(member: Member, copy: Copy) {
+    borrowed_at: Timestamp [required],
+    due_at: Timestamp [required]
+  }
+
+  --- Historical record: member returned a copy
+  edge returned(member: Member, copy: Copy) {
+    borrowed_at: Timestamp [required],
+    returned_at: Timestamp [required]
+  }
+
+}
