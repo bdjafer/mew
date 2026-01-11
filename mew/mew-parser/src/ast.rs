@@ -384,16 +384,27 @@ pub struct FnCall {
 /// Ontology definition.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OntologyDef {
+    TypeAlias(TypeAliasDef),
     Node(NodeTypeDef),
     Edge(EdgeTypeDef),
     Constraint(ConstraintDef),
     Rule(RuleDef),
 }
 
+/// Type alias definition: type Name = BaseType [modifiers]
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeAliasDef {
+    pub name: String,
+    pub base_type: String,
+    pub modifiers: Vec<AttrModifier>,
+    pub span: Span,
+}
+
 /// Node type definition.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NodeTypeDef {
     pub name: String,
+    pub parents: Vec<String>,
     pub attrs: Vec<AttrDef>,
     pub span: Span,
 }
@@ -419,6 +430,10 @@ pub enum AttrModifier {
         min: Option<Expr>,
         max: Option<Expr>,
     },
+    /// in: ["a", "b", "c"] - allowed values
+    InValues(Vec<Expr>),
+    /// match: "regex" - regex pattern for validation
+    Match(String),
 }
 
 /// Edge type definition.
@@ -436,6 +451,8 @@ pub struct EdgeTypeDef {
 pub enum EdgeModifier {
     Acyclic,
     Unique,
+    NoSelf,
+    Symmetric,
     OnKill(OnKillAction),
 }
 

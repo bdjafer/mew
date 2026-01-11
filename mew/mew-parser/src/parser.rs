@@ -1068,23 +1068,65 @@ impl Parser {
     fn parse_ontology_def(&mut self) -> ParseResult<OntologyDef> {
         let token = self.peek().clone();
         match &token.kind {
+            TokenKind::Type => self.parse_type_alias_def().map(OntologyDef::TypeAlias),
             TokenKind::Node => self.parse_node_type_def().map(OntologyDef::Node),
             TokenKind::Edge => self.parse_edge_type_def().map(OntologyDef::Edge),
             TokenKind::Constraint => self.parse_constraint_def().map(OntologyDef::Constraint),
             TokenKind::Rule => self.parse_rule_def().map(OntologyDef::Rule),
             _ => Err(ParseError::unexpected_token(
                 token.span,
-                "node, edge, constraint, or rule",
+                "type, node, edge, constraint, or rule",
                 token.kind.name(),
             )),
         }
     }
 
+    /// Parse a type alias definition.
+    /// Syntax: type Name = BaseType [modifiers]
+    fn parse_type_alias_def(&mut self) -> ParseResult<TypeAliasDef> {
+        let start = self.expect(&TokenKind::Type)?.span;
+        let name = self.expect_ident()?;
+        self.expect(&TokenKind::Eq)?;
+        let base_type = self.expect_ident()?;
+
+        // Parse optional modifiers in brackets
+        let modifiers = if self.check(&TokenKind::LBracket) {
+            self.parse_attr_modifiers()?
+        } else {
+            Vec::new()
+        };
+
+        let span = self.span_from(start);
+        Ok(TypeAliasDef {
+            name,
+            base_type,
+            modifiers,
+            span,
+        })
+    }
+
     /// Parse a node type definition.
-    /// Syntax: node TypeName [extends Parent] { attr: Type [modifiers], ... }
+    /// Syntax: node TypeName [: Parent1, Parent2] { attr: Type [modifiers], ... }
     fn parse_node_type_def(&mut self) -> ParseResult<NodeTypeDef> {
         let start = self.expect(&TokenKind::Node)?.span;
         let name = self.expect_ident()?;
+
+        // Parse optional inheritance clause: : Parent1, Parent2
+        let parents = if self.check(&TokenKind::Colon) {
+            self.advance();
+            let mut parents = vec![self.expect_ident()?];
+            while self.check(&TokenKind::Comma) {
+                self.advance();
+                // Check if next is LBrace (end of parents) or another ident
+                if self.check(&TokenKind::LBrace) {
+                    break;
+                }
+                parents.push(self.expect_ident()?);
+            }
+            parents
+        } else {
+            Vec::new()
+        };
 
         // Parse attribute definitions in braces
         let attrs = if self.check(&TokenKind::LBrace) {
@@ -1094,7 +1136,7 @@ impl Parser {
         };
 
         let span = self.span_from(start);
-        Ok(NodeTypeDef { name, attrs, span })
+        Ok(NodeTypeDef { name, parents, attrs, span })
     }
 
     /// Parse attribute definitions: { name: Type [modifiers], ... }
@@ -1184,6 +1226,18 @@ impl Parser {
             self.expect(&TokenKind::Eq)?;
             let value = self.parse_expr()?;
             Ok(AttrModifier::Default(value))
+        } else if self.check(&TokenKind::In) || self.check_ident("in") {
+            // in: ["a", "b", "c"] - allowed values
+            self.advance();
+            self.expect(&TokenKind::Colon)?;
+            let values = self.parse_array_literal()?;
+            Ok(AttrModifier::InValues(values))
+        } else if self.check(&TokenKind::Match) || self.check_ident("match") {
+            // match: "regex" - regex pattern
+            self.advance();
+            self.expect(&TokenKind::Colon)?;
+            let pattern = self.expect_string()?;
+            Ok(AttrModifier::Match(pattern))
         } else if self.check(&TokenKind::GtEq) {
             self.advance();
             let min = self.parse_expr()?;
@@ -1198,11 +1252,75 @@ impl Parser {
                 min: None,
                 max: Some(max),
             })
+        } else if let TokenKind::Int(min_val) = self.peek().kind {
+            // Range shorthand: [N..M]
+            let min = min_val;
+            self.advance();
+            if self.check(&TokenKind::Range) {
+                self.advance();
+                if let TokenKind::Int(max_val) = self.peek().kind {
+                    let max = max_val;
+                    self.advance();
+                    Ok(AttrModifier::Range {
+                        min: Some(Expr::Literal(Literal {
+                            kind: LiteralKind::Int(min),
+                            span: Span::default(),
+                        })),
+                        max: Some(Expr::Literal(Literal {
+                            kind: LiteralKind::Int(max),
+                            span: Span::default(),
+                        })),
+                    })
+                } else {
+                    let token = self.peek();
+                    Err(ParseError::unexpected_token(
+                        token.span,
+                        "integer for range end",
+                        token.kind.name(),
+                    ))
+                }
+            } else {
+                let token = self.peek();
+                Err(ParseError::unexpected_token(
+                    token.span,
+                    ".. for range",
+                    token.kind.name(),
+                ))
+            }
         } else {
             let token = self.peek();
             Err(ParseError::unexpected_token(
                 token.span,
                 "modifier",
+                token.kind.name(),
+            ))
+        }
+    }
+
+    /// Parse an array literal: [expr, expr, ...]
+    fn parse_array_literal(&mut self) -> ParseResult<Vec<Expr>> {
+        self.expect(&TokenKind::LBracket)?;
+        let mut values = Vec::new();
+        while !self.check(&TokenKind::RBracket) && !self.check(&TokenKind::Eof) {
+            values.push(self.parse_expr()?);
+            if self.check(&TokenKind::Comma) {
+                self.advance();
+            }
+        }
+        self.expect(&TokenKind::RBracket)?;
+        Ok(values)
+    }
+
+    /// Expect and consume a string literal, returning the string value.
+    fn expect_string(&mut self) -> ParseResult<String> {
+        let token = self.peek().clone();
+        if let TokenKind::String(s) = token.kind {
+            self.advance();
+            Ok(s)
+        } else {
+            Err(ParseError::unexpected_token(
+                token.span,
+                "string",
                 token.kind.name(),
             ))
         }
@@ -1287,6 +1405,12 @@ impl Parser {
         } else if self.check_ident("unique") {
             self.advance();
             Ok(EdgeModifier::Unique)
+        } else if self.check_ident("no_self") {
+            self.advance();
+            Ok(EdgeModifier::NoSelf)
+        } else if self.check_ident("symmetric") {
+            self.advance();
+            Ok(EdgeModifier::Symmetric)
         } else if self.check_ident("on_kill") {
             self.advance();
             self.expect(&TokenKind::Colon)?;

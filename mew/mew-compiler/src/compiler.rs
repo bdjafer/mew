@@ -68,6 +68,10 @@ impl Compiler {
         // Second pass: add types and edges
         for def in &defs {
             match def {
+                OntologyDef::TypeAlias(_) => {
+                    // Type aliases are expanded at use site - nothing to register
+                    // The modifiers are applied when the alias is used in an attribute
+                }
                 OntologyDef::Node(n) => {
                     self.add_node_type(&mut builder, n)?;
                 }
@@ -131,6 +135,11 @@ impl Compiler {
         node_def: &AstNodeTypeDef,
     ) -> CompileResult<TypeId> {
         let mut type_builder = builder.add_type(&node_def.name);
+
+        // Add parent types for inheritance
+        for parent in &node_def.parents {
+            type_builder = type_builder.extends(parent);
+        }
 
         for attr_def in &node_def.attrs {
             let mut attr = AttrDef::new(&attr_def.name, &attr_def.type_name);
@@ -204,6 +213,36 @@ impl Compiler {
                             });
                         }
                     }
+                    AttrModifier::InValues(values) => {
+                        // Generate enum constraint
+                        let value_strs: Vec<String> = values
+                            .iter()
+                            .filter_map(expr_to_value)
+                            .map(|v| format!("{:?}", v))
+                            .collect();
+                        if !value_strs.is_empty() {
+                            self.generated_type_constraints.push(GeneratedConstraint {
+                                name: format!("_{}_{}_{}", node_def.name, attr_def.name, "enum"),
+                                on_type: node_def.name.clone(),
+                                condition: format!(
+                                    "t.{} IN [{}]",
+                                    attr_def.name,
+                                    value_strs.join(", ")
+                                ),
+                            });
+                        }
+                    }
+                    AttrModifier::Match(pattern) => {
+                        // Generate regex constraint
+                        self.generated_type_constraints.push(GeneratedConstraint {
+                            name: format!("_{}_{}_{}", node_def.name, attr_def.name, "match"),
+                            on_type: node_def.name.clone(),
+                            condition: format!(
+                                "t.{} MATCHES \"{}\"",
+                                attr_def.name, pattern
+                            ),
+                        });
+                    }
                 }
             }
 
@@ -270,6 +309,11 @@ impl Compiler {
                         let max_val = max.as_ref().and_then(expr_to_value);
                         attr = attr.with_range(min_val, max_val);
                     }
+                    AttrModifier::InValues(_) | AttrModifier::Match(_) => {
+                        // These are constraint-generating modifiers
+                        // For edge attributes, we'd generate edge-level constraints
+                        // For now, just skip - runtime constraint checking will handle them
+                    }
                 }
             }
 
@@ -290,6 +334,17 @@ impl Compiler {
                 }
                 EdgeModifier::Unique => {
                     edge_builder = edge_builder.unique_edge();
+                }
+                EdgeModifier::NoSelf => {
+                    // Generate no-self constraint
+                    self.generated_edge_constraints.push(GeneratedConstraint {
+                        name: format!("_{}_no_self", edge_def.name),
+                        on_type: edge_def.name.clone(),
+                        condition: "source != target".to_string(),
+                    });
+                }
+                EdgeModifier::Symmetric => {
+                    edge_builder = edge_builder.symmetric();
                 }
                 EdgeModifier::OnKill(action) => {
                     let registry_action = match action {

@@ -45,6 +45,8 @@ pub enum TokenKind {
     Edge,
     Constraint,
     Rule,
+    Type,
+    In,
     On,
     Read,
     Serializable,
@@ -138,6 +140,8 @@ impl TokenKind {
             TokenKind::Edge => "edge",
             TokenKind::Constraint => "constraint",
             TokenKind::Rule => "rule",
+            TokenKind::Type => "type",
+            TokenKind::In => "in",
             TokenKind::On => "ON",
             TokenKind::Read => "READ",
             TokenKind::Serializable => "SERIALIZABLE",
@@ -517,6 +521,8 @@ impl<'a> Lexer<'a> {
             "EDGE" => TokenKind::Edge,
             "CONSTRAINT" => TokenKind::Constraint,
             "RULE" => TokenKind::Rule,
+            "TYPE" => TokenKind::Type,
+            "IN" => TokenKind::In,
             "ON" => TokenKind::On,
             // AUTO, PRIORITY, REQUIRED, UNIQUE, DEFAULT are context-specific
             // and handled as identifiers to avoid conflicts with attribute names
