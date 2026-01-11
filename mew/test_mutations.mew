@@ -1,7 +1,0 @@
--- Test mutation statements
-SPAWN p1: Person { name = "Alice" }
-SPAWN p2: Person { name = "Bob" }
-SPAWN t: Task { title = "Test Task" }
-LINK owns(p1, t)
-SET t.title = "Updated Task"
-MATCH p: Person RETURN p.name

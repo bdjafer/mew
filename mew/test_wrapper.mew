@@ -1,6 +1,0 @@
--- Testing ontology wrapper syntax
-ontology TestWrapper {
-  node Simple {
-    name: String [required]
-  }
-}

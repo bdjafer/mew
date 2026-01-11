@@ -1,4 +1,0 @@
--- Test script with statements (not ontology)
-SPAWN alice: Person { name = "Alice" }
-SPAWN t1: Task { title = "Design API" }
-MATCH t: Task RETURN t.title
