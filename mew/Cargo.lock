@@ -70,10 +70,6 @@ dependencies = [
 [[package]]
 name = "mew-parser"
 version = "0.1.0"
-dependencies = [
- "mew-core",
- "thiserror",
-]
 
 [[package]]
 name = "mew-pattern"
