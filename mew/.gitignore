@@ -1,2 +1,39 @@
+# Rust build artifacts
 /target/
+**/target/
+debug/
+release/
+*.pdb
+
+# Test artifacts
 /tests/reports/
+
+# Backup files
+**/*.rs.bk
+*.orig
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Coverage reports
+lcov.info
+coverage/
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+
+# Documentation build
+/target/doc
+
+# Benchmark results
+/target/criterion
+
+# Local development
+.env
+.env.local
