@@ -1,0 +1,10 @@
+[package]
+name = "mew-pattern"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mew-core.workspace = true
+mew-graph.workspace = true
+mew-registry.workspace = true
+thiserror.workspace = true

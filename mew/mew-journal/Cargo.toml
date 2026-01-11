@@ -1,0 +1,9 @@
+[package]
+name = "mew-journal"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mew-core.workspace = true
+mew-graph.workspace = true
+thiserror.workspace = true
