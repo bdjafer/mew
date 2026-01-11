@@ -1,2417 +1,1528 @@
-# HOHG System Architecture
+# MEW System Architecture
 
-**Version:** 2.0
+**Version:** 1.0
 **Status:** Design Specification
-**Purpose:** Component map, interactions, data flows, and core abstractions
+**Purpose:** Minimal Executable World — a self-describing higher-order hypergraph database
 
 ---
 
-# Part I: System Overview
+# Part I: Foundations
 
-## 1. Architecture Principles
+## 1. Design Philosophy
+
+MEW is a **typed higher-order hypergraph database** with:
+
+- **Self-describing schema**: The schema is stored in the graph itself (Layer 0)
+- **Higher-order edges**: Edges can target other edges, enabling meta-relationships
+- **Declarative constraints**: Invariants expressed as patterns that must hold
+- **Reactive rules**: Automatic transformations triggered by mutations
+- **ACID transactions**: All mutations are atomic and consistent
+
+### 1.1 Core Principles
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         DESIGN PRINCIPLES                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. SEPARATION OF CONCERNS                                                  │
-│     ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐             │
-│     │ Language │   │  Engine  │   │ Storage  │   │   API    │             │
-│     │ (Parse)  │   │ (Logic)  │   │ (Persist)│   │ (Expose) │             │
-│     └──────────┘   └──────────┘   └──────────┘   └──────────┘             │
-│                                                                              │
-│  2. LAYERED ABSTRACTION                                                     │
-│     API → Engine → Storage (each layer only talks to adjacent)             │
-│                                                                              │
-│  3. SINGLE SOURCE OF TRUTH                                                  │
-│     Ontology compiles to registries; registries drive all validation       │
-│                                                                              │
-│  4. FAIL-FAST VALIDATION                                                    │
-│     Type errors at parse time, constraint errors at mutation time          │
-│                                                                              │
-│  5. EXTENSIBILITY POINTS                                                    │
-│     Storage backend swappable, tensor integration planned                  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         DESIGN PRINCIPLES                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. SELF-SPECIFICATION                                              │
+│     The schema is data. Layer 0 nodes describe what nodes/edges     │
+│     can exist. The system describes itself.                         │
+│                                                                      │
+│  2. RELATIONS ARE PRIMITIVE                                         │
+│     Edges are first-class. Higher-order edges (edges about edges)   │
+│     are native. No artificial node/edge asymmetry.                  │
+│                                                                      │
+│  3. CONSTRAINTS ARE DECLARATIVE                                     │
+│     "What must be true" not "how to enforce it."                    │
+│     Pattern + condition = constraint.                               │
+│                                                                      │
+│  4. RULES ARE REACTIVE                                              │
+│     Mutations trigger rules. Rules fire to quiescence.              │
+│     The system reaches stable states automatically.                 │
+│                                                                      │
+│  5. MINIMAL CORE                                                    │
+│     13 components. Each has a distinct contract.                    │
+│     Implementation details hidden inside components.                │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 What MEW Is Good For
+
+MEW is optimized for **symbolic reasoning over structured relationships**:
+
+| Use Case | Why MEW Fits |
+|----------|--------------|
+| Knowledge graphs | Native higher-order for provenance, confidence |
+| Constraint systems | Declarative constraints with automatic checking |
+| Rule-based inference | Reactive rules with pattern matching |
+| Schema-driven data | Self-describing, evolvable schema |
+| Causal modeling | Directed edges, acyclicity constraints |
+| Self-referential systems | Layer 0 is queryable graph structure |
+
+### 1.3 What MEW Is Not
+
+| Limitation | Cause | Alternative |
+|------------|-------|-------------|
+| Continuous dynamics | Discrete graph model | Discretize or external physics engine |
+| Numerical computation | No tensor primitives | External numerical engine (PyTorch) |
+| True randomness | Deterministic rules | External RNG or branching (v2) |
+| Real-time streaming | Batch transaction model | Event bridge layer |
+
+These are fundamental to discrete symbolic systems, not flaws.
+
+---
+
+## 2. Architecture Overview
+
+### 2.1 Component Map (13 Components)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         MEW SYSTEM                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │                      SESSION (External Interface)              │  │
+│  │  • REPL / HTTP / Embedded API                                 │  │
+│  │  • Connection management, result encoding                     │  │
+│  └─────────────────────────────┬─────────────────────────────────┘  │
+│                                │                                     │
+│  ┌─────────────────────────────▼─────────────────────────────────┐  │
+│  │                      PARSER                                    │  │
+│  │  • Tokenize source text (statements + ontology)               │  │
+│  │  • Build AST                                                  │  │
+│  └─────────────────────────────┬─────────────────────────────────┘  │
+│                                │                                     │
+│  ┌─────────────────────────────▼─────────────────────────────────┐  │
+│  │                      ANALYZER                                  │  │
+│  │  • Name resolution against Registry                           │  │
+│  │  • Type checking                                              │  │
+│  └─────────────────────────────┬─────────────────────────────────┘  │
+│                                │                                     │
+│       ┌────────────────────────┼────────────────────────┐           │
+│       │                        │                        │           │
+│       ▼                        ▼                        ▼           │
+│  ┌─────────┐            ┌─────────────┐          ┌───────────┐     │
+│  │ COMPILER│            │    QUERY    │          │  MUTATION │     │
+│  │         │            │             │          │           │     │
+│  │Ontology │            │Plan + Exec  │          │SPAWN/KILL │     │
+│  │→Registry│            │MATCH/WALK   │          │LINK/UNLINK│     │
+│  │→Layer 0 │            │             │          │SET        │     │
+│  └────┬────┘            └──────┬──────┘          └─────┬─────┘     │
+│       │                        │                       │           │
+│       ▼                        │                       │           │
+│  ┌─────────┐                   │                       │           │
+│  │REGISTRY │◀──────────────────┤                       │           │
+│  │         │                   │                       │           │
+│  │Types    │                   ▼                       ▼           │
+│  │Edges    │            ┌─────────────────────────────────────┐   │
+│  │Constr.  │            │              PATTERN                 │   │
+│  │Rules    │            │  • Compile patterns                  │   │
+│  └─────────┘            │  • Match against graph               │   │
+│                         │  • Evaluate expressions              │   │
+│                         │  • Transitive closure                │   │
+│                         └──────────────┬──────────────────────┘   │
+│                                        │                           │
+│                         ┌──────────────┼──────────────┐           │
+│                         │              │              │           │
+│                         ▼              ▼              ▼           │
+│                   ┌──────────┐  ┌──────────┐  ┌────────────┐     │
+│                   │CONSTRAINT│  │   RULE   │  │TRANSACTION │     │
+│                   │          │  │          │  │            │     │
+│                   │Validate  │  │Trigger   │  │ACID        │     │
+│                   │Hard/Soft │  │Execute   │  │Orchestrate │     │
+│                   │Immediate/│  │Quiescence│  │Commit/     │     │
+│                   │Deferred  │  │          │  │Rollback    │     │
+│                   └──────────┘  └──────────┘  └─────┬──────┘     │
+│                                                     │             │
+│  ┌──────────────────────────────────────────────────▼───────────┐ │
+│  │                         GRAPH                                 │ │
+│  │  • Store nodes and edges                                     │ │
+│  │  • Indexes: Type, Attribute, Edge, Adjacency, Higher-Order   │ │
+│  │  • ID allocation                                             │ │
+│  └──────────────────────────────────────────────────┬───────────┘ │
+│                                                     │             │
+│  ┌──────────────────────────────────────────────────▼───────────┐ │
+│  │                        JOURNAL                                │ │
+│  │  • Write-ahead log                                           │ │
+│  │  • Crash recovery                                            │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 Component Responsibilities
+
+| Component | Purpose | Absorbs (Implementation Details) |
+|-----------|---------|----------------------------------|
+| **Graph** | Store nodes/edges, indexed access | GraphStore + TypeIndex + AttrIndex + EdgeIndex + AdjacencyIndex + HigherOrderIndex |
+| **Parser** | Tokenize and parse all source text | Lexer + StatementParser + OntologyParser |
+| **Analyzer** | Name resolution, type checking | — |
+| **Registry** | Runtime schema lookup | TypeRegistry + EdgeTypeRegistry + ConstraintRegistry + RuleRegistry |
+| **Compiler** | Ontology → Registry + Layer 0 | SugarExpander + Validator + L0Generator + RegistryBuilder |
+| **Pattern** | Match patterns, evaluate expressions | PatternCompiler + PatternMatcher + ExpressionEvaluator |
+| **Constraint** | Validate mutations against constraints | — |
+| **Rule** | Trigger and execute rules to quiescence | RuleMatcher + RuleExecutor |
+| **Query** | Plan and execute MATCH/WALK/INSPECT | QueryPlanner + QueryExecutor |
+| **Mutation** | Execute SPAWN/KILL/LINK/UNLINK/SET | — |
+| **Transaction** | ACID, orchestrate mutation→rule→constraint | TransactionManager + TransactionBuffer |
+| **Journal** | WAL + recovery | WAL + Recovery |
+| **Session** | External interface | SessionManager + REPL + HTTPHandler |
+
+### 2.3 Dependency Graph
+
+```
+                    Session
+                       │
+                       ▼
+                    Parser
+                       │
+                       ▼
+                   Analyzer ◄──────────┐
+                       │               │
+          ┌────────────┼────────────┐  │
+          │            │            │  │
+          ▼            ▼            ▼  │
+      Compiler      Query       Mutation
+          │            │            │
+          ▼            │            │
+      Registry ◄───────┤            │
+                       │            │
+                       ▼            ▼
+                    Pattern
+                       │
+          ┌────────────┼────────────┐
+          │            │            │
+          ▼            ▼            ▼
+     Constraint      Rule      Transaction
+          │            │            │
+          └────────────┼────────────┘
+                       │
+                       ▼
+                     Graph
+                       │
+                       ▼
+                    Journal
 ```
 
 ---
 
-## 2. High-Level Component Map
+## 3. Data Model
+
+### 3.1 Entity Representation
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              HOHG SYSTEM                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         CLIENT INTERFACES                            │   │
-│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────────────────┐ │   │
-│  │  │  REPL   │  │  HTTP   │  │  gRPC   │  │  Embedded (Library)     │ │   │
-│  │  │  (CLI)  │  │  (REST) │  │         │  │                         │ │   │
-│  │  └────┬────┘  └────┬────┘  └────┬────┘  └────────────┬────────────┘ │   │
-│  └───────┼────────────┼────────────┼────────────────────┼──────────────┘   │
-│          └────────────┴────────────┴────────────────────┘                   │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         API GATEWAY                                  │   │
-│  │                                                                      │   │
-│  │  • Session Management    • Connection Pooling    • Auth (stub)      │   │
-│  │  • Statement Routing     • Result Encoding       • Rate Limiting    │   │
-│  └──────────────────────────────────┬──────────────────────────────────┘   │
-│                                     │                                        │
-│                                     ▼                                        │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                      LANGUAGE PROCESSOR                              │   │
-│  │  ┌───────────────────────────────────────────────────────────────┐  │   │
-│  │  │                    Statement Pipeline                          │  │   │
-│  │  │   ┌───────┐   ┌────────┐   ┌──────────┐   ┌─────────────┐    │  │   │
-│  │  │   │ Lexer │──▶│ Parser │──▶│ Analyzer │──▶│   Planner   │    │  │   │
-│  │  │   └───────┘   └────────┘   └──────────┘   └─────────────┘    │  │   │
-│  │  └───────────────────────────────────────────────────────────────┘  │   │
-│  │  ┌───────────────────────────────────────────────────────────────┐  │   │
-│  │  │                   Ontology Compiler                            │  │   │
-│  │  │   ┌────────┐   ┌──────────┐   ┌───────────┐   ┌───────────┐  │  │   │
-│  │  │   │ Parser │──▶│ Expander │──▶│ Validator │──▶│ Generator │  │  │   │
-│  │  │   └────────┘   └──────────┘   └───────────┘   └───────────┘  │  │   │
-│  │  └───────────────────────────────────────────────────────────────┘  │   │
-│  └──────────────────────────────────┬──────────────────────────────────┘   │
-│                                     │                                        │
-│                                     ▼                                        │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         CORE ENGINE                                  │   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │   │
-│  │  │  Transaction │  │   Pattern    │  │    Query Executor        │  │   │
-│  │  │   Manager    │  │   Matcher    │  │                          │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │   │
-│  │  │  Constraint  │  │    Rule      │  │    Mutation Executor     │  │   │
-│  │  │   Checker    │  │   Engine     │  │                          │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │   │
-│  │                                                                      │   │
-│  │  ┌────────────────────────────────────────────────────────────────┐│   │
-│  │  │                    Runtime Registries                          ││   │
-│  │  │  ┌─────────┐ ┌─────────┐ ┌────────────┐ ┌─────────┐           ││   │
-│  │  │  │  Types  │ │  Edges  │ │ Constraints│ │  Rules  │           ││   │
-│  │  │  └─────────┘ └─────────┘ └────────────┘ └─────────┘           ││   │
-│  │  └────────────────────────────────────────────────────────────────┘│   │
-│  └──────────────────────────────────┬──────────────────────────────────┘   │
-│                                     │                                        │
-│                                     ▼                                        │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         STORAGE LAYER                                │   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │   │
-│  │  │    Graph     │  │    Index     │  │      Version             │  │   │
-│  │  │    Store     │  │   Manager    │  │      Manager             │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │   │
-│  │  │     WAL      │  │   Buffer     │  │      File Manager        │  │   │
-│  │  │              │  │    Pool      │  │                          │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         NODE STRUCTURE                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Node {                                                             │
+│    id: NodeId           // 64-bit, globally unique, immutable       │
+│    type_id: TypeId      // Reference to Registry                    │
+│    version: u64         // MVCC version                             │
+│    attributes: Map<AttrId, Value>                                   │
+│  }                                                                  │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                         EDGE STRUCTURE                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Edge {                                                             │
+│    id: EdgeId           // 64-bit, globally unique, immutable       │
+│    type_id: EdgeTypeId  // Reference to Registry                    │
+│    targets: Vec<EntityId>  // Ordered list: NodeId | EdgeId        │
+│    version: u64         // MVCC version                             │
+│    attributes: Map<AttrId, Value>                                   │
+│  }                                                                  │
+│                                                                      │
+│  EntityId = NodeId | EdgeId  // Unified ID space                    │
+│                                                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                      HIGHER-ORDER EDGES                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Example: causes(e1, e2) with confidence                            │
+│                                                                      │
+│  edge_1: causes                                                     │
+│    targets: [NodeId(e1), NodeId(e2)]                               │
+│                                                                      │
+│  edge_2: confidence                                                 │
+│    targets: [EdgeId(edge_1)]    ← Higher-order: targets an edge    │
+│    attributes: { level: 0.85 }                                     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 Value Types
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         VALUE TYPES                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Value = Null                                                       │
+│        | Bool(bool)                                                 │
+│        | Int(i64)                                                   │
+│        | Float(f64)                                                 │
+│        | String(String)                                             │
+│        | Timestamp(i64)      // millis since epoch                  │
+│        | Duration(i64)       // millis                              │
+│        | NodeRef(NodeId)                                            │
+│        | EdgeRef(EdgeId)                                            │
+│                                                                      │
+│  Type expressions in ontology:                                      │
+│    • Scalar: String, Int, Float, Bool, Timestamp, Duration         │
+│    • Optional: T? (nullable)                                        │
+│    • Reference: NodeType, edge<EdgeType>                           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.3 Layer 0 (Self-Describing Schema)
+
+Layer 0 is the **schema stored as graph structure**. When you define:
+
+```
+node Task { title: String [required] }
+edge belongs_to(task: Task, project: Project)
+```
+
+The compiler creates:
+
+```
+Nodes:
+  _NodeType { name: "Task", abstract: false, ... }
+  _AttributeDef { name: "title", required: true, ... }
+  _EdgeType { name: "belongs_to", arity: 2, ... }
+  _VarDef { name: "task", position: 0, ... }
+  _VarDef { name: "project", position: 1, ... }
+
+Edges:
+  _type_has_attribute(_NodeType:Task, _AttributeDef:title)
+  _attr_has_type(_AttributeDef:title, _ScalarTypeExpr:String)
+  _edge_has_position(_EdgeType:belongs_to, _VarDef:task) { position: 0 }
+  _edge_has_position(_EdgeType:belongs_to, _VarDef:project) { position: 1 }
+  _var_has_type(_VarDef:task, _NamedTypeRef:Task)
+  _var_has_type(_VarDef:project, _NamedTypeRef:Project)
+```
+
+**Key insight**: The schema is queryable. You can write:
+
+```sql
+MATCH t: _NodeType, a: _AttributeDef, _type_has_attribute(t, a)
+WHERE t.name = "Task"
+RETURN a.name, a.required
 ```
 
 ---
 
-## 3. Component Dependency Graph
+## 4. Execution Model
 
-```mermaid
-graph TD
-    subgraph "Client Layer"
-        CLI[CLI/REPL]
-        HTTP[HTTP API]
-        LIB[Embedded Lib]
-    end
+### 4.1 Reactive Execution (v1)
 
-    subgraph "API Layer"
-        GW[API Gateway]
-        SM[Session Manager]
-    end
+MEW v1 uses **synchronous reactive execution**:
 
-    subgraph "Language Layer"
-        LEX[Lexer]
-        PAR[Parser]
-        ANA[Analyzer]
-        PLN[Planner]
-        OCP[Ontology Compiler]
-    end
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    REACTIVE EXECUTION MODEL                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   External mutation                                                  │
+│         │                                                            │
+│         ▼                                                            │
+│   ┌───────────┐                                                     │
+│   │   Apply   │                                                     │
+│   │  mutation │                                                     │
+│   └─────┬─────┘                                                     │
+│         │                                                            │
+│         ▼                                                            │
+│   ┌───────────┐     ┌───────────┐                                   │
+│   │   Rules   │────▶│  More     │──┐                                │
+│   │   fire    │     │ mutations │  │                                │
+│   └───────────┘     └───────────┘  │                                │
+│         ▲                          │                                 │
+│         └──────────────────────────┘                                │
+│              (repeat until quiescent)                                │
+│         │                                                            │
+│         ▼                                                            │
+│   ┌───────────┐                                                     │
+│   │  Check    │                                                     │
+│   │constraints│                                                     │
+│   └─────┬─────┘                                                     │
+│         │                                                            │
+│    ┌────┴────┐                                                      │
+│    │         │                                                       │
+│    ▼         ▼                                                       │
+│  Pass      Fail                                                      │
+│    │         │                                                       │
+│    ▼         ▼                                                       │
+│  COMMIT   ROLLBACK                                                   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-    subgraph "Engine Layer"
-        TXN[Transaction Manager]
-        QEX[Query Executor]
-        MEX[Mutation Executor]
-        PMT[Pattern Matcher]
-        CCK[Constraint Checker]
-        REN[Rule Engine]
-        REG[Registries]
-    end
+**Semantics:**
+1. External mutation enters transaction
+2. Rules fire repeatedly until no new matches (quiescence)
+3. Constraints check final state
+4. Hard constraint violation → abort entire transaction
+5. Success → commit
 
-    subgraph "Storage Layer"
-        GS[Graph Store]
-        IDX[Index Manager]
-        VER[Version Manager]
-        WAL[Write-Ahead Log]
-        BUF[Buffer Pool]
-        FM[File Manager]
-    end
+**Limits to prevent infinite loops:**
+- `MAX_RULE_DEPTH = 100` — Nested rule trigger depth
+- `MAX_ACTIONS = 10,000` — Total actions per transaction
+- Same `(rule_id, bindings_hash)` executes at most once
 
-    CLI --> GW
-    HTTP --> GW
-    LIB --> GW
+### 4.2 Transaction Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    TRANSACTION STATE MACHINE                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ┌────────┐   BEGIN    ┌────────┐                                  │
+│   │  NONE  │ ─────────▶ │ ACTIVE │                                  │
+│   └────────┘            └────┬───┘                                  │
+│                              │                                       │
+│               ┌──────────────┼──────────────┐                       │
+│               │              │              │                        │
+│               │ ROLLBACK     │ COMMIT       │ error                  │
+│               ▼              ▼              ▼                        │
+│         ┌─────────┐   ┌───────────┐   ┌─────────┐                   │
+│         │ ABORTED │   │COMMITTING │   │ ABORTED │                   │
+│         └─────────┘   └─────┬─────┘   └─────────┘                   │
+│                             │                                        │
+│                  ┌──────────┴──────────┐                            │
+│                  │                     │                             │
+│                  │ success             │ failure                     │
+│                  ▼                     ▼                             │
+│            ┌───────────┐         ┌─────────┐                        │
+│            │ COMMITTED │         │ ABORTED │                        │
+│            └───────────┘         └─────────┘                        │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Transaction buffer** tracks uncommitted changes:
+- `created_nodes: Map<NodeId, Node>`
+- `created_edges: Map<EdgeId, Edge>`
+- `deleted_nodes: Set<NodeId>`
+- `deleted_edges: Set<EdgeId>`
+- `modified_attrs: Map<(EntityId, AttrId), (Old, New)>`
+
+**Queries within transaction** see uncommitted changes (read-your-writes).
+
+### 4.3 Mutation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      MUTATION EXECUTION FLOW                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  SPAWN t: Task { title = "New", priority = 8 }                      │
+│                          │                                           │
+│                          ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │ 1. TYPE VALIDATION                                             │  │
+│  │    • Task.abstract = false? ✓                                  │  │
+│  │    • title: String, "New" is String ✓                          │  │
+│  │    • priority: Int, 8 is Int ✓                                 │  │
+│  │    • Apply defaults for missing optional attrs                 │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                          │                                           │
+│                          ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │ 2. APPLY TO TRANSACTION BUFFER                                 │  │
+│  │    • Allocate NodeId                                           │  │
+│  │    • Add to created_nodes                                      │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                          │                                           │
+│                          ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │ 3. RULE ENGINE (repeat until quiescent)                        │  │
+│  │    • Find rules affected by mutation                           │  │
+│  │    • For each rule, find new matches                           │  │
+│  │    • Execute productions (may create more mutations)           │  │
+│  │    • Track executed (rule_id, bindings_hash) to avoid loops   │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                          │                                           │
+│                          ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │ 4. CONSTRAINT CHECK                                            │  │
+│  │    • Find constraints affected by all mutations                │  │
+│  │    • Evaluate each constraint                                  │  │
+│  │    • Hard fail → ABORT                                         │  │
+│  │    • Soft fail → WARN                                          │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                          │                                           │
+│                          ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │ 5. DEFERRED CONSTRAINTS (at commit)                            │  │
+│  │    • Cardinality constraints                                   │  │
+│  │    • Existence constraints                                     │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                          │                                           │
+│                          ▼                                           │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │ 6. COMMIT                                                      │  │
+│  │    • Write WAL                                                 │  │
+│  │    • Apply to Graph                                            │  │
+│  │    • Update indexes                                            │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+# Part II: Component Specifications
+
+## 5. Graph Component
+
+**Purpose**: Store and retrieve nodes/edges with indexed access.
+
+### 5.1 Contract
+
+```rust
+trait Graph {
+    // Node operations
+    fn create_node(type_id: TypeId, attrs: Attributes) -> NodeId;
+    fn get_node(id: NodeId) -> Option<Node>;
+    fn delete_node(id: NodeId) -> Result<()>;
+    fn set_attr(id: NodeId, attr: AttrId, value: Value) -> Result<()>;
     
-    GW --> SM
-    SM --> LEX
+    // Edge operations
+    fn create_edge(type_id: EdgeTypeId, targets: Vec<EntityId>, attrs: Attributes) -> EdgeId;
+    fn get_edge(id: EdgeId) -> Option<Edge>;
+    fn delete_edge(id: EdgeId) -> Result<()>;
     
-    LEX --> PAR
-    PAR --> ANA
-    ANA --> PLN
+    // Queries (index-backed)
+    fn nodes_by_type(type_id: TypeId) -> Iterator<NodeId>;
+    fn nodes_by_attr(type_id: TypeId, attr: AttrId, value: Value) -> Iterator<NodeId>;
+    fn nodes_by_attr_range(type_id: TypeId, attr: AttrId, min: Value, max: Value) -> Iterator<NodeId>;
+    fn edges_by_type(type_id: EdgeTypeId) -> Iterator<EdgeId>;
+    fn edges_from(node: NodeId, edge_type: Option<EdgeTypeId>) -> Iterator<EdgeId>;
+    fn edges_to(node: NodeId, edge_type: Option<EdgeTypeId>) -> Iterator<EdgeId>;
+    fn edges_about(edge: EdgeId) -> Iterator<EdgeId>;  // Higher-order index
     
-    OCP --> REG
+    // Snapshot
+    fn snapshot() -> GraphSnapshot;
+}
+```
+
+### 5.2 Internal Indexes
+
+| Index | Structure | Purpose |
+|-------|-----------|---------|
+| **Type Index** | `TypeId → Set<NodeId>` | Find all nodes of a type |
+| **Attribute Index** | `(TypeId, AttrId, Value) → Set<NodeId>` | Find nodes by attribute value/range |
+| **Unique Index** | `(TypeId, AttrId, Value) → NodeId` | Enforce uniqueness, fast lookup |
+| **Edge Index** | `(EdgeTypeId, Position, EntityId) → Set<EdgeId>` | Find edges by type and target |
+| **Adjacency Index** | `NodeId → { outbound: Map<EdgeTypeId, Set<EdgeId>>, inbound: ... }` | Fast neighbor lookup |
+| **Higher-Order Index** | `EdgeId → Set<EdgeId>` | Edges that target this edge |
+
+### 5.3 Implementation Notes
+
+- v1 starts **in-memory** (no BufferPool/FileManager)
+- Indexes are maintained synchronously on mutation
+- Higher-order index enables cascade deletion of meta-edges
+
+---
+
+## 6. Parser Component
+
+**Purpose**: Tokenize and parse source text into AST.
+
+### 6.1 Contract
+
+```rust
+trait Parser {
+    fn parse_statement(source: &str) -> Result<Statement, ParseError>;
+    fn parse_ontology(source: &str) -> Result<OntologyAST, ParseError>;
+}
+
+enum Statement {
+    Match(MatchStmt),
+    Walk(WalkStmt),
+    Inspect(InspectStmt),
+    Spawn(SpawnStmt),
+    Kill(KillStmt),
+    Link(LinkStmt),
+    Unlink(UnlinkStmt),
+    Set(SetStmt),
+    Begin,
+    Commit,
+    Rollback,
+    Load(LoadStmt),
+    // ... etc
+}
+```
+
+### 6.2 Grammar Summary
+
+```ebnf
+Statement     = MatchStmt | WalkStmt | MutationStmt | TxnStmt | AdminStmt
+
+MatchStmt     = "match" Pattern ("where" Expr)? ReturnClause?
+WalkStmt      = "walk" "from" Expr FollowClause+ ReturnWalkClause
+
+MutationStmt  = SpawnStmt | KillStmt | LinkStmt | UnlinkStmt | SetStmt
+SpawnStmt     = "spawn" VarDecl AttrBlock?
+KillStmt      = "kill" VarRef
+LinkStmt      = "link" EdgePattern AttrBlock?
+UnlinkStmt    = "unlink" VarRef
+SetStmt       = "set" AttrAccess "=" Expr
+
+Pattern       = PatternElem ("," PatternElem)*
+PatternElem   = NodePattern | EdgePattern
+NodePattern   = Identifier ":" TypeRef
+EdgePattern   = EdgeType "(" TargetList ")" ("as" Identifier)?
+```
+
+---
+
+## 7. Analyzer Component
+
+**Purpose**: Name resolution and type checking against Registry.
+
+### 7.1 Contract
+
+```rust
+trait Analyzer {
+    fn analyze(&self, stmt: Statement, registry: &Registry) -> Result<AnalyzedStmt, AnalysisError>;
+}
+
+struct AnalyzedStmt {
+    stmt: Statement,
+    bindings: Map<String, Binding>,      // Variable → type info
+    type_info: Map<ExprId, TypeInfo>,    // Expression → result type
+}
+```
+
+### 7.2 Analysis Passes
+
+1. **Name Resolution**
+   - Type names → TypeId via Registry
+   - Variable references → declaration site
+   - Attribute names → AttrId via Registry
+
+2. **Type Checking**
+   - Expression types computed bottom-up
+   - Operator type rules enforced
+   - Attribute access validated against type
+
+3. **Scope Analysis**
+   - Variable visibility rules
+   - EXISTS inner scope handling
+
+---
+
+## 8. Registry Component
+
+**Purpose**: Runtime schema lookup. Single source of truth for types, edges, constraints, rules.
+
+### 8.1 Contract
+
+```rust
+trait Registry {
+    // Type lookup
+    fn get_type(&self, name: &str) -> Option<&TypeDef>;
+    fn get_type_by_id(&self, id: TypeId) -> &TypeDef;
+    fn is_subtype(&self, child: TypeId, parent: TypeId) -> bool;
+    fn all_subtypes(&self, id: TypeId) -> &Set<TypeId>;
     
-    PLN --> QEX
-    PLN --> MEX
+    // Edge type lookup
+    fn get_edge_type(&self, name: &str) -> Option<&EdgeTypeDef>;
+    fn get_edge_type_by_id(&self, id: EdgeTypeId) -> &EdgeTypeDef;
     
-    QEX --> PMT
-    QEX --> TXN
+    // Constraint lookup
+    fn constraints_for_type(&self, id: TypeId) -> &[ConstraintDef];
+    fn constraints_for_edge(&self, id: EdgeTypeId) -> &[ConstraintDef];
+    fn deferred_constraints(&self) -> &[ConstraintDef];
     
-    MEX --> TXN
-    MEX --> CCK
-    MEX --> REN
+    // Rule lookup
+    fn rules_for_type(&self, id: TypeId) -> &[RuleDef];  // sorted by priority
+    fn rules_for_edge(&self, id: EdgeTypeId) -> &[RuleDef];
+    fn get_rule(&self, name: &str) -> Option<&RuleDef>;
+}
+```
+
+### 8.2 Data Structures
+
+```rust
+struct TypeDef {
+    id: TypeId,
+    name: String,
+    parent_ids: Vec<TypeId>,
+    attributes: Vec<AttrDef>,
+    abstract_: bool,
+    sealed: bool,
+    l0_node_id: NodeId,  // Reference to Layer 0
+}
+
+struct EdgeTypeDef {
+    id: EdgeTypeId,
+    name: String,
+    arity: u8,
+    signature: Vec<SignatureParam>,  // (position, name, type_expr)
+    attributes: Vec<AttrDef>,
+    symmetric: bool,
+    reflexive_allowed: bool,
+    l0_node_id: NodeId,
+}
+
+struct ConstraintDef {
+    id: ConstraintId,
+    name: String,
+    hard: bool,
+    pattern: CompiledPattern,
+    condition: CompiledExpr,
+    affected_types: Set<TypeId>,
+    affected_edges: Set<EdgeTypeId>,
+    deferred: bool,
+    message: String,
+}
+
+struct RuleDef {
+    id: RuleId,
+    name: String,
+    priority: i32,
+    auto: bool,
+    pattern: CompiledPattern,
+    production: CompiledProduction,
+    affected_types: Set<TypeId>,
+    affected_edges: Set<EdgeTypeId>,
+}
+```
+
+---
+
+## 9. Compiler Component
+
+**Purpose**: Transform ontology source into populated Registry + Layer 0 graph.
+
+### 9.1 Contract
+
+```rust
+trait Compiler {
+    fn compile(&self, ontology: OntologyAST, graph: &mut Graph) -> Result<Registry, CompileError>;
+}
+```
+
+### 9.2 Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    COMPILATION PIPELINE                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Ontology Source                                                    │
+│        │                                                             │
+│        ▼                                                             │
+│  ┌───────────┐                                                      │
+│  │  PARSE    │  → OntologyAST                                       │
+│  └─────┬─────┘                                                      │
+│        │                                                             │
+│        ▼                                                             │
+│  ┌───────────┐                                                      │
+│  │  EXPAND   │  Modifiers → explicit constraints/rules              │
+│  │  SUGAR    │  [required] → constraint                             │
+│  │           │  [unique] → constraint + index                       │
+│  │           │  [acyclic] → cycle check constraint                  │
+│  └─────┬─────┘                                                      │
+│        │                                                             │
+│        ▼                                                             │
+│  ┌───────────┐                                                      │
+│  │ VALIDATE  │  • No duplicate names                                │
+│  │           │  • No inheritance cycles                             │
+│  │           │  • All references resolve                            │
+│  │           │  • Type expressions valid                            │
+│  └─────┬─────┘                                                      │
+│        │                                                             │
+│        ▼                                                             │
+│  ┌───────────┐                                                      │
+│  │ GENERATE  │  Create Layer 0 nodes/edges in Graph                 │
+│  │ LAYER 0   │  _NodeType, _EdgeType, _AttributeDef, etc.          │
+│  └─────┬─────┘                                                      │
+│        │                                                             │
+│        ▼                                                             │
+│  ┌───────────┐                                                      │
+│  │  BUILD    │  Populate Registry from Layer 0                      │
+│  │ REGISTRY  │  Precompute: subtypes, constraint index, rule index │
+│  └─────┬─────┘                                                      │
+│        │                                                             │
+│        ▼                                                             │
+│  Registry + Layer 0 Graph                                           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 10. Pattern Component
+
+**Purpose**: Compile patterns, match against graph, evaluate expressions.
+
+### 10.1 Contract
+
+```rust
+trait Pattern {
+    fn compile(&self, pattern: PatternAST, registry: &Registry) -> Result<CompiledPattern, PatternError>;
+    fn match_(&self, pattern: &CompiledPattern, graph: &Graph, initial: Bindings) -> Iterator<Bindings>;
+    fn evaluate(&self, expr: &CompiledExpr, bindings: &Bindings, graph: &Graph) -> Result<Value, EvalError>;
+}
+
+struct CompiledPattern {
+    node_vars: Vec<NodeVar>,      // Variables bound to nodes
+    edge_patterns: Vec<EdgePat>,  // Edge patterns to match
+    conditions: Vec<CompiledExpr>, // WHERE conditions
     
-    PMT --> REG
-    PMT --> GS
-    PMT --> IDX
+    // Execution hints
+    join_order: Vec<VarId>,       // Order to bind variables
+    index_hints: Vec<IndexHint>,  // Suggested indexes
+}
+
+struct Bindings {
+    values: Map<VarId, EntityId>,
+}
+```
+
+### 10.2 Matching Algorithm
+
+```
+match(pattern, initial_bindings) → Iterator<Bindings>:
+
+  1. ORDER variables by selectivity (most constrained first)
+  
+  2. For first unbound variable V:
+     
+     If V is node variable:
+       candidates = get_candidates(V.type, conditions_on_V)
+     
+     If V is connected via edge to bound variable B:
+       candidates = traverse_edge(B, edge_type, position)
+     
+     If V is edge variable:
+       candidates = find_matching_edges(edge_pattern)
+  
+  3. For each candidate C:
+     
+     bindings' = bindings ∪ {V → C}
+     
+     Check conditions involving V
+       If fail → continue to next candidate
+     
+     If all variables bound:
+       yield bindings'
+     
+     Else:
+       recurse: match(remaining_pattern, bindings')
+```
+
+### 10.3 Transitive Closure
+
+For `edge+(A, B)` or `edge*(A, B)`:
+
+```
+match_transitive(start, edge_type, mode, max_depth):
+  visited = Set()
+  frontier = [(start, 0)]
+  
+  while frontier not empty:
+    (current, depth) = frontier.pop()
     
-    CCK --> REG
-    CCK --> PMT
+    if current in visited: continue
+    visited.add(current)
     
-    REN --> REG
-    REN --> MEX
+    if depth > 0 or mode == Star:  // Star includes depth=0
+      yield current
     
-    TXN --> WAL
-    TXN --> GS
+    if depth < max_depth:
+      for neighbor in get_neighbors(current, edge_type):
+        frontier.push((neighbor, depth + 1))
+```
+
+---
+
+## 11. Constraint Component
+
+**Purpose**: Validate mutations against constraints.
+
+### 11.1 Contract
+
+```rust
+trait Constraint {
+    fn check(
+        &self,
+        mutation: &Mutation,
+        graph: &Graph,
+        registry: &Registry,
+        pattern: &Pattern,
+    ) -> Result<Vec<Warning>, ConstraintViolation>;
     
-    GS --> BUF
-    IDX --> BUF
-    BUF --> FM
+    fn check_deferred(
+        &self,
+        graph: &Graph,
+        registry: &Registry,
+        pattern: &Pattern,
+    ) -> Result<Vec<Warning>, ConstraintViolation>;
+}
+```
+
+### 11.2 Constraint Categories
+
+| Category | When Checked | Examples |
+|----------|--------------|----------|
+| **Immediate** | After each mutation | Value constraints (`>= 0`), required attrs, `no_self`, `acyclic` |
+| **Deferred** | At commit time | Cardinality (`task -> 1`), existence (`=> EXISTS(...)`) |
+
+### 11.3 Check Algorithm
+
+```
+check(mutation, graph, registry, pattern):
+  
+  affected = registry.constraints_for_mutation(mutation)
+  
+  for constraint in affected:
     
-    VER --> GS
-    VER --> FM
+    // Seed pattern match from mutated entity
+    initial = seed_from_mutation(constraint.pattern, mutation)
+    matches = pattern.match(constraint.pattern, graph, initial)
+    
+    for bindings in matches:
+      result = pattern.evaluate(constraint.condition, bindings, graph)
+      
+      if result == false:
+        if constraint.hard:
+          return Error(ConstraintViolation(constraint, bindings))
+        else:
+          warnings.push(Warning(constraint, bindings))
+  
+  return Ok(warnings)
 ```
 
 ---
 
-## 4. Data Flow Overview
+## 12. Rule Component
 
-### 4.1 Query Execution Flow
+**Purpose**: Trigger and execute rules to quiescence.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         QUERY EXECUTION FLOW                                 │
-└─────────────────────────────────────────────────────────────────────────────┘
+### 12.1 Contract
 
-  "MATCH t: Task WHERE t.priority > 5 RETURN t"
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ LEXER                                                                        │
-│ Tokenize input string into token stream                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Output: [MATCH, IDENT:t, COLON, IDENT:Task, WHERE, IDENT:t, DOT,           │
-│          IDENT:priority, GT, INT:5, RETURN, IDENT:t]                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ PARSER                                                                       │
-│ Build Abstract Syntax Tree from tokens                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Output: MatchStmt {                                                         │
-│           pattern: Pattern { vars: [t:Task], edges: [] },                   │
-│           where: BinaryOp(GT, AttrAccess(t, priority), Literal(5)),        │
-│           return: [VarRef(t)]                                               │
-│         }                                                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ ANALYZER                                                                     │
-│ Resolve names, check types, annotate AST                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Lookup "Task" in TypeRegistry → TypeId(7)                                │
-│ • Lookup "priority" on Task → AttrId(3), type=Int                          │
-│ • Verify: Int > Int → Bool ✓                                               │
-│ Output: Annotated AST with type info                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ PLANNER                                                                      │
-│ Generate optimized execution plan                                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Check index on Task.priority → IndexId(12), desc                         │
-│ • Choose: IndexScan(Task.priority > 5) vs TypeScan(Task) + Filter          │
-│ • Estimate costs, pick best plan                                           │
-│                                                                              │
-│ Output: QueryPlan {                                                         │
-│           IndexScan(idx=12, range=(5, ∞)) → Project([t])                   │
-│         }                                                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ EXECUTOR                                                                     │
-│ Execute plan, stream results                                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Open index cursor at priority > 5                                        │
-│ • For each matching node ID:                                               │
-│   • Fetch node from GraphStore                                             │
-│   • Yield to result stream                                                 │
-│                                                                              │
-│ Output: Iterator<Row> streaming to client                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
+```rust
+trait Rule {
+    fn process(
+        &self,
+        mutation: &Mutation,
+        txn: &mut Transaction,
+        graph: &Graph,
+        registry: &Registry,
+        pattern: &Pattern,
+        mutation_executor: &Mutation,
+    ) -> Result<(), RuleError>;
+}
 ```
 
-### 4.2 Mutation Execution Flow
+### 12.2 Execution Algorithm
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        MUTATION EXECUTION FLOW                               │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-  "SPAWN t: Task { title = 'New', priority = 8 }"
-                          │
-                          ▼
-┌──────────────────────────────────────────────────┐
-│ PARSE + ANALYZE (same as query)                  │
-└──────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ TRANSACTION MANAGER                                                          │
-│ Begin or join transaction                                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • If auto-commit: create new transaction                                    │
-│ • If explicit BEGIN: use existing transaction                               │
-│ • Assign LSN, acquire locks as needed                                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ TYPE VALIDATION                                                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Task.abstract = false? ✓                                                  │
-│ • title: String, "New" is String ✓                                         │
-│ • priority: Int, 8 is Int ✓                                                │
-│ • Required attrs present? (check Task.title required) ✓                    │
-│ • Apply defaults for missing optional attrs                                 │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ GRAPH STORE                                                                  │
-│ Apply mutation (tentatively in transaction buffer)                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Allocate new NodeId                                                       │
-│ • Create Node { id, type=Task, attrs={title, priority, status="todo"} }   │
-│ • Add to transaction write set                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ RULE ENGINE                                                                  │
-│ Find and execute triggered rules (BEFORE constraint checking)              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Get auto-rules affecting type=Task, sorted by priority                   │
-│ • For each rule:                                                            │
-│   • Match pattern against current graph (including txn buffer)             │
-│   • For each new match (not in executed set):                              │
-│     • Execute production actions (may spawn more mutations)                │
-│     • Add spawned mutations to queue                                       │
-│ • Repeat until quiescence or limit reached                                 │
-│                                                                              │
-│ NOTE: Rules execute BEFORE constraints so they can "fix" violations.       │
-│       Example: auto_timestamp rule sets created_at before required check.  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ CONSTRAINT CHECKER                                                           │
-│ Check all constraints after rule quiescence                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Get constraints affecting modified types                                  │
-│ • For each constraint:                                                      │
-│   • Match pattern against current graph (including txn buffer)             │
-│   • Evaluate condition                                                      │
-│   • If hard constraint fails → ABORT entire transaction                    │
-│   • If soft constraint fails → WARN                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ DEFERRED CONSTRAINT CHECK                                                    │
-│ Check cardinality constraints at commit                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Minimum cardinality constraints (e.g., task -> 1 on belongs_to)          │
-│ • Existence constraints (=> EXISTS(...))                                    │
-│ • If any fail → ABORT entire transaction                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ COMMIT                                                                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • Write WAL records                                                         │
-│ • Flush WAL to disk (fsync)                                                │
-│ • Apply changes to Graph Store (in-memory)                                 │
-│ • Update indexes                                                            │
-│ • Release locks                                                             │
-│ • Return result to client                                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 4.3 Ontology Loading Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       ONTOLOGY LOADING FLOW                                  │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-  ontology TaskManagement { node Task { ... } edge belongs_to(...) [...] }
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ ONTOLOGY PARSER                                                              │
-│ Parse DSL into Ontology AST                                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Output: OntologyAST {                                                       │
-│           name: "TaskManagement",                                           │
-│           nodeTypes: [Task, Person, Project, ...],                         │
-│           edgeTypes: [belongs_to, assigned_to, ...],                       │
-│           constraints: [...],                                               │
-│           rules: [...]                                                      │
-│         }                                                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ SUGAR EXPANDER                                                               │
-│ Expand modifiers into explicit constraints/rules                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • [required] on attr → generate required constraint                        │
-│ • [unique] on attr → generate uniqueness constraint + index hint           │
-│ • [>= N] on attr → generate range constraint                               │
-│ • [no_self] on edge → generate self-loop constraint                        │
-│ • [acyclic] on edge → generate cycle constraint                            │
-│ • [on_kill: cascade] → generate cascade rule                               │
-│                                                                              │
-│ Output: Expanded AST with explicit constraints/rules                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ VALIDATOR                                                                    │
-│ Check ontology consistency                                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • No duplicate type names                                                   │
-│ • No inheritance cycles                                                     │
-│ • All referenced types exist                                               │
-│ • Attribute types valid                                                     │
-│ • Edge signatures valid                                                     │
-│ • Constraint patterns well-formed                                          │
-│ • Rule patterns and productions well-formed                                │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ LAYER 0 GENERATOR                                                            │
-│ Generate Layer 0 graph structure                                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ For each node type:                                                         │
-│   • Create _NodeType node                                                   │
-│   • Create _AttributeDef nodes                                              │
-│   • Create _type_has_attribute edges                                        │
-│   • Create _type_inherits edges                                             │
-│                                                                              │
-│ For each edge type:                                                         │
-│   • Create _EdgeType node                                                   │
-│   • Create _VarDef nodes for signature                                      │
-│   • Create _edge_has_position edges                                         │
-│                                                                              │
-│ For each constraint: (similar pattern structure)                            │
-│ For each rule: (similar pattern structure)                                  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ REGISTRY BUILDER                                                             │
-│ Build runtime registries from ontology                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ TypeRegistry:                                                               │
-│   • Map<TypeName, TypeDef>                                                 │
-│   • Inheritance graph                                                       │
-│   • Precomputed subtypes                                                   │
-│                                                                              │
-│ EdgeTypeRegistry:                                                           │
-│   • Map<EdgeName, EdgeTypeDef>                                             │
-│   • Signature lookup                                                        │
-│                                                                              │
-│ ConstraintRegistry:                                                         │
-│   • List<CompiledConstraint>                                               │
-│   • Index: TypeId → affecting constraints                                  │
-│                                                                              │
-│ RuleRegistry:                                                               │
-│   • List<CompiledRule> sorted by priority                                  │
-│   • Index: TypeId → triggered rules                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ INDEX BUILDER                                                                │
-│ Create indexes declared in ontology                                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ • For each [indexed] attribute: create attribute index                     │
-│ • For each [unique] attribute: create unique index                         │
-│ • Type index always created                                                 │
-│ • Edge index for each edge type                                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-               Ontology Active, Ready for Queries
+process(mutation, txn, graph, registry, pattern, mutation_executor):
+  
+  executed = Set()  // (rule_id, bindings_hash)
+  
+  loop:
+    triggered = registry.rules_for_mutation(mutation)
+    triggered.sort_by(priority, descending)
+    
+    new_matches = []
+    
+    for rule in triggered:
+      for bindings in pattern.match(rule.pattern, graph):
+        key = (rule.id, hash(bindings))
+        if key not in executed:
+          new_matches.push((rule, bindings))
+    
+    if new_matches.empty():
+      break  // Quiescent
+    
+    for (rule, bindings) in new_matches:
+      
+      if txn.depth >= MAX_DEPTH:
+        return Error(DepthLimitExceeded)
+      if txn.action_count >= MAX_ACTIONS:
+        return Error(ActionLimitExceeded)
+      
+      txn.depth += 1
+      
+      for action in rule.production.actions:
+        execute_action(action, bindings, txn, mutation_executor)
+        txn.action_count += 1
+      
+      txn.depth -= 1
+      executed.add((rule.id, hash(bindings)))
+  
+  return Ok(())
 ```
 
 ---
 
-# Part II: Core Data Model
+## 13. Query Component
 
-## 5. Entity Representation
+**Purpose**: Plan and execute MATCH/WALK/INSPECT statements.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            NODE STRUCTURE                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Node                                                                 │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │ id: NodeId (64-bit)          ← Globally unique, immutable           │   │
-│  │ type_id: TypeId (32-bit)     ← Reference to TypeRegistry            │   │
-│  │ version: u64                 ← MVCC version number                  │   │
-│  │ flags: u8                    ← deleted, pending, has_ho_edges       │   │
-│  │ attributes: AttributeStore  ← Attribute values                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  AttributeStore Layout (per node):                                          │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ For fixed-schema types (known attribute count):                     │   │
-│  │   [Value0, Value1, Value2, ...]  ← Dense array, index = attr_id    │   │
-│  │                                                                      │   │
-│  │ For dynamic/inherited types:                                        │   │
-│  │   HashMap<AttrId, Value>         ← Sparse, flexible                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+### 13.1 Contract
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            EDGE STRUCTURE                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Edge                                                                 │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │ id: EdgeId (64-bit)          ← Globally unique, immutable           │   │
-│  │ type_id: EdgeTypeId (32-bit) ← Reference to EdgeTypeRegistry        │   │
-│  │ targets: TargetList          ← Ordered list of NodeId | EdgeId      │   │
-│  │ version: u64                 ← MVCC version number                  │   │
-│  │ flags: u8                    ← deleted, pending, is_higher_order    │   │
-│  │ attributes: AttributeStore  ← Edge attribute values                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  TargetList variants:                                                       │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Binary edge (arity=2):   [NodeId, NodeId]        ← 16 bytes         │   │
-│  │ Ternary edge (arity=3):  [NodeId, NodeId, NodeId] ← 24 bytes        │   │
-│  │ Higher-order:            [EdgeId, ...]           ← EdgeId in targets│   │
-│  │ Hyperedge (arity=N):     [NodeId × N]            ← Variable size    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ID Space:                                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ NodeId and EdgeId: both 64-bit, allocated from shared sequence      │   │
-│  │                                                                      │   │
-│  │ Distinction mechanism:                                               │   │
-│  │   • Contextual: edge type signature specifies expected type at      │   │
-│  │     each position (e.g., edge<causes> at position 0 → expect EdgeId)│   │
-│  │   • For higher-order edges: is_higher_order flag set on edge        │   │
-│  │   • For generic META queries: check entity existence in both stores │   │
-│  │                                                                      │   │
-│  │ Rationale: Shared ID space simplifies allocation and allows         │   │
-│  │ uniform ID handling. Type safety comes from schema, not ID format.  │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```rust
+trait Query {
+    fn execute(
+        &self,
+        stmt: AnalyzedMatchStmt,
+        graph: &Graph,
+        registry: &Registry,
+        pattern: &Pattern,
+    ) -> Result<ResultSet, QueryError>;
+}
 ```
 
-## 6. Higher-Order Edge Model
+### 13.2 Query Plan Operators
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        HIGHER-ORDER EDGES                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Example: causes(e1, e2) with confidence                                    │
-│                                                                              │
-│  ┌─────────┐         causes         ┌─────────┐                            │
-│  │ Event   │ ───────(edge_1)───────▶│ Event   │                            │
-│  │ (e1)    │                        │ (e2)    │                            │
-│  └─────────┘                        └─────────┘                            │
-│                  │                                                          │
-│                  │ confidence (edge_2)                                      │
-│                  ▼                                                          │
-│            ┌──────────┐                                                     │
-│            │ level:   │                                                     │
-│            │ 0.85     │                                                     │
-│            └──────────┘                                                     │
-│                                                                              │
-│  In storage:                                                                │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ edge_1 (causes):                                                     │   │
-│  │   id: "edge_1"                                                       │   │
-│  │   type_id: EdgeType(causes)                                         │   │
-│  │   targets: [NodeId(e1), NodeId(e2)]                                 │   │
-│  │   flags: has_higher_order = true                                    │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │ edge_2 (confidence):                                                 │   │
-│  │   id: "edge_2"                                                       │   │
-│  │   type_id: EdgeType(confidence)                                     │   │
-│  │   targets: [EdgeId(edge_1)]  ← Points to edge, not node             │   │
-│  │   attributes: { level: 0.85 }                                       │   │
-│  │   flags: is_higher_order = true                                     │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  Higher-Order Index:                                                        │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ EdgeId → Set<EdgeId>  (edges that target this edge)                 │   │
-│  │                                                                      │   │
-│  │ edge_1 → {edge_2}                                                   │   │
-│  │                                                                      │   │
-│  │ Used for:                                                           │   │
-│  │   • Cascade deletion (unlink edge_1 → auto unlink edge_2)          │   │
-│  │   • Meta queries (find all edges about edge X)                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+| Operator | Purpose |
+|----------|---------|
+| `TypeScan(type_id)` | Scan all nodes of type |
+| `IndexScan(index, range)` | Scan index for range |
+| `UniqueIndexLookup(index, value)` | Single-row lookup |
+| `EdgeScan(edge_type)` | Scan all edges of type |
+| `AdjacencyLookup(node, edge_type, direction)` | Find edges from/to node |
+| `NestedLoopJoin(outer, inner, condition)` | Join via nested iteration |
+| `HashJoin(left, right, keys)` | Join via hash table |
+| `Filter(child, condition)` | Filter rows |
+| `Project(child, projections)` | Select/compute columns |
+| `Sort(child, keys)` | Sort rows |
+| `Limit(child, count, offset)` | Limit rows |
+| `Aggregate(child, group_keys, aggregations)` | Group and aggregate |
+| `TransitiveClosure(start, edge_type, depth)` | BFS/DFS traversal |
+
+### 13.3 WALK Execution
+
+WALK is syntactic sugar over MATCH with transitive closure:
+
+```sql
+WALK FROM #start FOLLOW causes [depth: 1..5] RETURN PATH
 ```
 
-## 7. Attribute Value Types
+Compiles to pattern with `causes+(start, end)` and depth constraints.
 
+### 13.4 INSPECT Execution
+
+INSPECT queries Layer 0:
+
+```sql
+INSPECT TYPES WHERE name LIKE "Task%"
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          VALUE REPRESENTATION                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Value (tagged union, 16-24 bytes):                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  tag (1 byte)  │  data (8-16 bytes)                                 │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  0: Null       │  (no data)                                         │   │
-│  │  1: Bool       │  0 or 1                                            │   │
-│  │  2: Int        │  i64                                               │   │
-│  │  3: Float      │  f64                                               │   │
-│  │  4: String     │  StringRef (index into string store)               │   │
-│  │  5: Timestamp  │  i64 (millis since epoch)                          │   │
-│  │  6: Duration   │  i64 (millis)                                      │   │
-│  │  7: NodeRef    │  NodeId                                            │   │
-│  │  8: EdgeRef    │  EdgeId                                            │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  String Storage:                                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Small strings (≤14 bytes): Inline in Value (tagged)                │   │
-│  │  Large strings: StringRef → String Store                            │   │
-│  │                                                                      │   │
-│  │  String Store:                                                      │   │
-│  │    ┌────────┐                                                       │   │
-│  │    │ Intern │ → Common strings (type names, enum values)            │   │
-│  │    │ Table  │   Deduped, fast equality                              │   │
-│  │    ├────────┤                                                       │   │
-│  │    │ Heap   │ → Large/unique strings                                │   │
-│  │    │        │   Reference counted                                   │   │
-│  │    └────────┘                                                       │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+
+Compiles to:
+
+```sql
+MATCH t: _NodeType WHERE t.name LIKE "Task%" RETURN t
 ```
 
 ---
 
-# Part III: Runtime Registries
+## 14. Mutation Component
 
-## 8. Registry Architecture
+**Purpose**: Execute SPAWN/KILL/LINK/UNLINK/SET operations.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         RUNTIME REGISTRIES                                   │
-│                                                                              │
-│  Compiled from ontology, used for all runtime validation and optimization  │
-│  Immutable during normal operation; replaced on schema change               │
-└─────────────────────────────────────────────────────────────────────────────┘
+### 14.1 Contract
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ TYPE REGISTRY                                                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────────────────┐    ┌───────────────────────────────────────┐ │
-│  │ by_name: Map             │    │ TypeDef                               │ │
-│  │   "Task" → TypeDef       │───▶│   id: TypeId                          │ │
-│  │   "Person" → TypeDef     │    │   name: "Task"                        │ │
-│  │   ...                    │    │   parent_ids: [TypeId(Entity)]        │ │
-│  └──────────────────────────┘    │   own_attrs: [AttrDef...]             │ │
-│                                   │   all_attrs: [AttrDef...] (cached)    │ │
-│  ┌──────────────────────────┐    │   abstract: false                     │ │
-│  │ by_id: Vec<TypeDef>      │    │   sealed: false                       │ │
-│  │   [0] → TypeDef(Entity)  │    │   l0_node_id: NodeId                  │ │
-│  │   [1] → TypeDef(Task)    │    └───────────────────────────────────────┘ │
-│  │   ...                    │                                              │
-│  └──────────────────────────┘    ┌───────────────────────────────────────┐ │
-│                                   │ AttrDef                               │ │
-│  ┌──────────────────────────┐    │   id: AttrId                          │ │
-│  │ inheritance_graph        │    │   name: "priority"                    │ │
-│  │   TypeId(Task) ──parent──│    │   type: ScalarType(Int)               │ │
-│  │           ▼              │    │   required: false                     │ │
-│  │   TypeId(Entity)         │    │   unique: false                       │ │
-│  └──────────────────────────┘    │   indexed: Desc                       │ │
-│                                   │   default: Some(5)                    │ │
-│  ┌──────────────────────────┐    └───────────────────────────────────────┘ │
-│  │ subtype_cache            │                                              │
-│  │   Entity → {Task,Person} │  ← Precomputed for fast subtype queries     │
-│  └──────────────────────────┘                                              │
-│                                                                              │
-│  Operations:                                                                │
-│    lookup(name) → TypeDef?                                                 │
-│    get(id) → TypeDef                                                       │
-│    is_subtype(child, parent) → bool                                        │
-│    get_attr(type_id, attr_name) → AttrDef?                                 │
-│    all_subtypes(type_id) → Set<TypeId>                                     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ EDGE TYPE REGISTRY                                                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────────────────┐    ┌───────────────────────────────────────┐ │
-│  │ by_name: Map             │    │ EdgeTypeDef                           │ │
-│  │   "causes" → EdgeTypeDef │───▶│   id: EdgeTypeId                      │ │
-│  │   "assigned_to" → ...    │    │   name: "causes"                      │ │
-│  └──────────────────────────┘    │   arity: 2                            │ │
-│                                   │   signature: [                        │ │
-│                                   │     (0, "from", TypeExpr(Event)),     │ │
-│                                   │     (1, "to", TypeExpr(Event))        │ │
-│                                   │   ]                                   │ │
-│                                   │   attrs: [AttrDef...]                 │ │
-│                                   │   symmetric: false                    │ │
-│                                   │   reflexive_allowed: false            │ │
-│                                   └───────────────────────────────────────┘ │
-│                                                                              │
-│  Operations:                                                                │
-│    lookup(name) → EdgeTypeDef?                                             │
-│    validate_targets(edge_type_id, targets) → Result<(), TypeError>         │
-│    get_signature(edge_type_id) → List<SignatureParam>                      │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ CONSTRAINT REGISTRY                                                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────────────────┐    ┌───────────────────────────────────────┐ │
-│  │ all: Vec<ConstraintDef>  │    │ ConstraintDef                         │ │
-│  │   [c1, c2, c3, ...]      │───▶│   id: ConstraintId                    │ │
-│  └──────────────────────────┘    │   name: "temporal_order"              │ │
-│                                   │   hard: true                          │ │
-│  ┌──────────────────────────┐    │   message: "Cause must precede..."    │ │
-│  │ by_type: Map             │    │   pattern: CompiledPattern            │ │
-│  │   Task → [c1, c3, c7]    │    │   condition: CompiledExpr             │ │
-│  │   Person → [c2, c4]      │    │   affected_types: {Event}             │ │
-│  │   ...                    │    │   affected_edges: {causes}            │ │
-│  └──────────────────────────┘    │   category: Immediate | Deferred      │ │
-│                                   └───────────────────────────────────────┘ │
-│  ┌──────────────────────────┐                                              │
-│  │ by_edge: Map             │    Category:                                 │
-│  │   causes → [c1, c5]      │      Immediate = check right after mutation │
-│  │   assigned_to → [c2]     │      Deferred = check at commit time        │
-│  └──────────────────────────┘                                              │
-│                                                                              │
-│  Operations:                                                                │
-│    get_affected(mutation) → List<ConstraintDef>                            │
-│    get_deferred() → List<ConstraintDef>                                    │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ RULE REGISTRY                                                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────────────────┐    ┌───────────────────────────────────────┐ │
-│  │ auto_rules: Vec<RuleDef> │    │ RuleDef                               │ │
-│  │   (sorted by priority ↓) │───▶│   id: RuleId                          │ │
-│  │   [r5, r2, r7, r1, ...]  │    │   name: "auto_timestamp"              │ │
-│  └──────────────────────────┘    │   priority: 100                       │ │
-│                                   │   auto: true                          │ │
-│  ┌──────────────────────────┐    │   pattern: CompiledPattern            │ │
-│  │ manual_rules: Map        │    │   production: CompiledProduction      │ │
-│  │   "archive" → RuleDef    │    │   affected_types: {Task}              │ │
-│  └──────────────────────────┘    │   affected_edges: {}                  │ │
-│                                   └───────────────────────────────────────┘ │
-│  ┌──────────────────────────┐                                              │
-│  │ by_type: Map             │                                              │
-│  │   Task → [r1, r3]        │                                              │
-│  │   Event → [r2, r5]       │                                              │
-│  └──────────────────────────┘                                              │
-│                                                                              │
-│  Operations:                                                                │
-│    get_triggered(mutation) → List<RuleDef> (auto only, by priority)       │
-│    get_manual(name) → RuleDef?                                             │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```rust
+trait Mutation {
+    fn spawn(&self, type_id: TypeId, attrs: Attributes, txn: &mut Transaction) -> Result<NodeId, MutationError>;
+    fn kill(&self, node_id: NodeId, txn: &mut Transaction) -> Result<(), MutationError>;
+    fn link(&self, edge_type: EdgeTypeId, targets: Vec<EntityId>, attrs: Attributes, txn: &mut Transaction) -> Result<EdgeId, MutationError>;
+    fn unlink(&self, edge_id: EdgeId, txn: &mut Transaction) -> Result<(), MutationError>;
+    fn set(&self, entity_id: EntityId, attr_id: AttrId, value: Value, txn: &mut Transaction) -> Result<(), MutationError>;
+}
 ```
 
-## 9. Compiled Pattern Structure
+### 14.2 Validation
+
+Each mutation validates:
+- Type exists and is concrete (not abstract)
+- Required attributes present
+- Attribute types match
+- Edge targets match signature types
+- Entity exists (for KILL/UNLINK/SET)
+
+### 14.3 Cascade Handling
+
+**KILL node**: 
+- Find all edges involving node (via adjacency index)
+- Unlink each edge first
+- Then delete node
+
+**UNLINK edge**:
+- Find all higher-order edges targeting this edge (via higher-order index)
+- Unlink each meta-edge first
+- Then delete edge
+
+---
+
+## 15. Transaction Component
+
+**Purpose**: ACID transaction management, orchestrate mutation→rule→constraint flow.
+
+### 15.1 Contract
+
+```rust
+trait Transaction {
+    fn begin(&mut self, isolation: IsolationLevel) -> TxnId;
+    fn commit(&mut self, txn_id: TxnId) -> Result<(), TxnError>;
+    fn rollback(&mut self, txn_id: TxnId) -> Result<(), TxnError>;
+    
+    fn execute_mutation(
+        &mut self,
+        mutation: MutationStmt,
+        graph: &mut Graph,
+        registry: &Registry,
+        pattern: &Pattern,
+        constraint: &Constraint,
+        rule: &Rule,
+        mutation_exec: &Mutation,
+    ) -> Result<MutationResult, TxnError>;
+}
+```
+
+### 15.2 Commit Sequence
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        COMPILED PATTERN                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Source pattern:                                                            │
-│    e1: Event, e2: Event, causes(e1, e2) WHERE e1.timestamp < e2.timestamp  │
-│                                                                              │
-│  Compiled form:                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ CompiledPattern {                                                    │   │
-│  │                                                                      │   │
-│  │   node_vars: [                                                      │   │
-│  │     { var_id: 0, name: "e1", type_id: Event },                      │   │
-│  │     { var_id: 1, name: "e2", type_id: Event }                       │   │
-│  │   ]                                                                  │   │
-│  │                                                                      │   │
-│  │   edge_patterns: [                                                  │   │
-│  │     {                                                                │   │
-│  │       edge_type_id: causes,                                         │   │
-│  │       target_vars: [0, 1],  ← positions in node_vars                │   │
-│  │       alias_var: None,                                              │   │
-│  │       negated: false,                                               │   │
-│  │       transitive: None                                              │   │
-│  │     }                                                                │   │
-│  │   ]                                                                  │   │
-│  │                                                                      │   │
-│  │   conditions: [                                                     │   │
-│  │     CompiledExpr::BinaryOp(                                         │   │
-│  │       Lt,                                                           │   │
-│  │       AttrAccess(VarRef(0), "timestamp"),                          │   │
-│  │       AttrAccess(VarRef(1), "timestamp")                           │   │
-│  │     )                                                                │   │
-│  │   ]                                                                  │   │
-│  │                                                                      │   │
-│  │   // Execution hints (computed by planner)                          │   │
-│  │   join_order: [0, 1]  ← start with e1, then find connected e2      │   │
-│  │   estimated_matches: 1000                                           │   │
-│  │   index_hints: [causes_idx]                                         │   │
-│  │                                                                      │   │
-│  │ }                                                                    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+commit(txn_id):
+  
+  1. CHECK DEFERRED CONSTRAINTS
+     • Cardinality constraints
+     • Existence constraints
+     • If fail → ABORT
+  
+  2. WRITE WAL
+     • Append all mutations
+     • Append COMMIT record
+     • fsync()
+  
+  3. APPLY TO GRAPH
+     • Move from txn buffer to graph
+     • Update indexes
+  
+  4. RETURN SUCCESS
 ```
 
 ---
 
-# Part IV: Storage Architecture
+## 16. Journal Component
 
-## 10. Storage Layer Overview
+**Purpose**: Write-ahead log and crash recovery.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          STORAGE LAYER                                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                      LOGICAL COMPONENTS                              │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │   │
-│  │  │ GRAPH STORE  │  │INDEX MANAGER │  │   VERSION MANAGER        │  │   │
-│  │  │              │  │              │  │                          │  │   │
-│  │  │ • Node CRUD  │  │ • Type Index │  │ • Snapshots              │  │   │
-│  │  │ • Edge CRUD  │  │ • Attr Index │  │ • Branches               │  │   │
-│  │  │ • ID alloc   │  │ • Edge Index │  │ • Diff/Merge             │  │   │
-│  │  │ • Lookup     │  │ • H.O. Index │  │ • Checkout               │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                      PHYSICAL COMPONENTS                             │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │   │
-│  │  │     WAL      │  │ BUFFER POOL  │  │    FILE MANAGER          │  │   │
-│  │  │              │  │              │  │                          │  │   │
-│  │  │ • Append-only│  │ • Page cache │  │ • Page read/write        │  │   │
-│  │  │ • Durability │  │ • LRU evict  │  │ • File allocation        │  │   │
-│  │  │ • Recovery   │  │ • Dirty track│  │ • Space management       │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         FILE SYSTEM                                  │   │
-│  │  /data/nodes/     /data/edges/     /indexes/     /wal/     /snap/   │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+### 16.1 Contract
+
+```rust
+trait Journal {
+    fn append(&mut self, entry: WALEntry) -> LSN;
+    fn sync(&mut self) -> Result<(), IOError>;
+    fn recover(&mut self, graph: &mut Graph) -> Result<RecoveryStats, RecoveryError>;
+}
+
+enum WALEntry {
+    Begin { txn_id: TxnId },
+    Commit { txn_id: TxnId },
+    Abort { txn_id: TxnId },
+    SpawnNode { txn_id: TxnId, node_id: NodeId, type_id: TypeId, attrs: Attributes },
+    KillNode { txn_id: TxnId, node_id: NodeId, prev_state: Node },
+    LinkEdge { txn_id: TxnId, edge_id: EdgeId, type_id: EdgeTypeId, targets: Vec<EntityId>, attrs: Attributes },
+    UnlinkEdge { txn_id: TxnId, edge_id: EdgeId, prev_state: Edge },
+    SetAttr { txn_id: TxnId, entity_id: EntityId, attr_id: AttrId, old: Value, new: Value },
+}
 ```
 
-## 11. Index Architecture
+### 16.2 Recovery Algorithm
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           INDEX MANAGER                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ TYPE INDEX                                                           │   │
-│  │ Purpose: Find all nodes of a given type                             │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   TypeId ──────────────▶ Set<NodeId>                                │   │
-│  │                                                                      │   │
-│  │   Task   ──────────────▶ {n1, n5, n12, n45, ...}                   │   │
-│  │   Person ──────────────▶ {n2, n7, n8, ...}                         │   │
-│  │                                                                      │   │
-│  │   Note: Includes subtypes. Query Task also returns SpecialTask.    │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ ATTRIBUTE INDEX                                                      │   │
-│  │ Purpose: Find nodes by attribute value                              │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   (TypeId, AttrId, Value) ──────────────▶ Set<NodeId>              │   │
-│  │                                                                      │   │
-│  │   Structure: B+ Tree                                                │   │
-│  │     Key: (type_id, attr_id, value)                                  │   │
-│  │     Val: NodeId set or posting list                                 │   │
-│  │                                                                      │   │
-│  │   Supports:                                                         │   │
-│  │     • Equality: WHERE t.status = "done"                            │   │
-│  │     • Range: WHERE t.priority > 5                                  │   │
-│  │     • Prefix: WHERE t.name LIKE "Alice%"                           │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ UNIQUE INDEX                                                         │   │
-│  │ Purpose: Enforce uniqueness, fast lookup by unique attribute        │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   (TypeId, AttrId, Value) ──────────────▶ NodeId (exactly one)     │   │
-│  │                                                                      │   │
-│  │   Structure: Hash Map                                               │   │
-│  │     Key: (type_id, attr_id, value)                                  │   │
-│  │     Val: single NodeId                                              │   │
-│  │                                                                      │   │
-│  │   Constraint: Insert fails if key exists                           │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ EDGE INDEX                                                           │   │
-│  │ Purpose: Find edges by type and target                              │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   (EdgeTypeId, Position, TargetId) ──────────────▶ Set<EdgeId>     │   │
-│  │                                                                      │   │
-│  │   Examples:                                                         │   │
-│  │     (causes, 0, e1) → {edge_1, edge_5}    # edges FROM e1          │   │
-│  │     (causes, 1, e2) → {edge_1, edge_3}    # edges TO e2            │   │
-│  │                                                                      │   │
-│  │   Supports: Find edges where target at position P is node N        │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ ADJACENCY INDEX                                                      │   │
-│  │ Purpose: Fast neighbor lookup from any node                         │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   NodeId ──────────────▶ AdjacencyList                              │   │
-│  │                                                                      │   │
-│  │   AdjacencyList {                                                   │   │
-│  │     outbound: Map<EdgeTypeId, Set<EdgeId>>                         │   │
-│  │     inbound:  Map<EdgeTypeId, Set<EdgeId>>                         │   │
-│  │   }                                                                  │   │
-│  │                                                                      │   │
-│  │   Example for node n1:                                              │   │
-│  │     outbound: { causes: {e1, e3}, assigned_to: {e5} }              │   │
-│  │     inbound:  { depends_on: {e7} }                                 │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ HIGHER-ORDER INDEX                                                   │   │
-│  │ Purpose: Find edges that reference other edges                      │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   EdgeId ──────────────▶ Set<EdgeId>                                │   │
-│  │   (base edge)              (edges targeting base)                   │   │
-│  │                                                                      │   │
-│  │   edge_1 (causes) ──────▶ {edge_2, edge_3}                         │   │
-│  │                            (confidence, provenance)                 │   │
-│  │                                                                      │   │
-│  │   Used for:                                                         │   │
-│  │     • Cascade deletion                                              │   │
-│  │     • META queries: edges_about(e)                                  │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 12. Transaction Model
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        TRANSACTION LIFECYCLE                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Transaction State Machine                                            │   │
-│  │                                                                      │   │
-│  │   ┌────────┐   begin    ┌────────┐                                  │   │
-│  │   │  NONE  │ ─────────▶ │ ACTIVE │                                  │   │
-│  │   └────────┘            └────┬───┘                                  │   │
-│  │                              │                                       │   │
-│  │               ┌──────────────┼──────────────┐                       │   │
-│  │               │              │              │                        │   │
-│  │               │ rollback     │ commit       │ error                  │   │
-│  │               ▼              ▼              ▼                        │   │
-│  │         ┌─────────┐   ┌───────────┐   ┌─────────┐                  │   │
-│  │         │ ABORTED │   │COMMITTING │   │ ABORTED │                  │   │
-│  │         └─────────┘   └─────┬─────┘   └─────────┘                  │   │
-│  │                             │                                        │   │
-│  │                  ┌──────────┴──────────┐                            │   │
-│  │                  │                     │                             │   │
-│  │                  │ success             │ failure                     │   │
-│  │                  ▼                     ▼                             │   │
-│  │            ┌───────────┐         ┌─────────┐                        │   │
-│  │            │ COMMITTED │         │ ABORTED │                        │   │
-│  │            └───────────┘         └─────────┘                        │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Transaction Buffer                                                   │   │
-│  │                                                                      │   │
-│  │   Transaction {                                                     │   │
-│  │     id: TxnId                                                       │   │
-│  │     state: TxnState                                                 │   │
-│  │     isolation: ReadCommitted | Serializable                         │   │
-│  │     start_time: Timestamp                                           │   │
-│  │                                                                      │   │
-│  │     // Write set (pending changes)                                  │   │
-│  │     created_nodes: Map<NodeId, Node>                                │   │
-│  │     created_edges: Map<EdgeId, Edge>                                │   │
-│  │     deleted_nodes: Set<NodeId>                                      │   │
-│  │     deleted_edges: Set<EdgeId>                                      │   │
-│  │     modified_attrs: Map<(EntityId, AttrId), (Old, New)>            │   │
-│  │                                                                      │   │
-│  │     // Rule execution state                                         │   │
-│  │     executed_rules: Set<(RuleId, BindingsHash)>                    │   │
-│  │     rule_depth: u32                                                 │   │
-│  │     action_count: u32                                               │   │
-│  │                                                                      │   │
-│  │     // Savepoints for partial rollback                              │   │
-│  │     savepoints: Map<Name, SavepointState>                          │   │
-│  │   }                                                                  │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Query Visibility (Transaction Isolation)                            │   │
-│  │                                                                      │   │
-│  │   Within a transaction, queries see:                                │   │
-│  │                                                                      │   │
-│  │   • Own uncommitted changes: VISIBLE                                │   │
-│  │     - created_nodes, created_edges in transaction buffer            │   │
-│  │     - modified_attrs applied to query results                       │   │
-│  │     - deleted_nodes, deleted_edges filtered out                     │   │
-│  │                                                                      │   │
-│  │   • Other transactions' uncommitted changes: INVISIBLE              │   │
-│  │     - Standard isolation guarantee                                  │   │
-│  │                                                                      │   │
-│  │   Query Resolution Order:                                           │   │
-│  │     1. Check transaction buffer first (uncommitted local changes)  │   │
-│  │     2. Check committed storage                                      │   │
-│  │     3. Merge both views for final result                           │   │
-│  │                                                                      │   │
-│  │   Index Queries:                                                    │   │
-│  │     - Transaction maintains local index delta                       │   │
-│  │     - Query merges committed index + local delta                   │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         COMMIT SEQUENCE                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. VALIDATE                                                                │
-│     ├─ Check deferred constraints (cardinality, existence)                 │
-│     └─ If fail → ABORT                                                     │
-│                                                                              │
-│  2. ACQUIRE LOCKS                                                           │
-│     ├─ Lock modified entities (exclusive)                                  │
-│     └─ Deadlock detection → ABORT if detected                              │
-│                                                                              │
-│  3. WRITE WAL                                                               │
-│     ├─ Append all mutations as WAL entries                                 │
-│     ├─ Append COMMIT record                                                │
-│     └─ fsync() WAL to disk                                                 │
-│                                                                              │
-│  4. APPLY CHANGES                                                           │
-│     ├─ Update in-memory graph store                                        │
-│     └─ Update indexes                                                       │
-│                                                                              │
-│  5. RELEASE LOCKS                                                           │
-│                                                                              │
-│  6. RETURN SUCCESS                                                          │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 13. Write-Ahead Log
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            WAL STRUCTURE                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  WAL Segment Files:                                                         │
-│    wal_000001.log  ─────▶  [Entry][Entry][Entry]...                        │
-│    wal_000002.log  ─────▶  [Entry][Entry][Entry]...                        │
-│    ...                                                                       │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ WAL Entry Structure                                                  │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  ┌──────────────────────────────────────────────────────────────┐  │   │
-│  │  │ Header (32 bytes)                                             │  │   │
-│  │  │   lsn: u64              ← Log Sequence Number (monotonic)    │  │   │
-│  │  │   txn_id: u64           ← Transaction ID                     │  │   │
-│  │  │   entry_type: u8        ← BEGIN|COMMIT|ABORT|SPAWN|KILL|...  │  │   │
-│  │  │   data_size: u32        ← Size of data section               │  │   │
-│  │  │   checksum: u32         ← CRC32 of entire entry              │  │   │
-│  │  │   prev_lsn: u64         ← Previous LSN in same txn (chain)   │  │   │
-│  │  └──────────────────────────────────────────────────────────────┘  │   │
-│  │  ┌──────────────────────────────────────────────────────────────┐  │   │
-│  │  │ Data (variable)                                               │  │   │
-│  │  │   Depends on entry_type...                                   │  │   │
-│  │  └──────────────────────────────────────────────────────────────┘  │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  Entry Types:                                                               │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ BEGIN       │ isolation_level                                       │   │
-│  │ COMMIT      │ (empty)                                               │   │
-│  │ ABORT       │ (empty)                                               │   │
-│  │ SPAWN_NODE  │ node_id, type_id, serialized_attributes              │   │
-│  │ KILL_NODE   │ node_id, serialized_prev_state (for undo)            │   │
-│  │ LINK_EDGE   │ edge_id, type_id, targets, serialized_attributes     │   │
-│  │ UNLINK_EDGE │ edge_id, serialized_prev_state (for undo)            │   │
-│  │ SET_ATTR    │ entity_id, attr_id, old_value, new_value             │   │
-│  │ CHECKPOINT  │ list of dirty page ids flushed                        │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  Recovery Process:                                                          │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ 1. Read WAL from last checkpoint                                    │   │
-│  │ 2. Group entries by transaction                                     │   │
-│  │ 3. Identify: committed txns, uncommitted txns                       │   │
-│  │ 4. REDO: Replay all committed txn operations                       │   │
-│  │ 5. UNDO: Discard uncommitted txn operations (already not applied)  │   │
-│  │ 6. System ready                                                     │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+recover(graph):
+  
+  1. Read WAL from last checkpoint
+  
+  2. Group entries by transaction
+  
+  3. Identify committed vs uncommitted transactions
+  
+  4. REDO: Replay all committed transactions in LSN order
+  
+  5. (Uncommitted transactions are simply ignored - 
+      they were never applied to durable storage)
+  
+  6. System ready
 ```
 
 ---
 
-# Part V: Core Engine
+## 17. Session Component
 
-## 14. Pattern Matcher
+**Purpose**: External interface (REPL, HTTP, embedded).
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         PATTERN MATCHER                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Input: CompiledPattern + optional initial bindings                        │
-│  Output: Iterator of complete bindings (variable → value maps)             │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Matching Algorithm (Backtracking Search)                             │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  match(pattern, initial_bindings) → Iterator<Bindings>:             │   │
-│  │                                                                      │   │
-│  │    1. ORDER variables by selectivity (most constrained first)       │   │
-│  │                                                                      │   │
-│  │    2. For first unbound variable V:                                 │   │
-│  │       │                                                              │   │
-│  │       ├─ If V is node variable:                                     │   │
-│  │       │    candidates = get_candidates(V.type, conditions_on_V)     │   │
-│  │       │                                                              │   │
-│  │       ├─ If V is connected via edge to bound variable B:            │   │
-│  │       │    candidates = traverse_edge(B, edge_type, position)       │   │
-│  │       │                                                              │   │
-│  │       └─ If V is edge variable:                                     │   │
-│  │            candidates = find_matching_edges(edge_pattern)           │   │
-│  │                                                                      │   │
-│  │    3. For each candidate C in candidates:                           │   │
-│  │       │                                                              │   │
-│  │       ├─ Extend bindings: bindings' = bindings ∪ {V → C}           │   │
-│  │       │                                                              │   │
-│  │       ├─ Check conditions involving V                               │   │
-│  │       │    If fail → continue to next candidate                     │   │
-│  │       │                                                              │   │
-│  │       ├─ If all variables bound:                                    │   │
-│  │       │    yield bindings'                                          │   │
-│  │       │                                                              │   │
-│  │       └─ Else:                                                      │   │
-│  │            recurse: match(remaining_pattern, bindings')             │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Candidate Generation Strategies                                      │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  By Type (no conditions):                                           │   │
-│  │    candidates = TypeIndex.get(type_id)                              │   │
-│  │                                                                      │   │
-│  │  By Attribute Condition (indexed):                                   │   │
-│  │    candidates = AttrIndex.range(type, attr, min, max)               │   │
-│  │                                                                      │   │
-│  │  By Edge Connection (bound neighbor):                               │   │
-│  │    candidates = AdjacencyIndex.get(bound_node, edge_type, direction)│   │
-│  │                                                                      │   │
-│  │  By Unique Attribute:                                               │   │
-│  │    candidates = UniqueIndex.get(type, attr, value)  // 0 or 1      │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Transitive Closure                                                   │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  For pattern: edge+(A, B) or edge*(A, B)                            │   │
-│  │                                                                      │   │
-│  │  match_transitive(start, edge_type, mode, max_depth):               │   │
-│  │    visited = Set()                                                  │   │
-│  │    frontier = [(start, 0)]   // (node, depth)                       │   │
-│  │                                                                      │   │
-│  │    while frontier not empty:                                        │   │
-│  │      (current, depth) = frontier.pop()                              │   │
-│  │                                                                      │   │
-│  │      if current in visited: continue   // cycle handling            │   │
-│  │      visited.add(current)                                           │   │
-│  │                                                                      │   │
-│  │      if depth > 0 or mode == Star:     // Star includes depth=0    │   │
-│  │        yield current                                                │   │
-│  │                                                                      │   │
-│  │      if depth < max_depth:                                          │   │
-│  │        for neighbor in get_neighbors(current, edge_type):           │   │
-│  │          frontier.push((neighbor, depth + 1))                       │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Negative Patterns (NOT EXISTS)                                       │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  For condition: NOT EXISTS(inner_pattern)                           │   │
-│  │                                                                      │   │
-│  │  evaluate_not_exists(inner_pattern, outer_bindings):                │   │
-│  │    matches = match(inner_pattern, outer_bindings)                   │   │
-│  │    return matches.is_empty()   // true if no match exists           │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+### 17.1 Contract
+
+```rust
+trait Session {
+    fn execute(&mut self, statement: &str) -> Result<Response, SessionError>;
+    fn close(&mut self);
+}
+
+struct SessionState {
+    id: SessionId,
+    current_txn: Option<TxnId>,
+    auto_commit: bool,
+    current_branch: BranchId,  // For versioning (v1.x)
+}
 ```
 
-## 15. Constraint Checker
+### 17.2 Statement Routing
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        CONSTRAINT CHECKER                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Check Flow                                                           │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │                    Mutation                                          │   │
-│  │                       │                                              │   │
-│  │                       ▼                                              │   │
-│  │  ┌────────────────────────────────────────────────────────────┐    │   │
-│  │  │ Find Affected Constraints                                   │    │   │
-│  │  │                                                             │    │   │
-│  │  │ affected = ConstraintRegistry.get_affected(mutation)       │    │   │
-│  │  │                                                             │    │   │
-│  │  │ Uses indexes:                                               │    │   │
-│  │  │   • SPAWN node → constraints by type                       │    │   │
-│  │  │   • LINK edge → constraints by edge type                   │    │   │
-│  │  │   • SET attr → constraints mentioning attr                 │    │   │
-│  │  └────────────────────────────────────────────────────────────┘    │   │
-│  │                       │                                              │   │
-│  │                       ▼                                              │   │
-│  │  ┌────────────────────────────────────────────────────────────┐    │   │
-│  │  │ For each affected constraint:                               │    │   │
-│  │  │                                                             │    │   │
-│  │  │   // Find relevant matches (must include mutated entity)   │    │   │
-│  │  │   initial = seed_from_mutation(constraint.pattern, mutation)│    │   │
-│  │  │   matches = PatternMatcher.match(pattern, initial)         │    │   │
-│  │  │                                                             │    │   │
-│  │  │   for bindings in matches:                                  │    │   │
-│  │  │     result = evaluate(constraint.condition, bindings)      │    │   │
-│  │  │                                                             │    │   │
-│  │  │     if result == false:                                     │    │   │
-│  │  │       if constraint.hard:                                   │    │   │
-│  │  │         return Error(ConstraintViolation)                   │    │   │
-│  │  │       else:                                                 │    │   │
-│  │  │         log_warning(constraint, bindings)                   │    │   │
-│  │  │                                                             │    │   │
-│  │  └────────────────────────────────────────────────────────────┘    │   │
-│  │                       │                                              │   │
-│  │                       ▼                                              │   │
-│  │                   Return OK                                          │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Constraint Categories                                                │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  IMMEDIATE (checked right after mutation)                           │   │
-│  │    • Value constraints: >= N, <= M, in:[...], match:"..."           │   │
-│  │    • Required constraints: attr != null                             │   │
-│  │    • no_self: edge targets not equal                                │   │
-│  │    • acyclic: no path from target back to source                    │   │
-│  │                                                                      │   │
-│  │  DEFERRED (checked at commit time)                                  │   │
-│  │    • Cardinality: task -> 1 (must have exactly one project)        │   │
-│  │    • Existence: => EXISTS(related(x, _))                           │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 16. Rule Engine
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           RULE ENGINE                                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Execution Model                                                      │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   Mutation ─────▶ Rules Triggered ─────▶ Execute ─────▶ Repeat      │   │
-│  │                         │                                │           │   │
-│  │                         │                                │           │   │
-│  │                         └──────── until quiescent ◀──────┘           │   │
-│  │                                   or limit reached                   │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Core Algorithm                                                       │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  process_rules(mutation, txn):                                      │   │
-│  │                                                                      │   │
-│  │    executed = Set()        // (rule_id, bindings_hash)              │   │
-│  │    depth = 0                                                        │   │
-│  │    action_count = 0                                                 │   │
-│  │                                                                      │   │
-│  │    loop:                                                            │   │
-│  │      // Find rules that might fire                                  │   │
-│  │      triggered = RuleRegistry.get_triggered(mutation)              │   │
-│  │      triggered.sort_by(priority, descending)                        │   │
-│  │                                                                      │   │
-│  │      new_matches = []                                               │   │
-│  │                                                                      │   │
-│  │      for rule in triggered:                                         │   │
-│  │        for bindings in PatternMatcher.match(rule.pattern):         │   │
-│  │          key = (rule.id, hash(bindings))                            │   │
-│  │          if key not in executed:                                    │   │
-│  │            new_matches.append((rule, bindings))                     │   │
-│  │                                                                      │   │
-│  │      if new_matches.empty():                                        │   │
-│  │        break   // Quiescent                                         │   │
-│  │                                                                      │   │
-│  │      for (rule, bindings) in new_matches:                          │   │
-│  │        // Limit checks                                              │   │
-│  │        if depth >= MAX_DEPTH: return Error(DepthLimitExceeded)     │   │
-│  │        if action_count >= MAX_ACTIONS: return Error(ActionLimit)   │   │
-│  │                                                                      │   │
-│  │        // Execute production                                        │   │
-│  │        depth += 1                                                   │   │
-│  │        for action in rule.production.actions:                       │   │
-│  │          execute_action(action, bindings, txn)                      │   │
-│  │          action_count += 1                                          │   │
-│  │        depth -= 1                                                   │   │
-│  │                                                                      │   │
-│  │        executed.add((rule.id, hash(bindings)))                      │   │
-│  │                                                                      │   │
-│  │    return OK                                                        │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Action Execution                                                     │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  execute_action(action, bindings, txn):                             │   │
-│  │                                                                      │   │
-│  │    match action:                                                    │   │
-│  │                                                                      │   │
-│  │      SPAWN(var_name, type_id, attr_exprs):                          │   │
-│  │        attrs = evaluate_all(attr_exprs, bindings)                   │   │
-│  │        node_id = GraphStore.create_node(type_id, attrs, txn)       │   │
-│  │        bindings[var_name] = node_id   // Available for later actions│   │
-│  │        ConstraintChecker.check(SpawnMutation(node_id), txn)        │   │
-│  │                                                                      │   │
-│  │      KILL(var_name):                                                │   │
-│  │        node_id = bindings[var_name]                                 │   │
-│  │        handle_cascades(node_id, txn)                                │   │
-│  │        GraphStore.delete_node(node_id, txn)                         │   │
-│  │        ConstraintChecker.check(KillMutation(node_id), txn)         │   │
-│  │                                                                      │   │
-│  │      LINK(edge_type, target_vars, alias, attr_exprs):               │   │
-│  │        targets = [bindings[v] for v in target_vars]                │   │
-│  │        attrs = evaluate_all(attr_exprs, bindings)                   │   │
-│  │        edge_id = GraphStore.create_edge(edge_type, targets, attrs) │   │
-│  │        if alias: bindings[alias] = edge_id                          │   │
-│  │        ConstraintChecker.check(LinkMutation(edge_id), txn)         │   │
-│  │                                                                      │   │
-│  │      UNLINK(var_name):                                              │   │
-│  │        edge_id = bindings[var_name]                                 │   │
-│  │        handle_higher_order_cascade(edge_id, txn)                   │   │
-│  │        GraphStore.delete_edge(edge_id, txn)                         │   │
-│  │        ConstraintChecker.check(UnlinkMutation(edge_id), txn)       │   │
-│  │                                                                      │   │
-│  │      SET(var_name, attr_id, value_expr):                            │   │
-│  │        entity_id = bindings[var_name]                               │   │
-│  │        value = evaluate(value_expr, bindings)                       │   │
-│  │        GraphStore.set_attr(entity_id, attr_id, value, txn)         │   │
-│  │        ConstraintChecker.check(SetMutation(entity_id, attr_id), txn)│   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Execution Limits                                                     │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  MAX_DEPTH = 100        Nested rule trigger depth                   │   │
-│  │  MAX_ACTIONS = 10,000   Total actions per transaction               │   │
-│  │  SAME_BINDING_LIMIT = 1 Same (rule, bindings) executes once         │   │
-│  │                                                                      │   │
-│  │  Cycle detection: If same (rule, bindings_hash) seen → skip        │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+execute(statement):
+  
+  ast = parser.parse_statement(statement)
+  analyzed = analyzer.analyze(ast, registry)
+  
+  match analyzed:
+    
+    Query(match_stmt) →
+      query.execute(match_stmt, graph, registry, pattern)
+    
+    Mutation(mut_stmt) →
+      ensure_transaction()
+      transaction.execute_mutation(mut_stmt, ...)
+    
+    Begin →
+      transaction.begin(default_isolation)
+    
+    Commit →
+      transaction.commit(current_txn)
+    
+    Rollback →
+      transaction.rollback(current_txn)
+    
+    Load(ontology) →
+      compiler.compile(ontology, graph)
 ```
 
 ---
 
-# Part VI: Query Processing
+# Part III: Implementation Plan
 
-## 17. Query Pipeline
+## 18. v1 Scope
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        QUERY PROCESSING PIPELINE                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ STAGE 1: LEXER                                                       │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Input:  "MATCH t: Task WHERE t.priority > 5 RETURN t"              │   │
-│  │                                                                      │   │
-│  │  Process: Character-by-character state machine                      │   │
-│  │           Recognize tokens, skip whitespace/comments                │   │
-│  │                                                                      │   │
-│  │  Output: Token Stream                                               │   │
-│  │    [MATCH, IDENT("t"), COLON, IDENT("Task"), WHERE, ...]           │   │
-│  │                                                                      │   │
-│  │  Errors: Unknown character, unterminated string                     │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                          │                                                   │
-│                          ▼                                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ STAGE 2: PARSER                                                      │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Input: Token Stream                                                │   │
-│  │                                                                      │   │
-│  │  Process: Recursive descent parsing                                 │   │
-│  │           Build AST according to grammar                            │   │
-│  │                                                                      │   │
-│  │  Output: Abstract Syntax Tree (AST)                                 │   │
-│  │    MatchStmt {                                                      │   │
-│  │      pattern: Pattern { node_vars: [{name:"t", type:"Task"}] },     │   │
-│  │      where: BinaryExpr(GT, AttrAccess("t","priority"), Int(5)),    │   │
-│  │      return: [VarRef("t")],                                         │   │
-│  │      ...                                                            │   │
-│  │    }                                                                 │   │
-│  │                                                                      │   │
-│  │  Errors: Syntax error (unexpected token, missing clause)            │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                          │                                                   │
-│                          ▼                                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ STAGE 3: SEMANTIC ANALYZER                                           │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Input: AST                                                         │   │
-│  │                                                                      │   │
-│  │  Process:                                                           │   │
-│  │    1. Name Resolution                                               │   │
-│  │       - "Task" → TypeRegistry.lookup("Task") → TypeId(7)           │   │
-│  │       - "t" declared in pattern, resolve references                │   │
-│  │                                                                      │   │
-│  │    2. Type Checking                                                 │   │
-│  │       - t.priority: Int (from Task attributes)                     │   │
-│  │       - Int > Int → Bool ✓                                         │   │
-│  │                                                                      │   │
-│  │    3. Scope Analysis                                                │   │
-│  │       - Variable visibility rules                                  │   │
-│  │       - EXISTS inner scope handling                                │   │
-│  │                                                                      │   │
-│  │  Output: Annotated AST (with type info and resolved references)    │   │
-│  │                                                                      │   │
-│  │  Errors: Unknown type, unknown attribute, type mismatch            │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                          │                                                   │
-│                          ▼                                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ STAGE 4: QUERY PLANNER                                               │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Input: Annotated AST                                               │   │
-│  │                                                                      │   │
-│  │  Process:                                                           │   │
-│  │    1. Compile patterns to CompiledPattern                          │   │
-│  │                                                                      │   │
-│  │    2. Choose access methods                                         │   │
-│  │       - Check available indexes                                    │   │
-│  │       - Estimate selectivity                                       │   │
-│  │                                                                      │   │
-│  │    3. Determine join order                                          │   │
-│  │       - Which variable to bind first                               │   │
-│  │       - How to traverse edges                                      │   │
-│  │                                                                      │   │
-│  │    4. Build execution plan tree                                    │   │
-│  │                                                                      │   │
-│  │  Output: QueryPlan                                                  │   │
-│  │    IndexScan(Task.priority > 5)                                    │   │
-│  │      └─▶ Project([t])                                              │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                          │                                                   │
-│                          ▼                                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ STAGE 5: EXECUTOR                                                    │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Input: QueryPlan                                                   │   │
-│  │                                                                      │   │
-│  │  Process: Volcano-style iterator execution                          │   │
-│  │    - Each plan node is an operator with open/next/close            │   │
-│  │    - Pull-based: consumer calls next() on producer                 │   │
-│  │    - Streaming: results flow one row at a time                     │   │
-│  │                                                                      │   │
-│  │  Output: Iterator<Row> (streamed to client)                         │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### 18.1 In Scope (v1.0)
 
-## 18. Query Plan Operators
+| Category | Features |
+|----------|----------|
+| **Data Model** | Nodes, edges, higher-order edges, attributes |
+| **Schema** | Layer 0, type inheritance, edge signatures |
+| **Queries** | MATCH, WALK, INSPECT, expressions, aggregates |
+| **Mutations** | SPAWN, KILL, LINK, UNLINK, SET |
+| **Constraints** | Hard/soft, immediate/deferred, modifiers |
+| **Rules** | Auto-fire, priority, quiescence |
+| **Transactions** | BEGIN/COMMIT/ROLLBACK, ACID |
+| **Durability** | WAL, crash recovery |
+| **Interface** | REPL, basic HTTP API |
+
+### 18.2 Deferred (v1.x / v2)
+
+| Feature | Version | Notes |
+|---------|---------|-------|
+| Versioning (snapshot, branch, diff, merge) | v1.x | Data versioning |
+| META mode (reflection, schema evolution) | v2 | Runtime schema modification |
+| Branching execution | v2 | Probabilistic/quantum simulation |
+| Complex amplitudes | v2 | With branching |
+| Provenance tracking | v1.x or v2 | Automatic causal trace |
+| Automatic reification | v2 | Edge → node shadow |
+| GPU acceleration | v2+ | Tensor-backed storage |
+| Distribution | v2+ | Multi-node deployment |
+
+### 18.3 Implementation Order
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        QUERY PLAN OPERATORS                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  All operators implement:                                                   │
-│    open()  → Initialize state                                              │
-│    next()  → Return next row or None                                       │
-│    close() → Release resources                                             │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ SCAN OPERATORS (leaf nodes - produce rows)                           │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  TypeScan(type_id)                                                  │   │
-│  │    Scan all nodes of a type using TypeIndex                        │   │
-│  │                                                                      │   │
-│  │  IndexScan(index, range)                                            │   │
-│  │    Scan index for range of values                                   │   │
-│  │                                                                      │   │
-│  │  UniqueIndexLookup(index, value)                                    │   │
-│  │    Single-row lookup by unique key                                  │   │
-│  │                                                                      │   │
-│  │  EdgeScan(edge_type)                                                │   │
-│  │    Scan all edges of a type                                        │   │
-│  │                                                                      │   │
-│  │  AdjacencyLookup(node, edge_type, direction)                        │   │
-│  │    Find edges from/to a specific node                              │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ JOIN OPERATORS (combine rows from children)                          │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  NestedLoopJoin(outer, inner, condition)                            │   │
-│  │    For each outer row, scan inner and check condition              │   │
-│  │    Best for: small outer, indexed inner                            │   │
-│  │                                                                      │   │
-│  │  HashJoin(left, right, keys)                                        │   │
-│  │    Build hash table from one side, probe with other                │   │
-│  │    Best for: equi-joins, large inputs                              │   │
-│  │                                                                      │   │
-│  │  EdgeJoin(node_var, edge_type, target_var)                          │   │
-│  │    Join via edge relationship                                       │   │
-│  │    Uses AdjacencyIndex for efficiency                              │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ TRANSFORM OPERATORS (modify row stream)                              │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Filter(child, condition)                                           │   │
-│  │    Pass through rows where condition is true                       │   │
-│  │                                                                      │   │
-│  │  Project(child, projections)                                        │   │
-│  │    Select/compute output columns                                   │   │
-│  │                                                                      │   │
-│  │  Sort(child, keys)                                                  │   │
-│  │    Sort rows by key columns                                        │   │
-│  │                                                                      │   │
-│  │  Limit(child, count, offset)                                        │   │
-│  │    Return first N rows after skipping offset                       │   │
-│  │                                                                      │   │
-│  │  Distinct(child, keys)                                              │   │
-│  │    Remove duplicate rows                                           │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ AGGREGATE OPERATORS                                                  │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Aggregate(child, group_keys, aggregations)                         │   │
-│  │    Group by keys, compute aggregates (COUNT, SUM, etc.)            │   │
-│  │                                                                      │   │
-│  │  HashAggregate                                                      │   │
-│  │    Use hash table for grouping                                     │   │
-│  │                                                                      │   │
-│  │  SortAggregate                                                      │   │
-│  │    Assume input sorted by group keys                               │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ SPECIAL OPERATORS                                                    │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  TransitiveClosure(start, edge_type, min_depth, max_depth)         │   │
-│  │    BFS/DFS traversal for transitive patterns                       │   │
-│  │                                                                      │   │
-│  │  AntiJoin(outer, inner, condition)                                  │   │
-│  │    Return outer rows with NO matching inner (NOT EXISTS)           │   │
-│  │                                                                      │   │
-│  │  SemiJoin(outer, inner, condition)                                  │   │
-│  │    Return outer rows with ANY matching inner (EXISTS)              │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Phase 1: Foundation
+════════════════════
+  □ Core data structures (Node, Edge, Value)
+  □ In-memory Graph (no indexes yet)
+  □ Parser (statements only)
+  □ Basic REPL
 
-## 19. Example Query Plan
+Phase 2: Type System
+════════════════════
+  □ Registry (hardcoded for testing)
+  □ Analyzer (name resolution, type checking)
+  □ Type validation in mutations
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           EXAMPLE QUERY PLAN                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Query:                                                                     │
-│    MATCH t: Task, p: Project, person: Person,                              │
-│          belongs_to(t, p), assigned_to(t, person)                          │
-│    WHERE t.status = "in_progress" AND p.name = "Alpha"                     │
-│    RETURN t.title, person.name                                             │
-│    ORDER BY t.priority DESC                                                 │
-│    LIMIT 10                                                                 │
-│                                                                              │
-│  Plan:                                                                      │
-│                                                                              │
-│        ┌─────────────────┐                                                  │
-│        │     Limit(10)   │                                                  │
-│        └────────┬────────┘                                                  │
-│                 │                                                            │
-│        ┌────────▼────────┐                                                  │
-│        │  Sort(priority) │                                                  │
-│        │      DESC       │                                                  │
-│        └────────┬────────┘                                                  │
-│                 │                                                            │
-│        ┌────────▼────────┐                                                  │
-│        │    Project      │                                                  │
-│        │ (t.title,       │                                                  │
-│        │  person.name)   │                                                  │
-│        └────────┬────────┘                                                  │
-│                 │                                                            │
-│        ┌────────▼────────┐                                                  │
-│        │   EdgeJoin      │  ◀── assigned_to(t, person)                     │
-│        │ (t→person via   │                                                  │
-│        │  assigned_to)   │                                                  │
-│        └────────┬────────┘                                                  │
-│                 │                                                            │
-│        ┌────────▼────────┐                                                  │
-│        │   EdgeJoin      │  ◀── belongs_to(t, p)                           │
-│        │  (t→p via       │                                                  │
-│        │   belongs_to)   │                                                  │
-│        └────────┬────────┘                                                  │
-│                 │                                                            │
-│       ┌─────────┴─────────┐                                                 │
-│       │                   │                                                 │
-│ ┌─────▼─────┐     ┌───────▼───────┐                                        │
-│ │ IndexScan │     │ UniqueLookup  │                                        │
-│ │ Task      │     │ Project.name  │                                        │
-│ │ status=   │     │ = "Alpha"     │                                        │
-│ │ "in_prog" │     │               │                                        │
-│ └───────────┘     └───────────────┘                                        │
-│                                                                              │
-│  Execution:                                                                 │
-│    1. UniqueLookup finds Project "Alpha" (1 row)                           │
-│    2. IndexScan finds Tasks with status="in_progress" (N rows)             │
-│    3. EdgeJoin: for each task, check belongs_to → project_alpha           │
-│    4. EdgeJoin: for matching tasks, find assigned person                   │
-│    5. Project: extract title and person.name                               │
-│    6. Sort: by priority descending                                         │
-│    7. Limit: return first 10                                               │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+Phase 3: Ontology
+════════════════════
+  □ Ontology parser
+  □ Sugar expander
+  □ Layer 0 generator
+  □ Registry builder
+  □ LOAD statement
+
+Phase 4: Pattern Matching
+════════════════════
+  □ Pattern compiler
+  □ Pattern matcher (basic)
+  □ Expression evaluator
+  □ MATCH execution
+
+Phase 5: Constraints & Rules
+════════════════════
+  □ Constraint checker
+  □ Rule engine
+  □ Transaction integration
+
+Phase 6: Indexes
+════════════════════
+  □ Type index
+  □ Attribute index
+  □ Edge index
+  □ Adjacency index
+  □ Higher-order index
+  □ Query planner (index selection)
+
+Phase 7: Durability
+════════════════════
+  □ WAL
+  □ Recovery
+  □ Checkpointing
+
+Phase 8: Polish
+════════════════════
+  □ WALK execution
+  □ INSPECT execution
+  □ HTTP API
+  □ Error messages
+  □ Performance tuning
 ```
 
 ---
 
-# Part VII: Version Management
+## 19. Testing Strategy
 
-## 20. Versioning Architecture
+### 19.1 Unit Tests (per component)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        VERSION MANAGEMENT                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Conceptual Model                                                     │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │                    ┌─────────────────────────────────┐              │   │
-│  │                    │           MAIN                   │              │   │
-│  │                    └─────────────────────────────────┘              │   │
-│  │                              │                                       │   │
-│  │        S1 ─────── S2 ─────── S3 ─────── S4 (HEAD)                  │   │
-│  │                    │                     │                          │   │
-│  │                    │                     └─── branch: feature       │   │
-│  │                    │                           │                    │   │
-│  │                    │                          S5 ─── S6             │   │
-│  │                    │                                                │   │
-│  │                    └─── branch: experiment                          │   │
-│  │                          │                                          │   │
-│  │                         S7 ─── S8                                   │   │
-│  │                                                                      │   │
-│  │  S = Snapshot (immutable point-in-time)                            │   │
-│  │  Branch = Named pointer to a snapshot                              │   │
-│  │  HEAD = Current working state (may have uncommitted changes)       │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Storage Strategy                                                     │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Option A: Full Copy (simple, space-inefficient)                   │   │
-│  │    Each snapshot = complete copy of all data                       │   │
-│  │    Fast checkout, expensive snapshot                               │   │
-│  │                                                                      │   │
-│  │  Option B: Copy-on-Write (recommended)                             │   │
-│  │    Snapshots share unchanged pages                                 │   │
-│  │    Modified pages are copied                                       │   │
-│  │    Space efficient, fast snapshot                                  │   │
-│  │                                                                      │   │
-│  │  Option C: Delta Chain                                             │   │
-│  │    Store deltas from base snapshot                                 │   │
-│  │    Most space efficient                                            │   │
-│  │    Slow checkout (must replay deltas)                              │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Snapshot Structure                                                   │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Snapshot {                                                         │   │
-│  │    id: SnapshotId                                                   │   │
-│  │    label: String                     // User-provided name          │   │
-│  │    timestamp: Timestamp              // When created                │   │
-│  │    parent: SnapshotId?               // Previous snapshot           │   │
-│  │    branch: BranchId                  // Owning branch               │   │
-│  │                                                                      │   │
-│  │    // Content (copy-on-write references)                            │   │
-│  │    node_pages: Set<PageId>           // Pages containing nodes      │   │
-│  │    edge_pages: Set<PageId>           // Pages containing edges      │   │
-│  │    index_roots: Map<IndexId, PageId> // Index root pages           │   │
-│  │                                                                      │   │
-│  │    // Metadata                                                      │   │
-│  │    node_count: u64                                                  │   │
-│  │    edge_count: u64                                                  │   │
-│  │    ontology_version: String                                         │   │
-│  │  }                                                                   │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+| Component | Test Focus |
+|-----------|------------|
+| Parser | Grammar coverage, error messages |
+| Analyzer | Type errors, name resolution |
+| Pattern | Match correctness, transitive closure |
+| Constraint | Violation detection, hard vs soft |
+| Rule | Quiescence, priority order, cycle prevention |
+| Graph | Index correctness, CRUD operations |
+
+### 19.2 Integration Tests
+
+| Scenario | Coverage |
+|----------|----------|
+| End-to-end query | Parse → Analyze → Plan → Execute |
+| End-to-end mutation | Mutation → Rules → Constraints → Commit |
+| Transaction rollback | Constraint violation → abort → clean state |
+| Recovery | Crash simulation → WAL replay → consistent state |
+
+### 19.3 Property Tests
+
+| Property | Description |
+|----------|-------------|
+| Schema invariants | Layer 0 matches Registry |
+| Constraint soundness | No committed state violates hard constraints |
+| Rule determinism | Same input → same output (modulo ID allocation) |
+| Transaction isolation | Uncommitted changes invisible to other sessions |
+
+---
+
+## 20. Performance Targets (v1)
+
+| Operation | Target | Notes |
+|-----------|--------|-------|
+| Point query by ID | < 1μs | Hash lookup |
+| Type scan (1K nodes) | < 1ms | Index scan |
+| Pattern match (simple) | < 10ms | 2-3 variables, indexed |
+| Pattern match (complex) | < 100ms | 5+ variables, joins |
+| Mutation (single) | < 1ms | Excluding rules |
+| Rule execution (quiescence) | < 100ms | Typical case |
+| Transaction commit | < 10ms | Excluding fsync |
+| WAL fsync | < 50ms | Disk-dependent |
+
+---
+
+# Part IV: Future Extensions (v2+)
+
+## 21. META Mode (v2)
+
+**Runtime schema reflection and evolution.**
+
+See separate META Mode specification. Summary:
+
+- `META MATCH` — Query with unknown types (`edge<any>`)
+- `META CREATE` — Runtime type/constraint/rule creation
+- `META ENABLE/DISABLE` — Toggle constraints/rules
+- Permission levels: READ, WRITE, ADMIN
+- Layer 0 invariants protected
+
+## 22. Branching Execution (v2)
+
+**Multiple simultaneous execution branches for simulation.**
+
+```sql
+rule decay:
+  p: Particle
+  =>
+  BRANCH [weight: 0.7]: SET p.state = "alpha"
+  BRANCH [weight: 0.3]: SET p.state = "beta"
 ```
 
-## 21. Diff and Merge
+Both branches execute. Weights track density. Interference possible with complex amplitudes.
+
+## 23. Provenance Tracking (v1.x or v2)
+
+**Automatic causal trace of rule execution.**
+
+Every mutation creates causation edge:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DIFF ALGORITHM                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  diff(snapshot_a, snapshot_b) → Diff:                                       │
-│                                                                              │
-│    1. Compare node sets                                                     │
-│       added_nodes = nodes_in_b - nodes_in_a                                │
-│       removed_nodes = nodes_in_a - nodes_in_b                              │
-│       common_nodes = nodes_in_a ∩ nodes_in_b                               │
-│                                                                              │
-│    2. For common nodes, compare versions                                   │
-│       for node_id in common_nodes:                                         │
-│         if version_a[node_id] != version_b[node_id]:                       │
-│           modified_nodes.add(node_id, diff_attrs(a, b))                    │
-│                                                                              │
-│    3. Repeat for edges                                                     │
-│                                                                              │
-│    4. Return Diff {                                                        │
-│         nodes_added: [...],                                                │
-│         nodes_removed: [...],                                              │
-│         nodes_modified: [(id, changes), ...],                              │
-│         edges_added: [...],                                                │
-│         edges_removed: [...],                                              │
-│         edges_modified: [...]                                              │
-│       }                                                                     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+edge _caused_by(effect: any, cause: any) {
+  rule_name: String,
+  timestamp: Timestamp,
+}
+```
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          MERGE ALGORITHM                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  merge(source_branch, target_branch) → MergeResult:                        │
-│                                                                              │
-│    1. Find common ancestor                                                 │
-│       ancestor = find_common_ancestor(source.head, target.head)            │
-│                                                                              │
-│    2. Compute diffs                                                        │
-│       source_diff = diff(ancestor, source.head)                            │
-│       target_diff = diff(ancestor, target.head)                            │
-│                                                                              │
-│    3. Detect conflicts                                                     │
-│       conflicts = []                                                       │
-│       for node_id in source_diff.modified ∩ target_diff.modified:         │
-│         if changes_incompatible(source_changes, target_changes):           │
-│           conflicts.add(Conflict(node_id, source_val, target_val))        │
-│                                                                              │
-│       for node_id in source_diff.removed ∩ target_diff.modified:          │
-│         conflicts.add(DeleteModifyConflict(node_id))                       │
-│                                                                              │
-│    4. If conflicts:                                                        │
-│       return MergeResult::Conflict(conflicts)                              │
-│                                                                              │
-│    5. Apply changes                                                        │
-│       // Apply source additions/modifications to target                    │
-│       for change in source_diff:                                           │
-│         if not conflicts_with(change, target_diff):                        │
-│           apply(change, target.head)                                       │
-│                                                                              │
-│    6. Create merge snapshot                                                │
-│       merge_snapshot = create_snapshot(                                    │
-│         label = "merge source → target",                                   │
-│         parents = [source.head, target.head]                               │
-│       )                                                                     │
-│                                                                              │
-│    7. Return MergeResult::Success(merge_snapshot)                          │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+Execution trace becomes queryable graph structure.
+
+## 24. GPU Acceleration (v2+)
+
+**Tensor-backed storage for parallel pattern matching.**
+
+- Batch candidate evaluation
+- Parallel constraint checking
+- Sparse matrix graph representation
+
+Design contracts to accept batches from start (even if v1 processes sequentially).
+
+---
+
+# Appendix A: Layer 0 Schema
+
+```
+// Core meta-types (protected, immutable)
+
+node _NodeType {
+  name: String [required, unique]
+  abstract: Bool = false
+  sealed: Bool = false
+  doc: String?
+}
+
+node _EdgeType {
+  name: String [required, unique]
+  arity: Int [required, >= 1]
+  symmetric: Bool = false
+  reflexive_allowed: Bool = true
+  doc: String?
+}
+
+node _AttributeDef {
+  name: String [required]
+  required: Bool = false
+  unique: Bool = false
+  indexed: Bool = false
+  doc: String?
+}
+
+node _ConstraintDef {
+  name: String [required, unique]
+  hard: Bool = true
+  deferred: Bool = false
+  message: String?
+  doc: String?
+}
+
+node _RuleDef {
+  name: String [required, unique]
+  priority: Int = 0
+  auto: Bool = true
+  doc: String?
+}
+
+// Type expressions
+node _ScalarTypeExpr { scalar_type: String }
+node _NamedTypeRef { type_name: String }
+node _EdgeTypeRef { edge_type_name: String }
+node _OptionalTypeExpr { }
+node _ListTypeExpr { }
+
+// Pattern structure
+node _PatternDef { }
+node _VarDef { name: String, is_edge_var: Bool = false }
+node _EdgePatternDef { negated: Bool = false }
+
+// Expression structure (simplified)
+node _Expr { }
+node _LiteralExpr { value: String }
+node _VarRefExpr { var_name: String }
+node _AttrAccessExpr { attr_name: String }
+node _BinaryOpExpr { operator: String }
+node _UnaryOpExpr { operator: String }
+node _FunctionCallExpr { function_name: String }
+
+// Production structure
+node _ProductionDef { }
+node _SpawnAction { var_name: String }
+node _KillAction { }
+node _LinkAction { }
+node _UnlinkAction { }
+node _SetAction { attr_name: String }
+
+// Schema relationships
+edge _type_inherits(child: _NodeType, parent: _NodeType) [acyclic]
+edge _type_has_attribute(type: _NodeType, attr: _AttributeDef)
+edge _attr_has_type(attr: _AttributeDef, type_expr: _Expr)
+edge _edge_has_position(edge: _EdgeType, var: _VarDef) { position: Int }
+edge _var_has_type(var: _VarDef, type_expr: _Expr)
+edge _constraint_has_pattern(constraint: _ConstraintDef, pattern: _PatternDef)
+edge _constraint_has_condition(constraint: _ConstraintDef, condition: _Expr)
+edge _rule_has_pattern(rule: _RuleDef, pattern: _PatternDef)
+edge _rule_has_production(rule: _RuleDef, production: _ProductionDef)
+edge _pattern_has_node_var(pattern: _PatternDef, var: _VarDef)
+edge _pattern_has_edge_pattern(pattern: _PatternDef, edge_pattern: _EdgePatternDef)
+edge _edge_pattern_has_target(edge_pattern: _EdgePatternDef, var: _VarDef) { position: Int }
 ```
 
 ---
 
-# Part VIII: API Layer
+# Appendix B: Error Codes
 
-## 22. Session Model
+| Code | Category | Description |
+|------|----------|-------------|
+| E1xxx | Parse | Syntax errors |
+| E2xxx | Analysis | Name resolution, type checking |
+| E3xxx | Constraint | Constraint violations |
+| E4xxx | Rule | Rule execution errors |
+| E5xxx | Transaction | Transaction errors |
+| E6xxx | Storage | I/O errors |
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           SESSION MODEL                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Session                                                              │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   id: SessionId                                                     │   │
-│  │   created_at: Timestamp                                             │   │
-│  │   last_active: Timestamp                                            │   │
-│  │                                                                      │   │
-│  │   // Transaction state                                              │   │
-│  │   current_txn: Transaction?       // None if auto-commit            │   │
-│  │   auto_commit: bool               // Default: true                  │   │
-│  │   default_isolation: IsolationLevel                                 │   │
-│  │                                                                      │   │
-│  │   // Version context                                                │   │
-│  │   current_branch: BranchId        // Default: "main"                │   │
-│  │   readonly_snapshot: SnapshotId?  // If in CHECKOUT READONLY mode  │   │
-│  │                                                                      │   │
-│  │   // Query settings                                                 │   │
-│  │   default_timeout: Duration                                         │   │
-│  │   max_results: u64                                                  │   │
-│  │                                                                      │   │
-│  │   // Prepared statements                                            │   │
-│  │   prepared: Map<Name, PreparedStatement>                            │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Session Lifecycle                                                    │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   CREATE ────▶ ACTIVE ────▶ IDLE ────▶ CLOSED                      │   │
-│  │                  ▲  │                     ▲                          │   │
-│  │                  │  │                     │                          │   │
-│  │                  │  ▼                     │                          │   │
-│  │                  │ IN_TXN               timeout                      │   │
-│  │                  │  │                                                │   │
-│  │                  └──┘                                                │   │
-│  │                commit/rollback                                       │   │
-│  │                                                                      │   │
-│  │   Timeout: Sessions automatically closed after inactivity          │   │
-│  │   Cleanup: Open transactions rolled back on close                  │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 23. Statement Router
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        STATEMENT ROUTER                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Statement Dispatch                                                   │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │   Statement                                                         │   │
-│  │       │                                                              │   │
-│  │       ├─── Query (read-only)                                        │   │
-│  │       │     ├── MATCH ────────▶ QueryExecutor                       │   │
-│  │       │     ├── WALK ─────────▶ WalkExecutor                        │   │
-│  │       │     └── INSPECT ──────▶ InspectExecutor                     │   │
-│  │       │                                                              │   │
-│  │       ├─── Mutation (write)                                         │   │
-│  │       │     ├── SPAWN ────────▶ MutationExecutor                    │   │
-│  │       │     ├── KILL ─────────▶ MutationExecutor                    │   │
-│  │       │     ├── LINK ─────────▶ MutationExecutor                    │   │
-│  │       │     ├── UNLINK ───────▶ MutationExecutor                    │   │
-│  │       │     └── SET ──────────▶ MutationExecutor                    │   │
-│  │       │                                                              │   │
-│  │       ├─── Transaction Control                                      │   │
-│  │       │     ├── BEGIN ────────▶ TransactionManager                  │   │
-│  │       │     ├── COMMIT ───────▶ TransactionManager                  │   │
-│  │       │     ├── ROLLBACK ─────▶ TransactionManager                  │   │
-│  │       │     └── SAVEPOINT ────▶ TransactionManager                  │   │
-│  │       │                                                              │   │
-│  │       ├─── Admin                                                    │   │
-│  │       │     ├── LOAD ─────────▶ OntologyCompiler                    │   │
-│  │       │     ├── EXTEND ───────▶ OntologyCompiler                    │   │
-│  │       │     ├── SHOW ─────────▶ MetadataQuery                       │   │
-│  │       │     └── INDEX ────────▶ IndexManager                        │   │
-│  │       │                                                              │   │
-│  │       ├─── Version                                                  │   │
-│  │       │     ├── SNAPSHOT ─────▶ VersionManager                      │   │
-│  │       │     ├── CHECKOUT ─────▶ VersionManager                      │   │
-│  │       │     ├── DIFF ─────────▶ VersionManager                      │   │
-│  │       │     ├── BRANCH ───────▶ VersionManager                      │   │
-│  │       │     └── MERGE ────────▶ VersionManager                      │   │
-│  │       │                                                              │   │
-│  │       └─── Debug                                                    │   │
-│  │             ├── EXPLAIN ──────▶ QueryPlanner (plan only)            │   │
-│  │             ├── PROFILE ──────▶ QueryExecutor (with stats)          │   │
-│  │             └── DRY RUN ──────▶ MutationExecutor (no commit)        │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 24. Result Encoding
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        RESULT ENCODING                                       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Query Result Structure:                                                    │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ {                                                                    │   │
-│  │   "columns": ["t.title", "p.name", "person.email"],                 │   │
-│  │   "types": ["String", "String", "String"],                          │   │
-│  │   "rows": [                                                          │   │
-│  │     ["Fix bug", "Alpha", "alice@example.com"],                      │   │
-│  │     ["Add feature", "Alpha", "bob@example.com"],                    │   │
-│  │     ...                                                              │   │
-│  │   ],                                                                 │   │
-│  │   "stats": {                                                         │   │
-│  │     "rows_examined": 1500,                                          │   │
-│  │     "rows_returned": 42,                                            │   │
-│  │     "execution_time_ms": 23,                                        │   │
-│  │     "index_hits": 2                                                 │   │
-│  │   }                                                                  │   │
-│  │ }                                                                    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  Mutation Result Structure:                                                 │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ {                                                                    │   │
-│  │   "success": true,                                                  │   │
-│  │   "operation": "SPAWN",                                             │   │
-│  │   "affected": {                                                      │   │
-│  │     "nodes_created": 1,                                             │   │
-│  │     "edges_created": 0,                                             │   │
-│  │     "nodes_modified": 0,                                            │   │
-│  │     "rules_fired": 2                                                │   │
-│  │   },                                                                 │   │
-│  │   "returning": {                                                     │   │
-│  │     "id": "node_abc123",                                            │   │
-│  │     "title": "New Task",                                            │   │
-│  │     "created_at": 1705320000000                                     │   │
-│  │   }                                                                  │   │
-│  │ }                                                                    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  Value Encoding (JSON):                                                     │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  Internal Type      │  JSON Encoding                                │   │
-│  │  ──────────────────────────────────────────────────────────────────│   │
-│  │  Null               │  null                                         │   │
-│  │  Bool               │  true / false                                 │   │
-│  │  Int                │  42 (number)                                  │   │
-│  │  Float              │  3.14 (number)                                │   │
-│  │  String             │  "hello" (string)                             │   │
-│  │  Timestamp          │  {"$timestamp": 1705320000000}                │   │
-│  │  Duration           │  {"$duration": 86400000}                      │   │
-│  │  NodeRef            │  {"$node": "node_abc123"}                     │   │
-│  │  EdgeRef            │  {"$edge": "edge_xyz789"}                     │   │
-│  │  List               │  [...]                                        │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Examples:
+- `E1001` — Unexpected token
+- `E2001` — Unknown type
+- `E2002` — Unknown attribute
+- `E2003` — Type mismatch
+- `E3001` — Hard constraint violated
+- `E4001` — Rule depth limit exceeded
+- `E5001` — Transaction already active
+- `E6001` — WAL write failed
 
 ---
 
-# Part IX: Extension Points
-
-## 25. Future Integration Points
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                      EXTENSION POINTS (v2+)                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  These are NOT implemented in v1 but the architecture accommodates them.   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ NEURAL INTEGRATION HOOKS                                             │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Export Interface:                                                  │   │
-│  │    get_subgraph_tensors(center, k_hops) → TensorBundle             │   │
-│  │    get_type_embeddings() → Tensor                                   │   │
-│  │    get_edge_type_embeddings() → Tensor                              │   │
-│  │                                                                      │   │
-│  │  Proposal Interface:                                                │   │
-│  │    evaluate_proposal(mutations) → ProposalResult                   │   │
-│  │    commit_proposal(proposal_id) → Result                           │   │
-│  │                                                                      │   │
-│  │  Storage Backend could support:                                     │   │
-│  │    • Tensor-backed storage (GPU-resident)                          │   │
-│  │    • Zero-copy export to PyTorch/tinygrad                          │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ PARALLEL EXECUTION                                                   │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Query Parallelism:                                                 │   │
-│  │    • Parallel type scans (partition by type)                       │   │
-│  │    • Parallel index scans (partition by key range)                 │   │
-│  │    • Parallel hash joins (partition build + probe)                 │   │
-│  │                                                                      │   │
-│  │  Pattern Match Parallelism:                                         │   │
-│  │    • Parallel candidate evaluation                                  │   │
-│  │    • Parallel transitive closure (level-synchronous BFS)           │   │
-│  │                                                                      │   │
-│  │  Constraint Check Parallelism:                                      │   │
-│  │    • Independent constraints checked in parallel                   │   │
-│  │    • Results merged (any failure → abort)                          │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ DISTRIBUTED ARCHITECTURE (future)                                    │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Current decisions that enable distribution:                        │   │
-│  │    • Node/Edge IDs can be made globally unique (UUID)              │   │
-│  │    • Transactions have explicit boundaries                         │   │
-│  │    • WAL is append-only (can be replicated)                        │   │
-│  │    • Queries are declarative (can be distributed)                  │   │
-│  │                                                                      │   │
-│  │  Would need to add:                                                 │   │
-│  │    • Partition scheme (by type, by hash, etc.)                     │   │
-│  │    • Distributed transaction protocol (2PC or better)              │   │
-│  │    • Query routing and distributed joins                           │   │
-│  │    • Replication for fault tolerance                               │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ STORAGE BACKEND ABSTRACTION                                          │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Storage interface (abstract):                                      │   │
-│  │    trait StorageBackend {                                           │   │
-│  │      fn get_node(id) → Node?                                        │   │
-│  │      fn put_node(node) → Result                                     │   │
-│  │      fn delete_node(id) → Result                                    │   │
-│  │      fn scan_type(type_id) → Iterator<Node>                        │   │
-│  │      // ... similar for edges                                       │   │
-│  │    }                                                                 │   │
-│  │                                                                      │   │
-│  │  Possible backends:                                                 │   │
-│  │    • In-memory (default, fast, limited by RAM)                     │   │
-│  │    • File-based (current design, durable)                          │   │
-│  │    • RocksDB-backed (proven, LSM-based)                            │   │
-│  │    • Tensor-backed (GPU-accelerated, future)                       │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-# Part X: Component Summary
-
-## 26. Implementation Scope
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    COMPONENTS TO IMPLEMENT                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ CORE (Must Have for v1)                                              │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  Language Layer:                                                    │   │
-│  │    □ Lexer (tokenization)                                          │   │
-│  │    □ Parser (AST construction)                                     │   │
-│  │    □ Semantic Analyzer (name resolution, type checking)            │   │
-│  │    □ Query Planner (plan generation)                               │   │
-│  │    □ Ontology Compiler (DSL → Layer 0)                             │   │
-│  │                                                                      │   │
-│  │  Engine Layer:                                                      │   │
-│  │    □ Transaction Manager (ACID)                                    │   │
-│  │    □ Pattern Matcher (subgraph matching)                           │   │
-│  │    □ Constraint Checker (validation)                               │   │
-│  │    □ Rule Engine (auto-fire rules)                                 │   │
-│  │    □ Query Executor (operators)                                    │   │
-│  │    □ Mutation Executor (SPAWN/KILL/LINK/UNLINK/SET)               │   │
-│  │                                                                      │   │
-│  │  Storage Layer:                                                     │   │
-│  │    □ Graph Store (nodes, edges)                                    │   │
-│  │    □ Index Manager (type, attr, edge, adjacency, higher-order)    │   │
-│  │    □ WAL (durability, recovery)                                    │   │
-│  │    □ Buffer Pool (caching)                                         │   │
-│  │                                                                      │   │
-│  │  API Layer:                                                         │   │
-│  │    □ Session Manager                                               │   │
-│  │    □ Statement Router                                              │   │
-│  │    □ Result Encoder                                                │   │
-│  │    □ CLI/REPL                                                      │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ IMPORTANT (Should Have for v1)                                       │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │    □ Version Manager (snapshots, checkout)                         │   │
-│  │    □ Branching (create, switch)                                    │   │
-│  │    □ EXPLAIN/PROFILE                                               │   │
-│  │    □ Prepared statements                                           │   │
-│  │    □ HTTP API                                                      │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ NICE TO HAVE (v1.x)                                                  │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │    □ Diff/Merge                                                    │   │
-│  │    □ META mode (reflection)                                        │   │
-│  │    □ Query caching                                                 │   │
-│  │    □ Parallel query execution                                      │   │
-│  │    □ gRPC API                                                      │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ FUTURE (v2+)                                                         │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │    □ Neural integration                                            │   │
-│  │    □ Tensor-backed storage                                         │   │
-│  │    □ Distributed architecture                                      │   │
-│  │    □ Φ evaluation framework                                        │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 27. Dependency Order
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     IMPLEMENTATION ORDER                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Phase 1: Foundation                                                        │
-│  ═══════════════════                                                        │
-│    1. Core data structures (Node, Edge, Value)                             │
-│    2. In-memory Graph Store                                                │
-│    3. Type Registry (hardcoded for testing)                                │
-│    4. Basic Lexer + Parser                                                 │
-│                                                                              │
-│  Phase 2: Basic Operations                                                  │
-│  ═════════════════════════                                                  │
-│    5. Semantic Analyzer                                                    │
-│    6. Simple Query Executor (no optimization)                              │
-│    7. Mutation Executor (SPAWN/KILL/LINK/UNLINK/SET)                      │
-│    8. Type Index                                                           │
-│                                                                              │
-│  Phase 3: Ontology System                                                   │
-│  ════════════════════════                                                   │
-│    9. Ontology Parser                                                      │
-│    10. Sugar Expander                                                      │
-│    11. Layer 0 Generator                                                   │
-│    12. Registry Builder                                                    │
-│    13. Full Type/Edge Registry integration                                 │
-│                                                                              │
-│  Phase 4: Constraints & Rules                                               │
-│  ════════════════════════════                                               │
-│    14. Pattern Matcher                                                     │
-│    15. Constraint Registry + Checker                                       │
-│    16. Rule Registry + Engine                                              │
-│    17. Transaction integration (constraint/rule in txn)                    │
-│                                                                              │
-│  Phase 5: Optimization                                                      │
-│  ════════════════════                                                       │
-│    18. Attribute Index                                                     │
-│    19. Edge Index                                                          │
-│    20. Adjacency Index                                                     │
-│    21. Higher-Order Index                                                  │
-│    22. Query Planner (index selection, join order)                        │
-│                                                                              │
-│  Phase 6: Durability                                                        │
-│  ═══════════════════                                                        │
-│    23. WAL                                                                 │
-│    24. Buffer Pool                                                         │
-│    25. File-based persistence                                              │
-│    26. Recovery                                                            │
-│                                                                              │
-│  Phase 7: API & Polish                                                      │
-│  ════════════════════                                                       │
-│    27. Session Manager                                                     │
-│    28. CLI/REPL                                                            │
-│    29. HTTP API                                                            │
-│    30. Version Manager                                                     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 28. Final Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│                            ┌───────────────┐                                │
-│                            │    CLIENT     │                                │
-│                            │  (CLI/HTTP)   │                                │
-│                            └───────┬───────┘                                │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                          API GATEWAY                                 │   │
-│  │                     (Session, Auth, Routing)                        │   │
-│  └───────────────────────────────┬─────────────────────────────────────┘   │
-│                                  │                                          │
-│          ┌───────────────────────┼───────────────────────┐                 │
-│          │                       │                       │                  │
-│          ▼                       ▼                       ▼                  │
-│  ┌──────────────┐      ┌──────────────┐      ┌───────────────────┐        │
-│  │    LEXER     │      │  ONTOLOGY    │      │     ADMIN         │        │
-│  │   PARSER     │      │  COMPILER    │      │   (SHOW, INDEX)   │        │
-│  │   ANALYZER   │      │              │      │                   │        │
-│  │   PLANNER    │      │              │      │                   │        │
-│  └──────┬───────┘      └──────┬───────┘      └─────────┬─────────┘        │
-│         │                     │                        │                   │
-│         │                     ▼                        │                   │
-│         │          ┌───────────────────┐               │                   │
-│         │          │    REGISTRIES     │◀──────────────┘                   │
-│         │          │ (Type,Edge,Const, │                                   │
-│         │          │  Rule)            │                                   │
-│         │          └─────────┬─────────┘                                   │
-│         │                    │                                              │
-│         ▼                    ▼                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         CORE ENGINE                                  │   │
-│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────────┐    │   │
-│  │  │ QUERY EXECUTOR │  │   MUTATION     │  │   TRANSACTION      │    │   │
-│  │  │                │  │   EXECUTOR     │  │   MANAGER          │    │   │
-│  │  │  • Operators   │  │                │  │                    │    │   │
-│  │  │  • Iteration   │  │  • Type check  │  │  • Begin/Commit    │    │   │
-│  │  │                │  │  • Apply       │  │  • Rollback        │    │   │
-│  │  └───────┬────────┘  └───────┬────────┘  │  • Isolation       │    │   │
-│  │          │                   │           └──────────┬─────────┘    │   │
-│  │          │                   │                      │              │   │
-│  │          ▼                   ▼                      │              │   │
-│  │  ┌────────────────────────────────────┐             │              │   │
-│  │  │         PATTERN MATCHER            │             │              │   │
-│  │  │  • Subgraph isomorphism            │◀────────────┘              │   │
-│  │  │  • Transitive closure              │                            │   │
-│  │  │  • Negative patterns               │                            │   │
-│  │  └──────────────┬─────────────────────┘                            │   │
-│  │                 │                                                   │   │
-│  │          ┌──────┴──────┐                                           │   │
-│  │          ▼             ▼                                           │   │
-│  │  ┌─────────────┐ ┌─────────────┐                                   │   │
-│  │  │ CONSTRAINT  │ │    RULE     │                                   │   │
-│  │  │   CHECKER   │ │   ENGINE    │                                   │   │
-│  │  │             │ │             │                                   │   │
-│  │  │ • Immediate │ │ • Trigger   │                                   │   │
-│  │  │ • Deferred  │ │ • Execute   │                                   │   │
-│  │  │ • Hard/Soft │ │ • Cascade   │                                   │   │
-│  │  └─────────────┘ └─────────────┘                                   │   │
-│  └───────────────────────────┬─────────────────────────────────────────┘   │
-│                              │                                              │
-│                              ▼                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                        STORAGE LAYER                                 │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐  │   │
-│  │  │ GRAPH STORE │  │   INDEX     │  │   VERSION   │  │    WAL    │  │   │
-│  │  │             │  │  MANAGER    │  │   MANAGER   │  │           │  │   │
-│  │  │ • Nodes     │  │             │  │             │  │ • Append  │  │   │
-│  │  │ • Edges     │  │ • Type      │  │ • Snapshot  │  │ • Recover │  │   │
-│  │  │ • Attrs     │  │ • Attribute │  │ • Branch    │  │           │  │   │
-│  │  │             │  │ • Edge      │  │ • Diff      │  │           │  │   │
-│  │  │             │  │ • Adjacency │  │             │  │           │  │   │
-│  │  │             │  │ • H.O.      │  │             │  │           │  │   │
-│  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────┬─────┘  │   │
-│  │         │                │                │               │        │   │
-│  │         └────────────────┴────────────────┴───────────────┘        │   │
-│  │                                   │                                 │   │
-│  │                          ┌────────▼────────┐                       │   │
-│  │                          │  BUFFER POOL    │                       │   │
-│  │                          │  FILE MANAGER   │                       │   │
-│  │                          └────────┬────────┘                       │   │
-│  └───────────────────────────────────┼─────────────────────────────────┘   │
-│                                      │                                      │
-│                                      ▼                                      │
-│                              ┌───────────────┐                              │
-│                              │  FILE SYSTEM  │                              │
-│                              └───────────────┘                              │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-*End of HOHG System Architecture v2.0*
+*End of MEW Architecture v1.0*
