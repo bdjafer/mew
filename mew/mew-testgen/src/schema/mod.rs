@@ -459,11 +459,11 @@ impl SchemaAnalyzer {
         let mut allowed_values = None;
         let mut pattern = None;
 
-        // Find inline default
-        if let Some(eq_pos) = after_colon.find('=') {
-            let after_eq = &after_colon[eq_pos + 1..];
-            let val_end = after_eq.find('[').unwrap_or(after_eq.len());
-            let val_str = after_eq[..val_end].trim();
+        // Find inline default (only look before the bracket, not inside constraints like >=)
+        let bracket_pos = after_colon.find('[').unwrap_or(after_colon.len());
+        let before_bracket = &after_colon[..bracket_pos];
+        if let Some(eq_pos) = before_bracket.find('=') {
+            let val_str = before_bracket[eq_pos + 1..].trim();
             default = Self::parse_value(val_str);
         }
 
@@ -659,5 +659,38 @@ mod tests {
         assert!(rel.acyclic);
         assert!(rel.no_self);
         assert!(!rel.symmetric);
+    }
+
+    #[test]
+    fn test_float_with_min_constraint() {
+        // Test that Float [>= 0] parses correctly and doesn't confuse the '=' in '>=' with a default value
+        let source = r#"
+            node Contractor {
+                hourly_rate: Float [>= 0]
+            }
+        "#;
+
+        let schema = SchemaAnalyzer::analyze(source).unwrap();
+        let contractor = &schema.node_types["Contractor"];
+        assert_eq!(contractor.attrs.len(), 1);
+
+        let rate = &contractor.attrs[0];
+        assert_eq!(rate.name, "hourly_rate");
+        assert_eq!(rate.type_name, "Float");
+        assert!(rate.allowed_values.is_none());
+        assert!(rate.min.is_some());
+        assert!(rate.default.is_none(), "Should not have a default value");
+
+        // Generate a value and verify it's a Float
+        use rand::SeedableRng;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let gen_value = rate.generate_value(&mut rng);
+
+        match gen_value.value {
+            crate::types::Value::Float(f) => {
+                assert!(f >= 0.0, "Generated float should be >= 0");
+            }
+            other => panic!("Expected Float, got {:?}", other),
+        }
     }
 }

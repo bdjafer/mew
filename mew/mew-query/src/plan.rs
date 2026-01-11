@@ -134,6 +134,19 @@ impl<'r> QueryPlanner<'r> {
             };
         }
 
+        // Check if projections contain aggregates
+        let aggregates = self.extract_aggregates(&stmt.return_clause.projections);
+        let has_aggregates = !aggregates.is_empty();
+
+        // Add aggregate operator if needed (before ORDER BY)
+        if has_aggregates {
+            plan = PlanOp::Aggregate {
+                input: Box::new(plan),
+                group_by: Vec::new(), // TODO: Support GROUP BY clause
+                aggregates,
+            };
+        }
+
         // Add ORDER BY
         if let Some(ref order_by) = stmt.order_by {
             let order: Vec<(Expr, bool)> = order_by
@@ -159,17 +172,63 @@ impl<'r> QueryPlanner<'r> {
             };
         }
 
-        // Add projections
+        // Add projections (for non-aggregate queries, or for the column naming)
         let (projections, columns) = self.plan_projections(&stmt.return_clause.projections)?;
-        plan = PlanOp::Project {
-            input: Box::new(plan),
-            projections,
-        };
+
+        // If we have aggregates, the projection just names the output columns
+        // The actual values are computed by the Aggregate operator
+        if !has_aggregates {
+            plan = PlanOp::Project {
+                input: Box::new(plan),
+                projections,
+            };
+        }
 
         Ok(QueryPlan {
             root: plan,
             columns,
         })
+    }
+
+    /// Extract aggregate functions from projections.
+    fn extract_aggregates(&self, projections: &[Projection]) -> Vec<(String, AggregateKind, Expr)> {
+        let mut aggregates = Vec::new();
+
+        for proj in projections {
+            if let Some((kind, arg)) = self.get_aggregate(&proj.expr) {
+                let name = proj.alias.clone().unwrap_or_else(|| self.expr_to_name(&proj.expr));
+                aggregates.push((name, kind, arg));
+            }
+        }
+
+        aggregates
+    }
+
+    /// Check if an expression is an aggregate function and return its kind and argument.
+    fn get_aggregate(&self, expr: &Expr) -> Option<(AggregateKind, Expr)> {
+        match expr {
+            Expr::FnCall(fc) => {
+                let kind = match fc.name.to_lowercase().as_str() {
+                    "count" => Some(AggregateKind::Count),
+                    "sum" => Some(AggregateKind::Sum),
+                    "avg" => Some(AggregateKind::Avg),
+                    "min" => Some(AggregateKind::Min),
+                    "max" => Some(AggregateKind::Max),
+                    _ => None,
+                };
+                kind.map(|k| {
+                    // For count(), use a placeholder expression if no args
+                    let arg = fc.args.first().cloned().unwrap_or_else(|| {
+                        Expr::Literal(mew_parser::Literal {
+                            kind: mew_parser::LiteralKind::Int(1),
+                            span: fc.span,
+                        })
+                    });
+                    (k, arg)
+                })
+            }
+            _ => None,
+        }
     }
 
     /// Plan the pattern matching portion.

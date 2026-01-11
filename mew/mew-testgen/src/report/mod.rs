@@ -170,6 +170,7 @@ mod tests {
                     m
                 },
                 edge_types: HashMap::new(),
+                type_aliases: HashMap::new(),
                 constraints: Vec::new(),
                 rules: Vec::new(),
             },

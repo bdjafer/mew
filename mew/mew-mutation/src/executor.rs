@@ -249,22 +249,21 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         attr_name: &str,
         value: &Value,
     ) -> MutationResult<()> {
-        if let Some(type_def) = self.registry.get_type(type_id) {
-            if let Some(attr_def) = type_def.get_attr(attr_name) {
-                // Check type compatibility
-                let expected_type = &attr_def.type_name;
-                let actual_type = self.value_type_name(value);
+        // Use get_type_attr to check inherited attributes
+        if let Some(attr_def) = self.registry.get_type_attr(type_id, attr_name) {
+            // Check type compatibility
+            let expected_type = &attr_def.type_name;
+            let actual_type = self.value_type_name(value);
 
-                if !self.types_compatible(expected_type, &actual_type) {
-                    return Err(MutationError::invalid_attr_type(
-                        attr_name,
-                        expected_type,
-                        actual_type,
-                    ));
-                }
-            } else {
-                return Err(MutationError::unknown_attribute(type_name, attr_name));
+            if !self.types_compatible(expected_type, &actual_type) {
+                return Err(MutationError::invalid_attr_type(
+                    attr_name,
+                    expected_type,
+                    actual_type,
+                ));
             }
+        } else {
+            return Err(MutationError::unknown_attribute(type_name, attr_name));
         }
 
         Ok(())
@@ -277,11 +276,10 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         type_id: mew_core::TypeId,
         attrs: &mew_core::Attributes,
     ) -> MutationResult<()> {
-        if let Some(type_def) = self.registry.get_type(type_id) {
-            for (attr_name, attr_def) in &type_def.attributes {
-                if attr_def.required && !attrs.contains_key(attr_name) && attr_def.default.is_none() {
-                    return Err(MutationError::missing_required(type_name, attr_name));
-                }
+        // Get all attrs including inherited ones
+        for attr_def in self.registry.get_all_type_attrs(type_id) {
+            if attr_def.required && !attrs.contains_key(&attr_def.name) && attr_def.default.is_none() {
+                return Err(MutationError::missing_required(type_name, &attr_def.name));
             }
         }
         Ok(())
@@ -295,12 +293,11 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         attrs: &mut mew_core::Attributes,
         _bindings: &Bindings,
     ) -> MutationResult<()> {
-        if let Some(type_def) = self.registry.get_type(type_id) {
-            for (attr_name, attr_def) in &type_def.attributes {
-                if !attrs.contains_key(attr_name) {
-                    if let Some(ref default_value) = attr_def.default {
-                        attrs.insert(attr_name.clone(), default_value.clone());
-                    }
+        // Get all attrs including inherited ones
+        for attr_def in self.registry.get_all_type_attrs(type_id) {
+            if !attrs.contains_key(&attr_def.name) {
+                if let Some(ref default_value) = attr_def.default {
+                    attrs.insert(attr_def.name.clone(), default_value.clone());
                 }
             }
         }

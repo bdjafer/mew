@@ -4,10 +4,10 @@ use crate::{CompileError, CompileResult};
 use mew_core::{TypeId, Value};
 use mew_parser::{
     parse_ontology, AttrModifier, EdgeModifier, EdgeTypeDef as AstEdgeTypeDef,
-    NodeTypeDef as AstNodeTypeDef, OntologyDef,
+    NodeTypeDef as AstNodeTypeDef, OntologyDef, TypeAliasDef,
 };
 use mew_registry::{AttrDef, OnKillAction, Registry, RegistryBuilder};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// The Compiler transforms ontology source into Registry.
 pub struct Compiler {
@@ -15,6 +15,8 @@ pub struct Compiler {
     type_names: HashSet<String>,
     /// Collected edge type names for validation.
     edge_type_names: HashSet<String>,
+    /// Type alias definitions: name -> base type
+    type_aliases: HashMap<String, TypeAliasDef>,
     /// Generated constraints from modifiers (for node types).
     generated_type_constraints: Vec<GeneratedConstraint>,
     /// Generated constraints from modifiers (for edge types).
@@ -35,6 +37,7 @@ impl Compiler {
         Self {
             type_names: HashSet::new(),
             edge_type_names: HashSet::new(),
+            type_aliases: HashMap::new(),
             generated_type_constraints: Vec::new(),
             generated_edge_constraints: Vec::new(),
         }
@@ -45,9 +48,12 @@ impl Compiler {
         // Parse the ontology
         let defs = parse_ontology(source)?;
 
-        // First pass: collect all type and edge type names
+        // First pass: collect all type names, edge type names, and type aliases
         for def in &defs {
             match def {
+                OntologyDef::TypeAlias(alias) => {
+                    self.type_aliases.insert(alias.name.clone(), alias.clone());
+                }
                 OntologyDef::Node(n) => {
                     if !self.type_names.insert(n.name.clone()) {
                         return Err(CompileError::duplicate_type(&n.name, n.span));
@@ -142,7 +148,9 @@ impl Compiler {
         }
 
         for attr_def in &node_def.attrs {
-            let mut attr = AttrDef::new(&attr_def.name, &attr_def.type_name);
+            // Resolve type aliases to their base types
+            let resolved_type = self.resolve_type_name(&attr_def.type_name);
+            let mut attr = AttrDef::new(&attr_def.name, &resolved_type);
 
             // Handle nullable types
             if attr_def.nullable {
@@ -252,6 +260,16 @@ impl Compiler {
         type_builder.done().map_err(CompileError::from)
     }
 
+    /// Resolve a type name, expanding type aliases to their base types.
+    fn resolve_type_name(&self, type_name: &str) -> String {
+        if let Some(alias) = self.type_aliases.get(type_name) {
+            // Recursively resolve in case of chained aliases
+            self.resolve_type_name(&alias.base_type)
+        } else {
+            type_name.to_string()
+        }
+    }
+
     /// Add an edge type to the registry builder.
     fn add_edge_type(
         &mut self,
@@ -273,7 +291,9 @@ impl Compiler {
 
         // Process edge attributes
         for attr_def in &edge_def.attrs {
-            let mut attr = AttrDef::new(&attr_def.name, &attr_def.type_name);
+            // Resolve type aliases to their base types
+            let resolved_type = self.resolve_type_name(&attr_def.type_name);
+            let mut attr = AttrDef::new(&attr_def.name, &resolved_type);
 
             // Handle nullable types
             if attr_def.nullable {
