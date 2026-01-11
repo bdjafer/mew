@@ -3,6 +3,10 @@ name = "mew-testgen"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "testgen-runner"
+path = "src/bin/testgen_runner.rs"
+
 [dependencies]
 mew-core.workspace = true
 mew-graph.workspace = true
