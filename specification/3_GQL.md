@@ -1,6 +1,6 @@
-# HOHG Language Specification
+# Graph Query Language Specification
 
-## Part III: HOHG Language (Runtime)
+## Part III: GQL (Runtime)
 
 **Version:** 1.0
 **Status:** Draft
@@ -8,7 +8,7 @@
 
 ---
 
-# 19. HOHG Language Overview
+# 19. GQL Overview
 
 ## 19.1 Purpose
 
@@ -34,7 +34,7 @@ HOHG Language statements are **interpreted** against a running engine:
 └──────────────┘     └──────────────┘     └──────────────┘
 ```
 
-Unlike the Ontology DSL (compiled once), HOHG statements execute immediately.
+Unlike the Ontology DSL (compiled once), GQL statements execute immediately.
 
 ## 19.3 Statement Structure
 

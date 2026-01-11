@@ -1,4 +1,4 @@
-# HOHG Language Specification
+# GQL Specification
 
 ## Part IV: Meta Mode
 

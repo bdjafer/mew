@@ -327,29 +327,32 @@ graph TD
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ CONSTRAINT CHECKER                                                           │
-│ Check immediate constraints                                                 │
+│ RULE ENGINE                                                                  │
+│ Find and execute triggered rules (BEFORE constraint checking)              │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ • Get constraints affecting type=Task                                       │
-│ • For each constraint:                                                      │
+│ • Get auto-rules affecting type=Task, sorted by priority                   │
+│ • For each rule:                                                            │
 │   • Match pattern against current graph (including txn buffer)             │
-│   • Evaluate condition                                                      │
-│   • If hard constraint fails → ABORT                                       │
-│   • If soft constraint fails → WARN                                        │
+│   • For each new match (not in executed set):                              │
+│     • Execute production actions (may spawn more mutations)                │
+│     • Add spawned mutations to queue                                       │
+│ • Repeat until quiescence or limit reached                                 │
+│                                                                              │
+│ NOTE: Rules execute BEFORE constraints so they can "fix" violations.       │
+│       Example: auto_timestamp rule sets created_at before required check.  │
 └─────────────────────────────────────────────────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ RULE ENGINE                                                                  │
-│ Find and execute triggered rules                                            │
+│ CONSTRAINT CHECKER                                                           │
+│ Check all constraints after rule quiescence                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ • Get auto-rules affecting type=Task, sorted by priority                   │
-│ • For each rule:                                                            │
-│   • Match pattern                                                           │
-│   • For each new match (not in executed set):                              │
-│     • Execute production actions                                            │
-│     • Recursively check constraints + trigger rules                        │
-│ • Until quiescence or limit reached                                        │
+│ • Get constraints affecting modified types                                  │
+│ • For each constraint:                                                      │
+│   • Match pattern against current graph (including txn buffer)             │
+│   • Evaluate condition                                                      │
+│   • If hard constraint fails → ABORT entire transaction                    │
+│   • If soft constraint fails → WARN                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -357,7 +360,7 @@ graph TD
 │ DEFERRED CONSTRAINT CHECK                                                    │
 │ Check cardinality constraints at commit                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ • Cardinality constraints (e.g., task -> 1 on belongs_to)                  │
+│ • Minimum cardinality constraints (e.g., task -> 1 on belongs_to)          │
 │ • Existence constraints (=> EXISTS(...))                                    │
 │ • If any fail → ABORT entire transaction                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -538,6 +541,20 @@ graph TD
 │  │ Ternary edge (arity=3):  [NodeId, NodeId, NodeId] ← 24 bytes        │   │
 │  │ Higher-order:            [EdgeId, ...]           ← EdgeId in targets│   │
 │  │ Hyperedge (arity=N):     [NodeId × N]            ← Variable size    │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ID Space:                                                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ NodeId and EdgeId: both 64-bit, allocated from shared sequence      │   │
+│  │                                                                      │   │
+│  │ Distinction mechanism:                                               │   │
+│  │   • Contextual: edge type signature specifies expected type at      │   │
+│  │     each position (e.g., edge<causes> at position 0 → expect EdgeId)│   │
+│  │   • For higher-order edges: is_higher_order flag set on edge        │   │
+│  │   • For generic META queries: check entity existence in both stores │   │
+│  │                                                                      │   │
+│  │ Rationale: Shared ID space simplifies allocation and allows         │   │
+│  │ uniform ID handling. Type safety comes from schema, not ID format.  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -1029,6 +1046,30 @@ graph TD
 │  │     // Savepoints for partial rollback                              │   │
 │  │     savepoints: Map<Name, SavepointState>                          │   │
 │  │   }                                                                  │   │
+│  │                                                                      │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Query Visibility (Transaction Isolation)                            │   │
+│  │                                                                      │   │
+│  │   Within a transaction, queries see:                                │   │
+│  │                                                                      │   │
+│  │   • Own uncommitted changes: VISIBLE                                │   │
+│  │     - created_nodes, created_edges in transaction buffer            │   │
+│  │     - modified_attrs applied to query results                       │   │
+│  │     - deleted_nodes, deleted_edges filtered out                     │   │
+│  │                                                                      │   │
+│  │   • Other transactions' uncommitted changes: INVISIBLE              │   │
+│  │     - Standard isolation guarantee                                  │   │
+│  │                                                                      │   │
+│  │   Query Resolution Order:                                           │   │
+│  │     1. Check transaction buffer first (uncommitted local changes)  │   │
+│  │     2. Check committed storage                                      │   │
+│  │     3. Merge both views for final result                           │   │
+│  │                                                                      │   │
+│  │   Index Queries:                                                    │   │
+│  │     - Transaction maintains local index delta                       │   │
+│  │     - Query merges committed index + local delta                   │   │
 │  │                                                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │

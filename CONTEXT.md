@@ -1,10 +1,10 @@
-# HOHG: Higher-Order Hypergraph System
+# MEW: Minimum Executable World - Higher-Order Hypergraph
 
 ## Context Document
 
 **Version:** 1.0
 **Status:** Foundation
-**Purpose:** Entry point to the HOHG project — vision, philosophy, and orientation
+**Purpose:** Entry point to the MEW project — vision, philosophy, and orientation
 
 ---
 
