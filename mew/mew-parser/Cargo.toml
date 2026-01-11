@@ -4,5 +4,3 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-mew-core.workspace = true
-thiserror.workspace = true

@@ -7,6 +7,7 @@ name = "mew-analyzer"
 version = "0.1.0"
 dependencies = [
  "mew-core",
+ "mew-parser",
  "mew-registry",
  "thiserror",
 ]
@@ -63,6 +64,8 @@ version = "0.1.0"
 dependencies = [
  "mew-core",
  "mew-graph",
+ "mew-parser",
+ "mew-pattern",
  "mew-registry",
  "thiserror",
 ]
@@ -70,10 +73,6 @@ dependencies = [
 [[package]]
 name = "mew-parser"
 version = "0.1.0"
-dependencies = [
- "mew-core",
- "thiserror",
-]
 
 [[package]]
 name = "mew-pattern"
@@ -81,6 +80,7 @@ version = "0.1.0"
 dependencies = [
  "mew-core",
  "mew-graph",
+ "mew-parser",
  "mew-registry",
  "thiserror",
 ]
@@ -91,6 +91,7 @@ version = "0.1.0"
 dependencies = [
  "mew-core",
  "mew-graph",
+ "mew-parser",
  "mew-pattern",
  "mew-registry",
  "thiserror",
@@ -125,6 +126,7 @@ dependencies = [
  "mew-graph",
  "mew-parser",
  "mew-query",
+ "mew-registry",
  "mew-transaction",
  "thiserror",
 ]
@@ -137,6 +139,7 @@ dependencies = [
  "mew-core",
  "mew-graph",
  "mew-mutation",
+ "mew-registry",
  "mew-rule",
  "thiserror",
 ]
