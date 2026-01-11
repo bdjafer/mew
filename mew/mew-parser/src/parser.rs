@@ -1136,7 +1136,12 @@ impl Parser {
         };
 
         let span = self.span_from(start);
-        Ok(NodeTypeDef { name, parents, attrs, span })
+        Ok(NodeTypeDef {
+            name,
+            parents,
+            attrs,
+            span,
+        })
     }
 
     /// Parse attribute definitions: { name: Type [modifiers], ... }
@@ -1223,7 +1228,18 @@ impl Parser {
             Ok(AttrModifier::Unique)
         } else if self.check_ident("default") {
             self.advance();
-            self.expect(&TokenKind::Eq)?;
+            if self.check(&TokenKind::Eq) {
+                self.advance();
+            } else if self.check(&TokenKind::Colon) {
+                self.advance();
+            } else {
+                let token = self.peek();
+                return Err(ParseError::unexpected_token(
+                    token.span,
+                    "= or :",
+                    token.kind.name(),
+                ));
+            }
             let value = self.parse_expr()?;
             Ok(AttrModifier::Default(value))
         } else if self.check(&TokenKind::In) || self.check_ident("in") {
@@ -1411,7 +1427,10 @@ impl Parser {
         } else if self.check_ident("symmetric") {
             self.advance();
             Ok(EdgeModifier::Symmetric)
-        } else if self.check_ident("on_kill") || self.check_ident("on_kill_target") || self.check_ident("on_kill_source") {
+        } else if self.check_ident("on_kill")
+            || self.check_ident("on_kill_target")
+            || self.check_ident("on_kill_source")
+        {
             self.advance();
             self.expect(&TokenKind::Colon)?;
             let action = if self.check(&TokenKind::Cascade) || self.check_ident("cascade") {
@@ -1481,6 +1500,9 @@ impl Parser {
                     auto = true;
                 } else if self.check_ident("priority") {
                     self.advance();
+                    if self.check(&TokenKind::Colon) || self.check(&TokenKind::Eq) {
+                        self.advance();
+                    }
                     priority = Some(self.expect_int()?);
                 } else if self.check(&TokenKind::Comma) {
                     self.advance();
@@ -1497,7 +1519,9 @@ impl Parser {
             self.expect(&TokenKind::RBracket)?;
         }
 
-        self.expect(&TokenKind::Colon)?;
+        if self.check(&TokenKind::Colon) {
+            self.advance();
+        }
 
         // Parse production statements
         let mut production = Vec::new();

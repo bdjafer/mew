@@ -36,18 +36,50 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
         let plan = planner.plan_match(stmt)?;
 
         // Execute the plan
-        self.execute_plan(&plan)
+        self.execute_plan(&plan, None)
+    }
+
+    /// Execute a MATCH statement using initial bindings.
+    pub fn execute_match_with_bindings(
+        &self,
+        stmt: &MatchStmt,
+        initial_bindings: &Bindings,
+    ) -> QueryResult<QueryResults> {
+        let planner = QueryPlanner::new(self.registry);
+        let plan = planner.plan_match(stmt)?;
+
+        self.execute_plan(&plan, Some(initial_bindings))
     }
 
     /// Execute a query plan.
-    pub fn execute_plan(&self, plan: &QueryPlan) -> QueryResult<QueryResults> {
+    pub fn execute_plan(
+        &self,
+        plan: &QueryPlan,
+        initial_bindings: Option<&Bindings>,
+    ) -> QueryResult<QueryResults> {
         // Get all matching bindings using the pattern matcher
-        let bindings_list = self.execute_op(&plan.root)?;
+        let bindings_list = self.execute_op(&plan.root, initial_bindings)?;
+
+        let filtered_bindings = if let Some(initial) = initial_bindings {
+            bindings_list
+                .into_iter()
+                .filter(|(bindings, _)| {
+                    initial.iter().all(|(name, binding)| {
+                        bindings
+                            .get(name)
+                            .map(|existing| existing == binding)
+                            .unwrap_or(true)
+                    })
+                })
+                .collect()
+        } else {
+            bindings_list
+        };
 
         // Convert bindings to result rows
         let mut results = QueryResults::with_columns(plan.columns.clone());
 
-        for (bindings, values) in bindings_list {
+        for (bindings, values) in filtered_bindings {
             let mut row = QueryRow::new();
 
             // If we have projected values, use those
@@ -73,13 +105,22 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
     }
 
     /// Execute a single plan operator.
-    fn execute_op(&self, op: &PlanOp) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
+    fn execute_op(
+        &self,
+        op: &PlanOp,
+        initial_bindings: Option<&Bindings>,
+    ) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
         match op {
             PlanOp::NodeScan { var, type_id } => {
                 let mut results = Vec::new();
 
                 for node_id in self.graph.nodes_by_type(*type_id) {
-                    let mut bindings = Bindings::new();
+                    let mut bindings = initial_bindings.cloned().unwrap_or_default();
+                    if let Some(existing) = bindings.get(var) {
+                        if existing.as_node() != Some(node_id) {
+                            continue;
+                        }
+                    }
                     bindings.insert(var, mew_pattern::Binding::Node(node_id));
                     results.push((bindings, Vec::new()));
                 }
@@ -101,7 +142,12 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 // Use attribute index
                 if !matches!(search_val, Value::Null) {
                     for node_id in self.graph.nodes_by_attr(*type_id, attr, &search_val) {
-                        let mut bindings = Bindings::new();
+                        let mut bindings = initial_bindings.cloned().unwrap_or_default();
+                        if let Some(existing) = bindings.get(var) {
+                            if existing.as_node() != Some(node_id) {
+                                continue;
+                            }
+                        }
                         bindings.insert(var, mew_pattern::Binding::Node(node_id));
                         results.push((bindings, Vec::new()));
                     }
@@ -111,7 +157,13 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                         if let Some(node) = self.graph.get_node(node_id) {
                             if let Some(attr_val) = node.get_attr(attr) {
                                 if self.values_equal(attr_val, &search_val) {
-                                    let mut bindings = Bindings::new();
+                                    let mut bindings =
+                                        initial_bindings.cloned().unwrap_or_default();
+                                    if let Some(existing) = bindings.get(var) {
+                                        if existing.as_node() != Some(node_id) {
+                                            continue;
+                                        }
+                                    }
                                     bindings.insert(var, mew_pattern::Binding::Node(node_id));
                                     results.push((bindings, Vec::new()));
                                 }
@@ -129,7 +181,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 from_vars,
                 edge_var,
             } => {
-                let input_results = self.execute_op(input)?;
+                let input_results = self.execute_op(input, initial_bindings)?;
                 let mut results = Vec::new();
 
                 for (bindings, _) in input_results {
@@ -178,7 +230,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             }
 
             PlanOp::Filter { input, condition } => {
-                let input_results = self.execute_op(input)?;
+                let input_results = self.execute_op(input, initial_bindings)?;
                 let mut results = Vec::new();
 
                 for (bindings, values) in input_results {
@@ -191,11 +243,8 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 Ok(results)
             }
 
-            PlanOp::Project {
-                input,
-                projections,
-            } => {
-                let input_results = self.execute_op(input)?;
+            PlanOp::Project { input, projections } => {
+                let input_results = self.execute_op(input, initial_bindings)?;
                 let mut results = Vec::new();
 
                 for (bindings, _) in input_results {
@@ -213,7 +262,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             }
 
             PlanOp::Sort { input, order_by } => {
-                let mut results = self.execute_op(input)?;
+                let mut results = self.execute_op(input, initial_bindings)?;
 
                 // Sort by the order expressions
                 results.sort_by(|(a_bindings, a_values), (b_bindings, b_values)| {
@@ -232,11 +281,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
 
                         let cmp = self.compare_values(&a_val, &b_val);
                         if cmp != std::cmp::Ordering::Equal {
-                            return if *ascending {
-                                cmp
-                            } else {
-                                cmp.reverse()
-                            };
+                            return if *ascending { cmp } else { cmp.reverse() };
                         }
                     }
                     std::cmp::Ordering::Equal
@@ -250,16 +295,12 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 limit,
                 offset,
             } => {
-                let results = self.execute_op(input)?;
+                let results = self.execute_op(input, initial_bindings)?;
 
                 let start = offset.unwrap_or(0) as usize;
                 let end = limit.map(|l| start + l as usize).unwrap_or(results.len());
 
-                Ok(results
-                    .into_iter()
-                    .skip(start)
-                    .take(end - start)
-                    .collect())
+                Ok(results.into_iter().skip(start).take(end - start).collect())
             }
 
             PlanOp::Aggregate {
@@ -267,7 +308,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 group_by,
                 aggregates,
             } => {
-                let results = self.execute_op(input)?;
+                let results = self.execute_op(input, initial_bindings)?;
 
                 if group_by.is_empty() && results.is_empty() {
                     // Empty input with no grouping returns single row with defaults
@@ -295,10 +336,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                         .collect::<Vec<_>>()
                         .join("|");
 
-                    groups
-                        .entry(key)
-                        .or_default()
-                        .push((bindings, values));
+                    groups.entry(key).or_default().push((bindings, values));
                 }
 
                 // Compute aggregates for each group
@@ -320,8 +358,8 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             }
 
             PlanOp::CrossJoin { left, right } => {
-                let left_results = self.execute_op(left)?;
-                let right_results = self.execute_op(right)?;
+                let left_results = self.execute_op(left, initial_bindings)?;
+                let right_results = self.execute_op(right, initial_bindings)?;
 
                 let mut results = Vec::new();
 
@@ -345,16 +383,18 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 Ok(Vec::new())
             }
 
-            PlanOp::Empty => Ok(Vec::new()),
+            PlanOp::Empty => {
+                if let Some(initial) = initial_bindings {
+                    Ok(vec![(initial.clone(), Vec::new())])
+                } else {
+                    Ok(Vec::new())
+                }
+            }
         }
     }
 
     /// Compare two optional values for sorting.
-    fn compare_values(
-        &self,
-        a: &Option<Value>,
-        b: &Option<Value>,
-    ) -> std::cmp::Ordering {
+    fn compare_values(&self, a: &Option<Value>, b: &Option<Value>) -> std::cmp::Ordering {
         match (a, b) {
             (None, None) => std::cmp::Ordering::Equal,
             (None, Some(_)) => std::cmp::Ordering::Less,
@@ -369,7 +409,9 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             (Value::Null, _) => std::cmp::Ordering::Less,
             (_, Value::Null) => std::cmp::Ordering::Greater,
             (Value::Int(a), Value::Int(b)) => a.cmp(b),
-            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::Float(a), Value::Float(b)) => {
+                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+            }
             (Value::String(a), Value::String(b)) => a.cmp(b),
             (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
             _ => std::cmp::Ordering::Equal,
@@ -445,7 +487,9 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                             min = Some(match min {
                                 None => val,
                                 Some(m) => {
-                                    if self.compare_values_inner(&val, &m) == std::cmp::Ordering::Less {
+                                    if self.compare_values_inner(&val, &m)
+                                        == std::cmp::Ordering::Less
+                                    {
                                         val
                                     } else {
                                         m
@@ -466,7 +510,9 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                             max = Some(match max {
                                 None => val,
                                 Some(m) => {
-                                    if self.compare_values_inner(&val, &m) == std::cmp::Ordering::Greater {
+                                    if self.compare_values_inner(&val, &m)
+                                        == std::cmp::Ordering::Greater
+                                    {
                                         val
                                     } else {
                                         m
@@ -507,9 +553,18 @@ mod tests {
         let mut graph = Graph::new();
         let task_type_id = registry.get_type_id("Task").unwrap();
 
-        graph.create_node(task_type_id, attrs! { "title" => "Task A", "priority" => 1 });
-        graph.create_node(task_type_id, attrs! { "title" => "Task B", "priority" => 2 });
-        graph.create_node(task_type_id, attrs! { "title" => "Task C", "priority" => 3 });
+        graph.create_node(
+            task_type_id,
+            attrs! { "title" => "Task A", "priority" => 1 },
+        );
+        graph.create_node(
+            task_type_id,
+            attrs! { "title" => "Task B", "priority" => 2 },
+        );
+        graph.create_node(
+            task_type_id,
+            attrs! { "title" => "Task C", "priority" => 3 },
+        );
 
         let executor = QueryExecutor::new(&registry, &graph);
 
@@ -595,7 +650,10 @@ mod tests {
 
         graph.create_node(task_type_id, attrs! { "title" => "Low", "priority" => 1 });
         graph.create_node(task_type_id, attrs! { "title" => "High", "priority" => 10 });
-        graph.create_node(task_type_id, attrs! { "title" => "Medium", "priority" => 5 });
+        graph.create_node(
+            task_type_id,
+            attrs! { "title" => "Medium", "priority" => 5 },
+        );
 
         let executor = QueryExecutor::new(&registry, &graph);
 

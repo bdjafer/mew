@@ -45,6 +45,12 @@ pub enum MutationError {
         actual: String,
     },
 
+    #[error("Acyclic constraint violated for edge type {edge_type}")]
+    AcyclicViolation { edge_type: String },
+
+    #[error("Deletion restricted by edge type {edge_type}")]
+    OnKillRestrict { edge_type: String },
+
     #[error("Node not found: {0:?}")]
     NodeNotFound(NodeId),
 
@@ -97,11 +103,7 @@ impl MutationError {
         }
     }
 
-    pub fn invalid_arity(
-        edge_type: impl Into<String>,
-        expected: usize,
-        actual: usize,
-    ) -> Self {
+    pub fn invalid_arity(edge_type: impl Into<String>, expected: usize, actual: usize) -> Self {
         Self::InvalidArity {
             edge_type: edge_type.into(),
             expected,
@@ -118,6 +120,18 @@ impl MutationError {
             position,
             expected: expected.into(),
             actual: actual.into(),
+        }
+    }
+
+    pub fn acyclic_violation(edge_type: impl Into<String>) -> Self {
+        Self::AcyclicViolation {
+            edge_type: edge_type.into(),
+        }
+    }
+
+    pub fn on_kill_restrict(edge_type: impl Into<String>) -> Self {
+        Self::OnKillRestrict {
+            edge_type: edge_type.into(),
         }
     }
 
