@@ -125,6 +125,8 @@ pub enum Value {
     Float(f64),
     String(String),
     Id(u64),
+    /// A function call like now()
+    FunctionCall(String),
 }
 
 impl From<&mew_core::Value> for Value {
@@ -268,6 +270,8 @@ impl AttrInfo {
                 Value::Float(rng.gen_range(min..=max))
             }
             "Bool" => Value::Bool(rng.gen_bool(0.5)),
+            "Timestamp" => Value::FunctionCall("now".to_string()),
+            "Duration" => Value::Int(rng.gen_range(0..86400000)), // Up to 1 day in ms
             _ => Value::Null,
         }
     }

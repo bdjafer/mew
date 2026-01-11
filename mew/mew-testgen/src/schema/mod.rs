@@ -403,6 +403,11 @@ impl SchemaAnalyzer {
         if s == "false" {
             return Some(Value::Bool(false));
         }
+        // Function call like now()
+        if s.ends_with("()") && !s.starts_with('"') {
+            let func_name = &s[..s.len() - 2];
+            return Some(Value::FunctionCall(func_name.to_string()));
+        }
         if let Ok(i) = s.parse::<i64>() {
             return Some(Value::Int(i));
         }

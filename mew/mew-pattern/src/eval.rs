@@ -162,6 +162,14 @@ impl<'r, 'g> Evaluator<'r, 'g> {
         let name_lower = name.to_lowercase();
 
         match name_lower.as_str() {
+            "now" => {
+                // Return current timestamp in milliseconds since epoch
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let duration = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default();
+                Ok(Value::Timestamp(duration.as_millis() as i64))
+            }
             "count" => {
                 // COUNT expects 0 or 1 arguments
                 // For now, just return 0 - proper aggregate handling is in Query

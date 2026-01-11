@@ -256,6 +256,7 @@ impl<'a> QueryGenerator<'a> {
             Value::Float(f) => f.to_string(),
             Value::String(s) => format!("\"{}\"", s),
             Value::Id(id) => format!("#{}", id),
+            Value::FunctionCall(name) => format!("{}()", name),
         }
     }
 }
