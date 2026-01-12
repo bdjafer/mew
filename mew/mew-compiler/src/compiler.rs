@@ -89,34 +89,68 @@ impl Compiler {
                     let primary_type = self.extract_primary_type(&c.pattern)?;
 
                     // Validate that the type exists
-                    if !self.type_names.contains(&primary_type) {
-                        return Err(CompileError::unknown_type(&primary_type, c.span));
+                    // Handle edge-only patterns (edge:EdgeTypeName)
+                    if primary_type.starts_with("edge:") {
+                        let edge_name = &primary_type[5..]; // Skip "edge:" prefix
+                        if !self.edge_type_names.contains(edge_name) {
+                            return Err(CompileError::unknown_type(&primary_type, c.span));
+                        }
+                        // For edge-only constraints, register them on the edge type
+                        builder
+                            .add_constraint(&c.name, format!("{:?}", c.condition))
+                            .for_edge_type(edge_name)
+                            .done()?;
+                    } else {
+                        // Node type constraint
+                        if !self.type_names.contains(&primary_type) {
+                            return Err(CompileError::unknown_type(&primary_type, c.span));
+                        }
+                        // Note: Constraints are stored as strings in the registry
+                        // The actual constraint checking is done at runtime
+                        builder
+                            .add_constraint(&c.name, format!("{:?}", c.condition))
+                            .for_type(&primary_type)
+                            .done()?;
                     }
-                    // Note: Constraints are stored as strings in the registry
-                    // The actual constraint checking is done at runtime
-                    builder
-                        .add_constraint(&c.name, format!("{:?}", c.condition))
-                        .for_type(&primary_type)
-                        .done()?;
                 }
                 OntologyDef::Rule(r) => {
                     // Extract the primary type from the pattern (first node pattern)
                     let primary_type = self.extract_primary_type(&r.pattern)?;
 
                     // Validate that the type exists
-                    if !self.type_names.contains(&primary_type) {
-                        return Err(CompileError::unknown_type(&primary_type, r.span));
+                    // Handle edge-only patterns (edge:EdgeTypeName)
+                    if primary_type.starts_with("edge:") {
+                        let edge_name = &primary_type[5..]; // Skip "edge:" prefix
+                        if !self.edge_type_names.contains(edge_name) {
+                            return Err(CompileError::unknown_type(&primary_type, r.span));
+                        }
+                        // For edge-only rules, register them on the edge type
+                        let mut rule_builder = builder
+                            .add_rule(&r.name, format!("{:?}", r.production))
+                            .for_edge_type(edge_name);
+                        if r.auto {
+                            rule_builder = rule_builder.auto();
+                        }
+                        if let Some(p) = r.priority {
+                            rule_builder = rule_builder.priority(p as i32);
+                        }
+                        rule_builder.done()?;
+                    } else {
+                        // Node type rule
+                        if !self.type_names.contains(&primary_type) {
+                            return Err(CompileError::unknown_type(&primary_type, r.span));
+                        }
+                        let mut rule_builder = builder
+                            .add_rule(&r.name, format!("{:?}", r.production))
+                            .for_type(&primary_type);
+                        if r.auto {
+                            rule_builder = rule_builder.auto();
+                        }
+                        if let Some(p) = r.priority {
+                            rule_builder = rule_builder.priority(p as i32);
+                        }
+                        rule_builder.done()?;
                     }
-                    let mut rule_builder = builder
-                        .add_rule(&r.name, format!("{:?}", r.production))
-                        .for_type(&primary_type);
-                    if r.auto {
-                        rule_builder = rule_builder.auto();
-                    }
-                    if let Some(p) = r.priority {
-                        rule_builder = rule_builder.priority(p as i32);
-                    }
-                    rule_builder.done()?;
                 }
             }
         }
