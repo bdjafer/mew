@@ -3,6 +3,10 @@ name = "mew-repl"
 version.workspace = true
 edition.workspace = true
 
+[lib]
+name = "mew_repl"
+path = "src/lib.rs"
+
 [[bin]]
 name = "mew"
 path = "src/main.rs"
