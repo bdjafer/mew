@@ -28,7 +28,12 @@ mod crud {
     }
 
     #[test]
-    fn test() {
+    fn test_crud_operations_on_bookmarks() {
+        // GIVEN: an empty database with bookmarks ontology loaded
+
+        // WHEN: crud operations are executed (spawn, query, link, update, delete)
+
+        // THEN: all operations complete successfully
         scenario().run().unwrap();
     }
 }
@@ -52,7 +57,12 @@ mod queries {
     }
 
     #[test]
-    fn test() {
+    fn test_query_operations_with_populated_data() {
+        // GIVEN: a database with populated bookmarks seed data
+
+        // WHEN: various query operations are executed
+
+        // THEN: all queries return expected row counts
         scenario().run().unwrap();
     }
 }
@@ -70,7 +80,12 @@ mod errors {
     }
 
     #[test]
-    fn test() {
+    fn test_error_handling_for_invalid_operations() {
+        // GIVEN: a database with bookmarks ontology loaded
+
+        // WHEN: operations with invalid data are executed
+
+        // THEN: appropriate errors are returned
         scenario().run().unwrap();
     }
 }

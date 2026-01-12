@@ -40,23 +40,28 @@ impl<'s> Runner<'s> {
 
         // 3. Execute seed if present
         if let Some(seed_path) = self.scenario.seed_path() {
-            if seed_path.exists() {
-                let seed_source = fs::read_to_string(&seed_path)
-                    .map_err(|e| ExampleError::file_read(&seed_path, e))?;
+            if !seed_path.exists() {
+                return Err(ExampleError::file_read(
+                    &seed_path,
+                    std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "configured seed file does not exist",
+                    ),
+                ));
+            }
 
-                // Parse seed as operations (same format)
-                let seed_ops = Operations::parse(&seed_source)?;
+            let seed_source = fs::read_to_string(&seed_path)
+                .map_err(|e| ExampleError::file_read(&seed_path, e))?;
 
-                // Execute each step in the seed
-                for step_name in seed_ops.step_names() {
-                    if let Some(statement) = seed_ops.get_step(step_name) {
-                        session.execute(statement).map_err(|e| {
-                            ExampleError::step_execution(
-                                format!("seed:{}", step_name),
-                                e.to_string(),
-                            )
-                        })?;
-                    }
+            // Parse seed as operations (same format)
+            let seed_ops = Operations::parse(&seed_source)?;
+
+            // Execute each step in the seed
+            for step_name in seed_ops.step_names() {
+                if let Some(statement) = seed_ops.get_step(step_name) {
+                    session.execute(statement).map_err(|e| {
+                        ExampleError::step_execution(format!("seed:{}", step_name), e.to_string())
+                    })?;
                 }
             }
         }

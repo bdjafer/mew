@@ -332,7 +332,7 @@ impl Assertion {
             }
         }
 
-        // Check exactly
+        // Check exactly (with multiplicity)
         if let Some(ref expected_rows) = self.exactly {
             if result.rows.len() != expected_rows.len() {
                 return Err(ExampleError::assertion_failed(
@@ -344,12 +344,20 @@ impl Assertion {
                     ),
                 ));
             }
+            // Use multiset comparison: match and remove each expected row from actual
+            let mut remaining_rows: Vec<&[Value]> = result.rows.iter().map(|r| r.as_slice()).collect();
             for expected_row in expected_rows {
-                if !result_contains_row(result, expected_row) {
-                    return Err(ExampleError::assertion_failed(
-                        step,
-                        format!("expected result to contain row {:?}", expected_row),
-                    ));
+                let pos = remaining_rows.iter().position(|row| row_matches(&result.columns, row, expected_row));
+                match pos {
+                    Some(idx) => {
+                        remaining_rows.remove(idx);
+                    }
+                    None => {
+                        return Err(ExampleError::assertion_failed(
+                            step,
+                            format!("expected result to contain row {:?}", expected_row),
+                        ));
+                    }
                 }
             }
         }
