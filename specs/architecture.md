@@ -45,6 +45,11 @@ MEW is a **typed higher-order hypergraph database** with:
 │     13 components. Each has a distinct contract.                    │
 │     Implementation details hidden inside components.                │
 │                                                                      │
+│  6. PARALLEL-FRIENDLY                                               │
+│     No conditional expressions (IF/CASE) in the language.           │
+│     Patterns partition work upfront. Rule actions are uniform.      │
+│     Enables GPU acceleration and SIMD execution.                    │
+│                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

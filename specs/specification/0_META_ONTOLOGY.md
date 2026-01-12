@@ -261,21 +261,8 @@ node _ExistsExpr : _Expr [sealed] {
   -- inner pattern specified via edge
 }
 
-node _IfExpr : _Expr [sealed] {
-  -- IF condition THEN then_branch ELSE else_branch
-  -- condition, then_branch, else_branch specified via edges
-}
-
-node _CaseExpr : _Expr [sealed] {
-  -- CASE subject? WHEN ... THEN ... ELSE ... END
-  has_subject: Bool = false  -- true if simple CASE (value matching), false if searched CASE
-  -- subject (optional), when_clauses, else_clause specified via edges
-}
-
-node _WhenClause [sealed] {
-  -- WHEN condition THEN result
-  -- condition and result specified via edges
-}
+-- NOTE: IF/CASE expressions intentionally omitted (see §5.10.2 in 1_FOUNDATIONS.md)
+-- Conditional logic should use pattern-based rules for GPU-friendly execution
 
 node _CoalesceExpr : _Expr [sealed] {
   -- COALESCE(expr1, expr2, ...) or expr1 ?? expr2
@@ -594,62 +581,8 @@ edge _list_element(
   -- list contains this element at this position
 }
 
-edge _if_condition(
-  expr: _IfExpr,
-  condition: _Expr
-) {
-  -- IF expression condition
-}
-
-edge _if_then(
-  expr: _IfExpr,
-  then_branch: _Expr
-) {
-  -- IF expression THEN branch
-}
-
-edge _if_else(
-  expr: _IfExpr,
-  else_branch: _Expr
-) {
-  -- IF expression ELSE branch
-}
-
-edge _case_subject(
-  expr: _CaseExpr,
-  subject: _Expr
-) {
-  -- CASE expression subject (for simple CASE)
-}
-
-edge _case_when(
-  expr: _CaseExpr,
-  when_clause: _WhenClause
-) {
-  position: Int [required]  -- 0-indexed position in WHEN list
-  -- CASE expression WHEN clause
-}
-
-edge _case_else(
-  expr: _CaseExpr,
-  else_branch: _Expr
-) {
-  -- CASE expression ELSE branch
-}
-
-edge _when_condition(
-  clause: _WhenClause,
-  condition: _Expr
-) {
-  -- WHEN clause condition
-}
-
-edge _when_result(
-  clause: _WhenClause,
-  result: _Expr
-) {
-  -- WHEN clause result
-}
+-- NOTE: IF/CASE edge types intentionally omitted (see §5.10.2 in 1_FOUNDATIONS.md)
+-- Conditional expressions removed for GPU-friendly execution
 
 edge _coalesce_arg(
   expr: _CoalesceExpr,
@@ -1608,8 +1541,8 @@ _NodeType, _EdgeType, _AttributeDef, _ConstraintDef, _RuleDef,
 _PatternDef, _VarDef, _EdgePattern, _ProductionDef, _Action,
 _SpawnAction, _LinkAction, _KillAction, _UnlinkAction, _SetAction,
 _Expr, _LiteralExpr, _VarRefExpr, _AttrAccessExpr, _BinaryOpExpr,
-_UnaryOpExpr, _ExistsExpr, _IfExpr, _CaseExpr, _WhenClause, _CoalesceExpr,
-_ListExpr, _TypeExpr, _NamedTypeExpr, _OptionalTypeExpr, _UnionTypeExpr,
+_UnaryOpExpr, _ExistsExpr, _CoalesceExpr, _ListExpr,
+_TypeExpr, _NamedTypeExpr, _OptionalTypeExpr, _UnionTypeExpr,
 _EdgeRefTypeExpr, _AnyTypeExpr, _ScalarTypeExpr, _Ontology, _Import
 ```
 

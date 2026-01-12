@@ -278,21 +278,21 @@ The complete list of reserved keywords:
 
 ```
 abstract    and         app         as          asc
-begin       branch      by          case        checkout
-coalesce    collect     commit      constraint  depth
-desc        diff        distinct    drop        edge
-else        end         exists      explain     extend
-false       follow      from        if          in
-index       indexes     inspect     kill        limit
-link        load        match       merge       node
-not         null        offset      on          ontology
-or          order       profile     required    return
-rollback    rule        rules       scope       sealed
-set         show        snapshot    spawn       switch
-then        true        types       unique      unlink
-until       using       versions    walk        when
-where
+begin       branch      by          checkout    coalesce
+collect     commit      constraint  depth       desc
+diff        distinct    drop        edge        exists
+explain     extend      false       follow      from
+in          index       indexes     inspect     kill
+limit       link        load        match       merge
+node        not         null        offset      on
+ontology    or          order       profile     required
+return      rollback    rule        rules       scope
+sealed      set         show        snapshot    spawn
+switch      true        types       unique      unlink
+until       using       versions    walk        where
 ```
+
+**Removed keywords** (no conditional expressions): `case`, `else`, `end`, `if`, `then`, `when`
 
 Keywords are case-sensitive: `NODE` is not a keyword, `node` is.
 
@@ -498,24 +498,27 @@ Null represents the absence of a value for optional attributes or expressions.
 Operator =
     /* Comparison */
     "=" | "!=" | "<" | ">" | "<=" | ">="
-    
+
     /* Arithmetic */
   | "+" | "-" | "*" | "/" | "%"
-    
+
     /* Logical */
   | "and" | "or" | "not"
-    
+
     /* String */
   | "++"              /* concatenation */
-    
+
+    /* Null handling */
+  | "??"              /* coalesce (first non-null) */
+
     /* Access */
   | "."               /* attribute access */
-    
+
     /* Type */
   | ":"               /* type annotation */
   | "|"               /* union type */
   | "?"               /* optional type */
-    
+
     /* Edge */
   | "->"              /* edge direction (future) */
   | "<-"              /* edge direction (future) */
@@ -534,7 +537,8 @@ From highest to lowest precedence:
 | 5 | `<`, `>`, `<=`, `>=` | Left |
 | 6 | `=`, `!=` | Left |
 | 7 | `and` | Left |
-| 8 (lowest) | `or` | Left |
+| 8 | `or` | Left |
+| 9 (lowest) | `??` | Right |
 
 Parentheses override precedence.
 
@@ -1352,135 +1356,15 @@ not (x and y)
 
 ---
 
-## 5.10 Conditional Expressions
+## 5.10 Null Handling Expressions
 
-### 5.10.1 IF Expression
-
-The IF expression provides inline conditional logic:
-
-```
-IfExpr = "if" Expr "then" Expr "else" Expr
-
--- Syntax:
-IF condition THEN value_if_true ELSE value_if_false
-```
-
-**Examples:**
-```
--- Simple conditional
-IF t.priority > 5 THEN "high" ELSE "normal"
-
--- Nested conditionals
-IF t.priority >= 8 THEN "critical"
-ELSE IF t.priority >= 5 THEN "high"
-ELSE "normal"
-
--- In RETURN
-MATCH t: Task
-RETURN t.title, IF t.completed THEN "done" ELSE "pending" AS status
-
--- In SET
-SET #task_123.label = IF #task_123.priority > 5 THEN "urgent" ELSE "normal"
-```
-
-**Type rules:**
-- Condition must be Bool or Bool?
-- Both branches must have compatible types
-- Result type is the common type of both branches
-
-```
--- Valid: both branches are String
-IF x > 0 THEN "positive" ELSE "non-positive"
-
--- Valid: branches are Int and Int
-IF x > 0 THEN x ELSE 0
-
--- Invalid: branches have incompatible types
-IF x > 0 THEN "text" ELSE 42  -- ERROR: String vs Int
-```
-
-### 5.10.2 CASE Expression
-
-The CASE expression provides multi-way conditional logic:
-
-```
-CaseExpr = 
-    "case" Expr WhenClause+ ElseClause?
-  | "case" WhenClause+ ElseClause?
-
-WhenClause = "when" Expr "then" Expr
-ElseClause = "else" Expr
-```
-
-**Simple CASE (value matching):**
-```
-CASE t.status
-  WHEN "todo" THEN 0
-  WHEN "in_progress" THEN 1
-  WHEN "done" THEN 2
-  ELSE -1
-END
-```
-
-**Searched CASE (condition matching):**
-```
-CASE
-  WHEN t.priority >= 8 THEN "critical"
-  WHEN t.priority >= 5 THEN "high"
-  WHEN t.priority >= 3 THEN "medium"
-  ELSE "low"
-END
-```
-
-**Examples:**
-```
--- In RETURN
-MATCH t: Task
-RETURN t.title,
-       CASE t.priority
-         WHEN 10 THEN "🔴 Critical"
-         WHEN 5..9 THEN "🟡 High"
-         ELSE "🟢 Normal"
-       END AS priority_label
-
--- In WHERE
-MATCH t: Task
-WHERE CASE t.status
-        WHEN "done" THEN t.completed_at < @2024-01-01
-        ELSE true
-      END
-RETURN t
-
--- In SET
-SET #task_123.category = CASE
-  WHEN #task_123.priority >= 8 THEN "urgent"
-  WHEN #task_123.due_date < now() THEN "overdue"
-  ELSE "normal"
-END
-```
-
-**Type rules:**
-- All THEN branches must have compatible types
-- ELSE branch (if present) must have compatible type
-- If no ELSE, result is nullable (T?)
-
-```
--- Valid: all branches are String
-CASE x WHEN 1 THEN "one" WHEN 2 THEN "two" ELSE "other" END
-
--- Valid but nullable: no ELSE
-CASE x WHEN 1 THEN "one" WHEN 2 THEN "two" END  -- Type: String?
-
--- Invalid: incompatible types
-CASE x WHEN 1 THEN "one" WHEN 2 THEN 2 END  -- ERROR: String vs Int
-```
-
-### 5.10.3 COALESCE Expression
+### 5.10.1 COALESCE Expression
 
 Returns the first non-null value:
 
 ```
-COALESCE(expr1, expr2, ...)
+CoalesceExpr = "coalesce" "(" Expr ("," Expr)+ ")"
+             | Expr "??" Expr
 
 -- Examples:
 COALESCE(t.nickname, t.name, "Anonymous")
@@ -1492,6 +1376,65 @@ COALESCE(t.description, "")
 t.nickname ?? t.name ?? "Anonymous"
 -- Equivalent to COALESCE(t.nickname, t.name, "Anonymous")
 ```
+
+**Type rules:**
+- All arguments must have compatible types
+- Result type is the non-nullable common type if last argument is non-null
+- Result type is nullable if all arguments are nullable
+
+```
+-- Valid: all String or String?
+COALESCE(t.nickname, t.name, "default")  -- Type: String (last is non-null)
+
+-- Valid: nullable result
+COALESCE(t.nickname, t.alt_name)  -- Type: String? (both nullable)
+```
+
+### 5.10.2 Design Note: No IF/ELSE or CASE Expressions
+
+**This language intentionally omits conditional expressions (IF/THEN/ELSE, CASE/WHEN).**
+
+**Rationale — GPU and Parallel Execution:**
+
+Conditional expressions cause **thread divergence** in SIMD/GPU execution:
+- Different data items take different branches
+- Threads in a warp that diverge execute serially
+- Performance degrades proportionally to divergence
+
+**Pattern-based alternative:**
+
+Instead of conditional expressions, use **pattern-based rules** which partition work at match time:
+
+```
+-- ANTI-PATTERN (if IF/ELSE existed):
+-- rule classify:
+--   t: Task => SET t.label = IF t.priority > 5 THEN "high" ELSE "low"
+
+-- CORRECT: Two rules with disjoint patterns
+rule classify_high:
+  t: Task WHERE t.priority > 5
+  => SET t.label = "high"
+
+rule classify_low:
+  t: Task WHERE t.priority <= 5
+  => SET t.label = "low"
+```
+
+**Why this is better:**
+1. **Pattern matching partitions work upfront** — the query engine knows which tasks go to which rule before execution
+2. **Each rule has uniform execution** — all matched items perform the same action
+3. **GPU-friendly** — no thread divergence within a rule's execution
+4. **Analyzable** — static analysis can reason about rule interactions
+
+**For computed columns in queries**, use:
+1. Stored computed attributes (populated by rules)
+2. Application-side transformation of results
+3. Multiple queries filtered by condition
+
+**COALESCE is retained** because null-handling:
+- Has predictable, uniform branching patterns (null bitmap operations)
+- Is essential for optional type (`T?`) ergonomics
+- Can be implemented with branchless select instructions
 
 ---
 
@@ -1580,8 +1523,9 @@ EdgeRefType      = "edge" "<" (QualifiedIdent | "any") ">"
 AnyType          = "any"
 ScalarType       = "String" | "Int" | "Float" | "Bool" | "Timestamp" | "ID"
 
-(* Expressions *)
-Expr             = OrExpr
+(* Expressions — no IF/CASE, only COALESCE for null handling *)
+Expr             = CoalesceExpr
+CoalesceExpr     = OrExpr ("??" OrExpr)*
 OrExpr           = AndExpr ("or" AndExpr)*
 AndExpr          = EqualityExpr ("and" EqualityExpr)*
 EqualityExpr     = CompareExpr (("=" | "!=") CompareExpr)*
@@ -1590,8 +1534,9 @@ AddExpr          = MulExpr (("+" | "-" | "++") MulExpr)*
 MulExpr          = UnaryExpr (("*" | "/" | "%") UnaryExpr)*
 UnaryExpr        = ("-" | "not")? PostfixExpr
 PostfixExpr      = PrimaryExpr ("." Identifier)*
-PrimaryExpr      = Literal | Identifier | CallExpr | ExistsExpr | "(" Expr ")"
+PrimaryExpr      = Literal | Identifier | CallExpr | CoalesceFn | ExistsExpr | "(" Expr ")"
 CallExpr         = Identifier "(" (Expr ("," Expr)*)? ")"
+CoalesceFn       = "coalesce" "(" Expr ("," Expr)+ ")"
 ExistsExpr       = "not"? "exists" "(" Pattern ")"
 Literal          = StringLiteral | IntLiteral | FloatLiteral | BoolLiteral | NullLiteral
 ```
