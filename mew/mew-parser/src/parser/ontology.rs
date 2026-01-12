@@ -322,8 +322,46 @@ impl Parser {
 
     // ==================== EDGE TYPE ====================
 
+    /// Parse a type reference: either a simple identifier or edge<Type> / edge<any>
+    ///
+    /// Syntax:
+    /// - Simple type: `Node`, `Person`, `any`
+    /// - Edge reference: `edge<causes>`, `edge<any>`
+    fn parse_type_ref(&mut self) -> ParseResult<TypeRef> {
+        let start = self.peek().span;
+
+        // Check for edge<...> syntax
+        if self.check(&TokenKind::Edge) {
+            self.advance(); // consume 'edge'
+            self.expect(&TokenKind::Lt)?; // consume '<'
+
+            // Parse the inner type: either 'any' or an identifier
+            let edge_type = if self.check(&TokenKind::Any) {
+                self.advance();
+                None // edge<any>
+            } else {
+                // Use expect_name to allow keywords as edge type names
+                Some(self.expect_name()?)
+            };
+
+            self.expect(&TokenKind::Gt)?; // consume '>'
+
+            let span = self.span_from(start);
+            Ok(TypeRef::EdgeRef { edge_type, span })
+        } else if self.check(&TokenKind::Any) {
+            // 'any' as a simple type (backwards compatibility)
+            self.advance();
+            Ok(TypeRef::Simple("any".to_string()))
+        } else {
+            // Simple type name - use expect_name to allow keywords like 'Node'
+            let name = self.expect_name()?;
+            Ok(TypeRef::Simple(name))
+        }
+    }
+
     /// Parse an edge type definition.
     /// Syntax: edge EdgeName(param: Type, ...) [modifiers] { attrs }
+    /// Type can be: NodeType, any, edge<EdgeType>, or edge<any>
     fn parse_edge_type_def(&mut self) -> ParseResult<EdgeTypeDef> {
         let start = self.expect(&TokenKind::Edge)?.span;
         let name = self.expect_ident()?;
@@ -332,15 +370,13 @@ impl Parser {
         self.expect(&TokenKind::LParen)?;
         let mut params = Vec::new();
         while !self.check(&TokenKind::RParen) && !self.check(&TokenKind::Eof) {
-            let param_name = self.expect_ident()?;
+            // Use expect_name to allow keywords like 'from', 'to' as parameter names
+            let param_name = self.expect_name()?;
             self.expect(&TokenKind::Colon)?;
-            // Accept 'any' keyword as a type constraint
-            let param_type = if self.check(&TokenKind::Any) {
-                self.advance();
-                "any".to_string()
-            } else {
-                self.expect_ident()?
-            };
+
+            // Parse type reference (can be edge<...> or simple type)
+            let param_type = self.parse_type_ref()?;
+
             params.push((param_name, param_type));
             if self.check(&TokenKind::Comma) {
                 self.advance();

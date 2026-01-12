@@ -4,10 +4,21 @@ use crate::{CompileError, CompileResult};
 use mew_core::{TypeId, Value};
 use mew_parser::{
     parse_ontology, AttrModifier, EdgeModifier, EdgeTypeDef as AstEdgeTypeDef,
-    NodeTypeDef as AstNodeTypeDef, OntologyDef, TypeAliasDef,
+    NodeTypeDef as AstNodeTypeDef, OntologyDef, TypeAliasDef, TypeRef,
 };
 use mew_registry::{AttrDef, OnKillAction, Registry, RegistryBuilder};
 use std::collections::{HashMap, HashSet};
+
+/// Convert a TypeRef to its string representation for the registry.
+fn type_ref_to_string(type_ref: &TypeRef) -> String {
+    match type_ref {
+        TypeRef::Simple(name) => name.clone(),
+        TypeRef::EdgeRef { edge_type, .. } => match edge_type {
+            Some(name) => format!("edge<{}>", name),
+            None => "edge<any>".to_string(),
+        },
+    }
+}
 
 /// The Compiler transforms ontology source into Registry.
 pub struct Compiler {
@@ -315,15 +326,30 @@ impl Compiler {
     ) -> CompileResult<()> {
         // Validate that parameter types exist
         for (_, param_type) in &edge_def.params {
-            if param_type != "any" && !self.type_names.contains(param_type) {
-                return Err(CompileError::unknown_type(param_type, edge_def.span));
+            match param_type {
+                TypeRef::Simple(type_name) => {
+                    if type_name != "any" && !self.type_names.contains(type_name) {
+                        return Err(CompileError::unknown_type(type_name, edge_def.span));
+                    }
+                }
+                TypeRef::EdgeRef { edge_type, span } => {
+                    // For edge<TypeName>, validate the edge type exists
+                    // For edge<any>, always valid
+                    if let Some(target_edge) = edge_type {
+                        if !self.edge_type_names.contains(target_edge) {
+                            return Err(CompileError::unknown_edge_type(target_edge, *span));
+                        }
+                    }
+                }
             }
         }
 
         let mut edge_builder = builder.add_edge_type(&edge_def.name);
 
         for (param_name, param_type) in &edge_def.params {
-            edge_builder = edge_builder.param(param_name, param_type);
+            // Convert TypeRef to string representation for registry
+            let type_str = type_ref_to_string(param_type);
+            edge_builder = edge_builder.param(param_name, type_str);
         }
 
         // Process edge attributes

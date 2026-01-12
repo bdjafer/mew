@@ -34,6 +34,14 @@ pub enum CompileError {
         column: usize,
     },
 
+    /// Unknown edge type in edge reference.
+    #[error("Unknown edge type '{name}' in edge reference at line {line}, column {column}")]
+    UnknownEdgeType {
+        name: String,
+        line: usize,
+        column: usize,
+    },
+
     /// Unknown parent type.
     #[error("Unknown parent type '{name}' at line {line}, column {column}")]
     UnknownParentType {
@@ -86,6 +94,14 @@ impl CompileError {
 
     pub fn unknown_parent_type(name: impl Into<String>, span: Span) -> Self {
         Self::UnknownParentType {
+            name: name.into(),
+            line: span.line,
+            column: span.column,
+        }
+    }
+
+    pub fn unknown_edge_type(name: impl Into<String>, span: Span) -> Self {
+        Self::UnknownEdgeType {
             name: name.into(),
             line: span.line,
             column: span.column,

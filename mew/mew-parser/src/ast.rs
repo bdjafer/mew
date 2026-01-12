@@ -439,6 +439,48 @@ pub struct AttrDef {
     pub span: Span,
 }
 
+/// Type reference in ontology definitions.
+/// Can be a simple type name or an edge reference type.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeRef {
+    /// Simple type: String, Int, NodeType, etc.
+    Simple(String),
+    /// Edge reference: edge<causes> or edge<any>
+    EdgeRef {
+        /// The edge type being referenced, or None for edge<any>
+        edge_type: Option<String>,
+        span: Span,
+    },
+}
+
+impl TypeRef {
+    pub fn simple(name: impl Into<String>) -> Self {
+        TypeRef::Simple(name.into())
+    }
+
+    pub fn edge_ref(edge_type: Option<String>, span: Span) -> Self {
+        TypeRef::EdgeRef { edge_type, span }
+    }
+
+    /// Returns true if this is an edge reference type.
+    pub fn is_edge_ref(&self) -> bool {
+        matches!(self, TypeRef::EdgeRef { .. })
+    }
+
+    /// Returns true if this is edge<any>.
+    pub fn is_any_edge_ref(&self) -> bool {
+        matches!(self, TypeRef::EdgeRef { edge_type: None, .. })
+    }
+
+    /// Returns the type name as a string (for simple types or edge type name).
+    pub fn type_name(&self) -> Option<&str> {
+        match self {
+            TypeRef::Simple(name) => Some(name),
+            TypeRef::EdgeRef { edge_type, .. } => edge_type.as_deref(),
+        }
+    }
+}
+
 /// Attribute modifier.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AttrModifier {
@@ -459,7 +501,9 @@ pub enum AttrModifier {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EdgeTypeDef {
     pub name: String,
-    pub params: Vec<(String, String)>,
+    /// Parameters: (param_name, type_ref)
+    /// type_ref can be TypeRef::Simple("NodeType") or TypeRef::EdgeRef { edge_type: Some("causes") }
+    pub params: Vec<(String, TypeRef)>,
     pub attrs: Vec<AttrDef>,
     pub modifiers: Vec<EdgeModifier>,
     pub span: Span,

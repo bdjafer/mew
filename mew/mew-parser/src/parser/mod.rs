@@ -426,4 +426,185 @@ mod tests {
             Ok(_) => panic!("Expected error"),
         }
     }
+
+    // ==================== HIGHER-ORDER EDGE TESTS ====================
+
+    #[test]
+    fn test_parse_higher_order_edge_specific_type() {
+        let input = r#"
+            ontology Test {
+                edge causes(src: Event, dst: Event)
+                edge confidence(about: edge<causes>) {
+                    level: Float
+                }
+            }
+        "#;
+        let defs = parse_ontology(input).unwrap();
+
+        // Should have two edge definitions
+        assert_eq!(defs.len(), 2);
+
+        // Check the confidence edge has edge<causes> parameter
+        match &defs[1] {
+            OntologyDef::Edge(edge_def) => {
+                assert_eq!(edge_def.name, "confidence");
+                assert_eq!(edge_def.params.len(), 1);
+
+                let (param_name, param_type) = &edge_def.params[0];
+                assert_eq!(param_name, "about");
+
+                match param_type {
+                    TypeRef::EdgeRef { edge_type, .. } => {
+                        assert_eq!(edge_type, &Some("causes".to_string()));
+                    }
+                    _ => panic!("Expected EdgeRef type, got {:?}", param_type),
+                }
+            }
+            _ => panic!("Expected Edge definition"),
+        }
+    }
+
+    #[test]
+    fn test_parse_higher_order_edge_any() {
+        let input = r#"
+            ontology Test {
+                edge provenance(about: edge<any>) {
+                    source: String
+                }
+            }
+        "#;
+        let defs = parse_ontology(input).unwrap();
+
+        assert_eq!(defs.len(), 1);
+        match &defs[0] {
+            OntologyDef::Edge(edge_def) => {
+                assert_eq!(edge_def.name, "provenance");
+                assert_eq!(edge_def.params.len(), 1);
+
+                let (param_name, param_type) = &edge_def.params[0];
+                assert_eq!(param_name, "about");
+
+                match param_type {
+                    TypeRef::EdgeRef { edge_type, .. } => {
+                        assert_eq!(edge_type, &None); // edge<any> has no specific type
+                    }
+                    _ => panic!("Expected EdgeRef type, got {:?}", param_type),
+                }
+            }
+            _ => panic!("Expected Edge definition"),
+        }
+    }
+
+    #[test]
+    fn test_parse_mixed_params_node_and_edge_ref() {
+        let input = r#"
+            ontology Test {
+                edge annotates(subject: Person, about: edge<any>) {
+                    note: String
+                }
+            }
+        "#;
+        let defs = parse_ontology(input).unwrap();
+
+        assert_eq!(defs.len(), 1);
+        match &defs[0] {
+            OntologyDef::Edge(edge_def) => {
+                assert_eq!(edge_def.name, "annotates");
+                assert_eq!(edge_def.params.len(), 2);
+
+                // First param: subject: Person (simple type)
+                let (name1, type1) = &edge_def.params[0];
+                assert_eq!(name1, "subject");
+                match type1 {
+                    TypeRef::Simple(name) => assert_eq!(name, "Person"),
+                    _ => panic!("Expected Simple type"),
+                }
+
+                // Second param: about: edge<any>
+                let (name2, type2) = &edge_def.params[1];
+                assert_eq!(name2, "about");
+                match type2 {
+                    TypeRef::EdgeRef { edge_type, .. } => {
+                        assert_eq!(edge_type, &None);
+                    }
+                    _ => panic!("Expected EdgeRef type"),
+                }
+            }
+            _ => panic!("Expected Edge definition"),
+        }
+    }
+
+    #[test]
+    fn test_parse_edge_with_simple_any_type() {
+        // Test backwards compatibility: 'any' as a simple type
+        let input = r#"
+            edge universal(src: any, dst: any)
+        "#;
+        let defs = parse_ontology(input).unwrap();
+
+        assert_eq!(defs.len(), 1);
+        match &defs[0] {
+            OntologyDef::Edge(edge_def) => {
+                assert_eq!(edge_def.params.len(), 2);
+
+                // Both params should be simple 'any' type
+                for (_, param_type) in &edge_def.params {
+                    match param_type {
+                        TypeRef::Simple(name) => assert_eq!(name, "any"),
+                        _ => panic!("Expected Simple(any) type"),
+                    }
+                }
+            }
+            _ => panic!("Expected Edge definition"),
+        }
+    }
+
+    #[test]
+    fn test_parse_standard_edge_unchanged() {
+        // Ensure backwards compatibility with standard edges
+        let input = r#"
+            edge knows(src: Person, dst: Person) [symmetric]
+        "#;
+        let defs = parse_ontology(input).unwrap();
+
+        assert_eq!(defs.len(), 1);
+        match &defs[0] {
+            OntologyDef::Edge(edge_def) => {
+                assert_eq!(edge_def.name, "knows");
+                assert_eq!(edge_def.params.len(), 2);
+
+                for (_, param_type) in &edge_def.params {
+                    match param_type {
+                        TypeRef::Simple(name) => assert_eq!(name, "Person"),
+                        _ => panic!("Expected Simple type"),
+                    }
+                }
+
+                assert!(edge_def
+                    .modifiers
+                    .iter()
+                    .any(|m| matches!(m, EdgeModifier::Symmetric)));
+            }
+            _ => panic!("Expected Edge definition"),
+        }
+    }
+
+    #[test]
+    fn test_type_ref_methods() {
+        // Test TypeRef helper methods
+        let simple = TypeRef::simple("Person");
+        assert!(!simple.is_edge_ref());
+        assert!(!simple.is_any_edge_ref());
+        assert_eq!(simple.type_name(), Some("Person"));
+
+        let edge_ref = TypeRef::edge_ref(Some("causes".to_string()), Span::default());
+        assert!(edge_ref.is_edge_ref());
+        assert!(!edge_ref.is_any_edge_ref());
+        assert_eq!(edge_ref.type_name(), Some("causes"));
+
+        let any_edge_ref = TypeRef::edge_ref(None, Span::default());
+        assert!(any_edge_ref.is_edge_ref());
+        assert!(any_edge_ref.is_any_edge_ref());
+        assert_eq!(any_edge_ref.type_name(), None);
+    }
 }
