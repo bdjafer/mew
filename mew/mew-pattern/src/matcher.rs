@@ -154,12 +154,11 @@ impl<'r, 'g> Matcher<'r, 'g> {
                             // Check all targets match
                             let mut all_match = true;
                             for (i, &expected_id) in target_ids.iter().enumerate() {
-                                if i < edge.targets.len() {
-                                    if edge.targets[i].as_node() != Some(expected_id) {
+                                if i < edge.targets.len()
+                                    && edge.targets[i].as_node() != Some(expected_id) {
                                         all_match = false;
                                         break;
                                     }
-                                }
                             }
                             if all_match {
                                 return Ok(vec![bindings.clone()]);

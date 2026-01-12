@@ -90,8 +90,8 @@ impl Compiler {
 
                     // Validate that the type exists
                     // Handle edge-only patterns (edge:EdgeTypeName)
-                    if primary_type.starts_with("edge:") {
-                        let edge_name = &primary_type[5..]; // Skip "edge:" prefix
+                    if let Some(edge_name) = primary_type.strip_prefix("edge:") {
+                        // Skip "edge:" prefix
                         if !self.edge_type_names.contains(edge_name) {
                             return Err(CompileError::unknown_type(&primary_type, c.span));
                         }
@@ -119,8 +119,8 @@ impl Compiler {
 
                     // Validate that the type exists
                     // Handle edge-only patterns (edge:EdgeTypeName)
-                    if primary_type.starts_with("edge:") {
-                        let edge_name = &primary_type[5..]; // Skip "edge:" prefix
+                    if let Some(edge_name) = primary_type.strip_prefix("edge:") {
+                        // Skip "edge:" prefix
                         if !self.edge_type_names.contains(edge_name) {
                             return Err(CompileError::unknown_type(&primary_type, r.span));
                         }

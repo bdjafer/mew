@@ -1,0 +1,5 @@
+- separate control plane vs data plane
+- maybe separate attributes (metadata) from nodes/edges data
+- able to host separately the data, even remotely
+- attributes that needs to be queries on, must live in the graph
+- used to store large amount of data

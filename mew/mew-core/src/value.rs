@@ -154,6 +154,48 @@ impl Value {
             Value::EdgeRef(_) => "EdgeRef",
         }
     }
+
+    /// Compare values for sorting. Null is treated as less than any other value.
+    /// Values of different types return Equal (stable sort behavior).
+    pub fn cmp_sortable(&self, other: &Value) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match (self, other) {
+            (Value::Null, Value::Null) => Ordering::Equal,
+            (Value::Null, _) => Ordering::Less,
+            (_, Value::Null) => Ordering::Greater,
+            (Value::Int(a), Value::Int(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+            (Value::String(a), Value::String(b)) => a.cmp(b),
+            (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+            (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
+            (Value::Duration(a), Value::Duration(b)) => a.cmp(b),
+            _ => Ordering::Equal,
+        }
+    }
+
+    /// Check if this value is greater than or equal to another (for numeric comparisons).
+    /// Returns true for non-comparable types.
+    pub fn gte(&self, other: &Value) -> bool {
+        match (self, other) {
+            (Value::Int(v), Value::Int(m)) => *v >= *m,
+            (Value::Float(v), Value::Float(m)) => *v >= *m,
+            (Value::Int(v), Value::Float(m)) => (*v as f64) >= *m,
+            (Value::Float(v), Value::Int(m)) => *v >= (*m as f64),
+            _ => true,
+        }
+    }
+
+    /// Check if this value is less than or equal to another (for numeric comparisons).
+    /// Returns true for non-comparable types.
+    pub fn lte(&self, other: &Value) -> bool {
+        match (self, other) {
+            (Value::Int(v), Value::Int(m)) => *v <= *m,
+            (Value::Float(v), Value::Float(m)) => *v <= *m,
+            (Value::Int(v), Value::Float(m)) => (*v as f64) <= *m,
+            (Value::Float(v), Value::Int(m)) => *v <= (*m as f64),
+            _ => true,
+        }
+    }
 }
 
 impl fmt::Display for Value {

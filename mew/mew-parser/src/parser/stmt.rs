@@ -27,6 +27,7 @@ impl Parser {
             TokenKind::Unlink => self.parse_unlink().map(Stmt::Unlink),
             TokenKind::Set => self.parse_set().map(Stmt::Set),
             TokenKind::Walk => self.parse_walk().map(Stmt::Walk),
+            TokenKind::Inspect => self.parse_inspect().map(Stmt::Inspect),
             TokenKind::Begin => {
                 let _span = self.advance().span;
                 let isolation = if self.check(&TokenKind::Read) {
@@ -560,5 +561,48 @@ impl Parser {
             let projections = self.parse_projections()?;
             Ok(WalkReturnType::Projections(projections))
         }
+    }
+
+    // ==================== INSPECT ====================
+
+    fn parse_inspect(&mut self) -> ParseResult<InspectStmt> {
+        let start = self.expect(&TokenKind::Inspect)?.span;
+
+        // Expect #id (can be identifier or integer)
+        self.expect(&TokenKind::Hash)?;
+        let id = match self.peek().kind.clone() {
+            TokenKind::Ident(name) => {
+                self.advance();
+                name
+            }
+            TokenKind::Int(n) => {
+                self.advance();
+                n.to_string()
+            }
+            _ => {
+                let token = self.peek();
+                return Err(crate::ParseError::unexpected_token(
+                    token.span,
+                    "identifier or integer",
+                    token.kind.name(),
+                ));
+            }
+        };
+
+        // Optional RETURN projections
+        let projections = if self.check(&TokenKind::Return) {
+            self.advance();
+            Some(self.parse_projections()?)
+        } else {
+            None
+        };
+
+        let span = self.span_from(start);
+
+        Ok(InspectStmt {
+            id,
+            projections,
+            span,
+        })
     }
 }

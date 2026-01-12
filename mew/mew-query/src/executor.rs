@@ -2,7 +2,7 @@
 
 use mew_core::Value;
 use mew_graph::Graph;
-use mew_parser::MatchStmt;
+use mew_parser::{MatchStmt, WalkStmt};
 use mew_pattern::{Bindings, Evaluator, Matcher};
 use mew_registry::Registry;
 
@@ -36,6 +36,16 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
         // Plan the query
         let planner = QueryPlanner::new(self.registry);
         let plan = planner.plan_match(stmt)?;
+
+        // Execute the plan
+        self.execute_plan(&plan, None)
+    }
+
+    /// Execute a WALK statement.
+    pub fn execute_walk(&self, stmt: &WalkStmt) -> QueryResult<QueryResults> {
+        // Plan the walk
+        let planner = QueryPlanner::new(self.registry);
+        let plan = planner.plan_walk(stmt)?;
 
         // Execute the plan
         self.execute_plan(&plan, None)
@@ -205,12 +215,11 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                                 for (i, var) in from_vars.iter().enumerate() {
                                     if let Some(binding) = bindings.get(var) {
                                         if let Some(expected_id) = binding.as_node() {
-                                            if i < edge.targets.len() {
-                                                if edge.targets[i].as_node() != Some(expected_id) {
+                                            if i < edge.targets.len()
+                                                && edge.targets[i].as_node() != Some(expected_id) {
                                                     all_match = false;
                                                     break;
                                                 }
-                                            }
                                         }
                                     }
                                 }
@@ -267,19 +276,11 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 let mut results = self.execute_op(input, initial_bindings)?;
 
                 // Sort by the order expressions
-                results.sort_by(|(a_bindings, a_values), (b_bindings, b_values)| {
+                results.sort_by(|(a_bindings, _a_values), (b_bindings, _b_values)| {
                     for (expr, ascending) in order_by {
                         // Evaluate the expression for both rows
-                        let a_val = if !a_values.is_empty() {
-                            self.evaluator.eval(expr, a_bindings, self.graph).ok()
-                        } else {
-                            self.evaluator.eval(expr, a_bindings, self.graph).ok()
-                        };
-                        let b_val = if !b_values.is_empty() {
-                            self.evaluator.eval(expr, b_bindings, self.graph).ok()
-                        } else {
-                            self.evaluator.eval(expr, b_bindings, self.graph).ok()
-                        };
+                        let a_val = self.evaluator.eval(expr, a_bindings, self.graph).ok();
+                        let b_val = self.evaluator.eval(expr, b_bindings, self.graph).ok();
 
                         let cmp = self.compare_values(&a_val, &b_val);
                         if cmp != std::cmp::Ordering::Equal {
@@ -383,9 +384,115 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 Ok(results)
             }
 
-            PlanOp::TransitiveClosure { .. } => {
-                // TODO: Implement transitive closure for WALK
-                Ok(Vec::new())
+            PlanOp::TransitiveClosure {
+                start_var: _,
+                start_expr,
+                edge_types,
+                min_depth,
+                max_depth,
+                direction,
+            } => {
+                // Evaluate the start expression to get the starting node(s)
+                let init_bindings = initial_bindings.cloned().unwrap_or_default();
+                let start_value = self.evaluator.eval(start_expr, &init_bindings, self.graph)?;
+
+                // Get the starting node ID
+                let start_node = match &start_value {
+                    Value::NodeRef(id) => Some(*id),
+                    _ => None,
+                };
+
+                let Some(start_id) = start_node else {
+                    return Ok(Vec::new());
+                };
+
+                // BFS traversal with depth tracking
+                let mut results = Vec::new();
+                let mut visited = std::collections::HashSet::new();
+                let mut frontier: std::collections::VecDeque<(mew_core::NodeId, i64, Vec<mew_core::EntityId>)> =
+                    std::collections::VecDeque::new();
+
+                // Start with (node_id, depth, path)
+                frontier.push_back((start_id, 0, vec![start_id.into()]));
+
+                let max_d = max_depth.unwrap_or(100); // Default max depth
+
+                while let Some((current_id, depth, path)) = frontier.pop_front() {
+                    // Skip if already visited (cycle prevention) - check BEFORE yielding
+                    if !visited.insert(current_id) {
+                        continue;
+                    }
+
+                    // Check if we should yield this node
+                    if depth >= *min_depth && depth <= max_d {
+
+                        let mut bindings = init_bindings.clone();
+                        // Use "node" as the output variable to avoid overwriting the input "start" binding
+                        bindings.insert("node", mew_pattern::Binding::Node(current_id));
+
+                        // Add path as a value (list of node refs)
+                        let path_values: Vec<Value> = path.iter().map(|id| {
+                            match id {
+                                mew_core::EntityId::Node(n) => Value::NodeRef(*n),
+                                mew_core::EntityId::Edge(e) => Value::EdgeRef(*e),
+                            }
+                        }).collect();
+
+                        // Output: node (the current node), path (the path taken)
+                        results.push((bindings, vec![
+                            Value::NodeRef(current_id),
+                            Value::String(format!("{:?}", path_values)),
+                        ]));
+                    }
+
+                    // Stop expanding if at max depth
+                    if depth >= max_d {
+                        continue;
+                    }
+
+                    // Expand frontier by following edges
+                    for edge_type_id in edge_types {
+                        // Outbound edges
+                        if matches!(direction, crate::plan::WalkDirection::Outbound | crate::plan::WalkDirection::Both) {
+                            for edge_id in self.graph.edges_from(current_id, Some(*edge_type_id)) {
+                                if let Some(edge) = self.graph.get_edge(edge_id) {
+                                    // Get the target node (position 1 for binary edges)
+                                    if edge.targets.len() > 1 {
+                                        if let Some(target_id) = edge.targets[1].as_node() {
+                                            if !visited.contains(&target_id) {
+                                                let mut new_path = path.clone();
+                                                new_path.push(edge_id.into());
+                                                new_path.push(target_id.into());
+                                                frontier.push_back((target_id, depth + 1, new_path));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Inbound edges
+                        if matches!(direction, crate::plan::WalkDirection::Inbound | crate::plan::WalkDirection::Both) {
+                            for edge_id in self.graph.edges_to(current_id, Some(*edge_type_id)) {
+                                if let Some(edge) = self.graph.get_edge(edge_id) {
+                                    // Get the source node (position 0 for binary edges)
+                                    if !edge.targets.is_empty() {
+                                        if let Some(source_id) = edge.targets[0].as_node() {
+                                            if !visited.contains(&source_id) {
+                                                let mut new_path = path.clone();
+                                                new_path.push(edge_id.into());
+                                                new_path.push(source_id.into());
+                                                frontier.push_back((source_id, depth + 1, new_path));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Ok(results)
             }
 
             PlanOp::Empty => {
@@ -409,18 +516,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
     }
 
     fn compare_values_inner(&self, a: &Value, b: &Value) -> std::cmp::Ordering {
-        match (a, b) {
-            (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
-            (Value::Null, _) => std::cmp::Ordering::Less,
-            (_, Value::Null) => std::cmp::Ordering::Greater,
-            (Value::Int(a), Value::Int(b)) => a.cmp(b),
-            (Value::Float(a), Value::Float(b)) => {
-                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-            }
-            (Value::String(a), Value::String(b)) => a.cmp(b),
-            (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
-            _ => std::cmp::Ordering::Equal,
-        }
+        a.cmp_sortable(b)
     }
 
     /// Check if two values are equal.
@@ -764,5 +860,153 @@ mod tests {
         assert_eq!(titles[0], Value::String("A".to_string()));
         assert_eq!(titles[1], Value::String("B".to_string()));
         assert_eq!(titles[2], Value::String("C".to_string()));
+    }
+
+    // ==================== WALK TESTS ====================
+
+    fn walk_test_registry() -> Registry {
+        let mut builder = RegistryBuilder::new();
+        builder
+            .add_type("Person")
+            .attr(AttrDef::new("name", "String"))
+            .done()
+            .unwrap();
+        builder
+            .add_edge_type("knows")
+            .param("from", "Person")
+            .param("to", "Person")
+            .done()
+            .unwrap();
+        builder.build().unwrap()
+    }
+
+    #[test]
+    fn test_execute_walk_simple_chain() {
+        // GIVEN - A -> B -> C chain
+        let registry = walk_test_registry();
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+        let knows_type_id = registry.get_edge_type_id("knows").unwrap();
+
+        let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+        let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+        let carol = graph.create_node(person_type_id, attrs! { "name" => "Carol" });
+
+        graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {});
+        graph.create_edge(knows_type_id, vec![bob.into(), carol.into()], attrs! {});
+
+        let executor = QueryExecutor::new(&registry, &graph);
+
+        // WALK FROM #alice FOLLOW knows RETURN PATH
+        let stmt = WalkStmt {
+            from: mew_parser::Expr::Var("start".to_string(), Span::default()),
+            follow: vec![mew_parser::FollowClause {
+                edge_types: vec!["knows".to_string()],
+                direction: mew_parser::WalkDirection::Outbound,
+                min_depth: Some(1),
+                max_depth: Some(3),
+                span: Span::default(),
+            }],
+            until: None,
+            return_type: mew_parser::WalkReturnType::Path,
+            span: Span::default(),
+        };
+
+        // Create initial bindings with start node
+        let mut initial = Bindings::new();
+        initial.insert("start", mew_pattern::Binding::Node(alice));
+
+        let planner = crate::plan::QueryPlanner::new(&registry);
+        let plan = planner.plan_walk(&stmt).unwrap();
+
+        // WHEN
+        let results = executor.execute_plan(&plan, Some(&initial)).unwrap();
+
+        // THEN - should find Bob (depth 1) and Carol (depth 2)
+        assert!(results.len() >= 2, "Expected at least 2 results, got {}", results.len());
+    }
+
+    #[test]
+    fn test_execute_walk_no_edges() {
+        // GIVEN - isolated node
+        let registry = walk_test_registry();
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+
+        let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+
+        let executor = QueryExecutor::new(&registry, &graph);
+
+        // WALK FROM #alice FOLLOW knows RETURN PATH
+        let stmt = WalkStmt {
+            from: mew_parser::Expr::Var("start".to_string(), Span::default()),
+            follow: vec![mew_parser::FollowClause {
+                edge_types: vec!["knows".to_string()],
+                direction: mew_parser::WalkDirection::Outbound,
+                min_depth: Some(1),
+                max_depth: Some(3),
+                span: Span::default(),
+            }],
+            until: None,
+            return_type: mew_parser::WalkReturnType::Path,
+            span: Span::default(),
+        };
+
+        let mut initial = Bindings::new();
+        initial.insert("start", mew_pattern::Binding::Node(alice));
+
+        let planner = crate::plan::QueryPlanner::new(&registry);
+        let plan = planner.plan_walk(&stmt).unwrap();
+
+        // WHEN
+        let results = executor.execute_plan(&plan, Some(&initial)).unwrap();
+
+        // THEN - no paths found (min_depth is 1)
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_execute_walk_with_cycle() {
+        // GIVEN - A -> B -> A cycle
+        let registry = walk_test_registry();
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+        let knows_type_id = registry.get_edge_type_id("knows").unwrap();
+
+        let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+        let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+
+        graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {});
+        graph.create_edge(knows_type_id, vec![bob.into(), alice.into()], attrs! {});
+
+        let executor = QueryExecutor::new(&registry, &graph);
+
+        // WALK FROM #alice FOLLOW knows RETURN PATH
+        let stmt = WalkStmt {
+            from: mew_parser::Expr::Var("start".to_string(), Span::default()),
+            follow: vec![mew_parser::FollowClause {
+                edge_types: vec!["knows".to_string()],
+                direction: mew_parser::WalkDirection::Outbound,
+                min_depth: Some(1),
+                max_depth: Some(10), // Should not infinite loop
+                span: Span::default(),
+            }],
+            until: None,
+            return_type: mew_parser::WalkReturnType::Path,
+            span: Span::default(),
+        };
+
+        let mut initial = Bindings::new();
+        initial.insert("start", mew_pattern::Binding::Node(alice));
+
+        let planner = crate::plan::QueryPlanner::new(&registry);
+        let plan = planner.plan_walk(&stmt).unwrap();
+
+        // WHEN
+        let results = executor.execute_plan(&plan, Some(&initial)).unwrap();
+
+        // THEN - should terminate and find Bob (cycle detection prevents revisiting)
+        assert!(results.len() >= 1, "Expected at least 1 result, got {}", results.len());
+        assert!(results.len() <= 2, "Expected at most 2 results (cycle should be cut), got {}", results.len());
     }
 }

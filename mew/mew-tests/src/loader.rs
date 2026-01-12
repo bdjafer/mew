@@ -30,7 +30,7 @@ impl Operations {
             let trimmed = line.trim();
 
             // Check for step marker
-            if trimmed.starts_with("--#") {
+            if let Some(suffix) = trimmed.strip_prefix("--#") {
                 // Save previous step if any
                 if let Some(ref step_name) = current_step {
                     let content = current_content.trim().to_string();
@@ -40,7 +40,7 @@ impl Operations {
                 }
 
                 // Start new step
-                let step_name = trimmed[3..].trim().to_string();
+                let step_name = suffix.trim().to_string();
                 if step_name.is_empty() {
                     return Err(ExampleError::operations_parse(
                         "<inline>",

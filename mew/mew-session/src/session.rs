@@ -3,7 +3,7 @@
 use mew_core::{EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{parse_stmt, MatchStmt, Stmt, TargetRef, TxnStmt};
+use mew_parser::{parse_stmt, InspectStmt, MatchStmt, Stmt, TargetRef, TxnStmt, WalkStmt};
 use mew_pattern::Bindings;
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -132,9 +132,14 @@ impl<'r> Session<'r> {
                 Ok(StatementResult::Mutation(result))
             }
 
-            Stmt::Walk(_) => {
-                // Walk statements for traversal
-                Ok(StatementResult::Empty)
+            Stmt::Walk(walk_stmt) => {
+                let result = self.execute_walk(walk_stmt)?;
+                Ok(StatementResult::Query(result))
+            }
+
+            Stmt::Inspect(inspect_stmt) => {
+                let result = self.execute_inspect(inspect_stmt)?;
+                Ok(StatementResult::Query(result))
             }
 
             Stmt::Txn(txn_stmt) => self.execute_txn(txn_stmt),
@@ -145,6 +150,27 @@ impl<'r> Session<'r> {
     fn execute_match(&self, stmt: &MatchStmt) -> SessionResult<QueryResult> {
         let executor = QueryExecutor::new(self.registry, &self.graph);
         let result = executor.execute_match(stmt)?;
+
+        // Convert to QueryResult
+        let columns: Vec<String> = result.column_names().to_vec();
+        let types = vec!["any".to_string(); columns.len()]; // Simplified
+
+        let mut rows = Vec::new();
+        for row in result.rows() {
+            let mut values = Vec::with_capacity(columns.len());
+            for col in &columns {
+                values.push(row.get_by_name(col).cloned().unwrap_or(Value::Null));
+            }
+            rows.push(values);
+        }
+
+        Ok(QueryResult::new(columns, types, rows))
+    }
+
+    /// Execute a WALK statement.
+    fn execute_walk(&self, stmt: &WalkStmt) -> SessionResult<QueryResult> {
+        let executor = QueryExecutor::new(self.registry, &self.graph);
+        let result = executor.execute_walk(stmt)?;
 
         // Convert to QueryResult
         let columns: Vec<String> = result.column_names().iter().cloned().collect();
@@ -160,6 +186,94 @@ impl<'r> Session<'r> {
         }
 
         Ok(QueryResult::new(columns, types, rows))
+    }
+
+    /// Execute an INSPECT statement.
+    fn execute_inspect(&self, stmt: &InspectStmt) -> SessionResult<QueryResult> {
+        use mew_core::NodeId;
+
+        // Try to parse the ID as a node ID (format: "node_N" or just a number)
+        let id_str = &stmt.id;
+        let node_id = if let Some(num_str) = id_str.strip_prefix("node_") {
+            num_str.parse::<u64>().ok().map(NodeId::new)
+        } else {
+            id_str.parse::<u64>().ok().map(NodeId::new)
+        };
+
+        // Try to look up as node first
+        if let Some(nid) = node_id {
+            if let Some(node) = self.graph.get_node(nid) {
+                // Get the type name from registry
+                let type_name = self
+                    .registry
+                    .get_type(node.type_id)
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                // Build columns based on projections or all attributes
+                let (columns, values): (Vec<String>, Vec<Value>) =
+                    if let Some(ref projections) = stmt.projections {
+                        let mut cols = Vec::new();
+                        let mut vals = Vec::new();
+                        for proj in projections {
+                            let col_name = proj.alias.clone().unwrap_or_else(|| {
+                                if let mew_parser::Expr::Var(name, _) = &proj.expr {
+                                    name.clone()
+                                } else if let mew_parser::Expr::AttrAccess(_, attr, _) = &proj.expr {
+                                    attr.clone()
+                                } else {
+                                    "?".to_string()
+                                }
+                            });
+
+                            // Handle special columns
+                            let value = match col_name.as_str() {
+                                "_type" => Value::String(type_name.clone()),
+                                "_id" => Value::NodeRef(nid),
+                                "*" => {
+                                    // Return all attributes
+                                    for (attr_name, attr_val) in node.attributes.iter() {
+                                        cols.push(attr_name.clone());
+                                        vals.push(attr_val.clone());
+                                    }
+                                    continue;
+                                }
+                                attr => node
+                                    .get_attr(attr)
+                                    .cloned()
+                                    .unwrap_or(Value::Null),
+                            };
+
+                            cols.push(col_name);
+                            vals.push(value);
+                        }
+                        (cols, vals)
+                    } else {
+                        // Default: return all attributes plus _type and _id
+                        let mut cols = vec!["_type".to_string(), "_id".to_string()];
+                        let mut vals: Vec<Value> = vec![
+                            Value::String(type_name),
+                            Value::NodeRef(nid),
+                        ];
+
+                        for (attr_name, attr_val) in node.attributes.iter() {
+                            cols.push(attr_name.clone());
+                            vals.push(attr_val.clone());
+                        }
+
+                        (cols, vals)
+                    };
+
+                let types = vec!["any".to_string(); columns.len()];
+                return Ok(QueryResult::new(columns, types, vec![values]));
+            }
+        }
+
+        // Entity not found - return empty result with found=false
+        let columns = vec!["found".to_string()];
+        let types = vec!["bool".to_string()];
+        let values = vec![Value::Bool(false)];
+        Ok(QueryResult::new(columns, types, vec![values]))
     }
 
     /// Execute a SPAWN statement.
@@ -617,5 +731,61 @@ mod tests {
         // Note: In a true shared database, session B would now see the data
         // Our current implementation uses separate graphs per session
         // This test verifies the isolation mechanism works
+    }
+
+    // ========== INSPECT Tests ==========
+
+    #[test]
+    fn test_inspect_existing_node() {
+        // GIVEN a session with a task
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // Create a task
+        let _ = session.execute("SPAWN t: Task { title = \"Test Task\" }").unwrap();
+
+        // WHEN inspecting the node by ID
+        let result = session.execute("INSPECT #1");
+
+        // THEN we get the node data
+        if let Err(ref e) = result {
+            eprintln!("INSPECT failed: {:?}", e);
+        }
+        assert!(result.is_ok(), "INSPECT failed: {:?}", result.err());
+        match result.unwrap() {
+            StatementResult::Query(q) => {
+                assert!(q.columns.contains(&"_type".to_string()));
+                assert!(q.columns.contains(&"_id".to_string()));
+                // Should have at least one row
+                assert!(!q.rows.is_empty());
+            }
+            _ => panic!("Expected query result"),
+        }
+    }
+
+    #[test]
+    fn test_inspect_nonexistent_node() {
+        // GIVEN a session
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // WHEN inspecting a nonexistent node
+        let result = session.execute("INSPECT #999");
+
+        // THEN we get found=false
+        if let Err(ref e) = result {
+            eprintln!("INSPECT failed: {:?}", e);
+        }
+        assert!(result.is_ok(), "INSPECT failed: {:?}", result.err());
+        match result.unwrap() {
+            StatementResult::Query(q) => {
+                assert!(q.columns.contains(&"found".to_string()));
+                // First row should have found=false
+                if let Some(row) = q.rows.first() {
+                    assert_eq!(row[0], Value::Bool(false));
+                }
+            }
+            _ => panic!("Expected query result"),
+        }
     }
 }

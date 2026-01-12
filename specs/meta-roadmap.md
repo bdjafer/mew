@@ -352,11 +352,13 @@ When documents conflict, higher wins:
 ```
 Philosophy (CONTEXT.md, core principles)
     ↓
-Architecture (implementation/architecture.md)
+Specification (specs/specification/*.md)
     ↓
-Component Specs (implementation/components/*.md)
+Architecture (specs/architecture.md)
     ↓
-Test Specs (implementation/tests/*.md)
+Component Specs (specs/components/*.md)
+    ↓
+Test Specs (specs/tests/*.md)
     ↓
 Implementation (mew/**/src/)
 ```
@@ -406,10 +408,7 @@ After interruption, to resume:
 2. Check: git status / git log
    → What was in progress?
 
-3. Read: implementation/tests/*.md
-   → What tests exist vs should exist?
-
-4. Apply: Section 3 (Behavior Selection)
+3. Apply: Section 3 (Behavior Selection)
    → Resume appropriate behavior
 ```
 

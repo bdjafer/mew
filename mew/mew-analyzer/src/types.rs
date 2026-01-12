@@ -70,16 +70,18 @@ impl Type {
 
     /// Check if this type can be ordered (compared with <, >, etc).
     pub fn can_order(&self, other: &Type) -> bool {
-        match (self, other) {
-            (Type::Int, Type::Int) => true,
-            (Type::Float, Type::Float) => true,
-            (Type::Int, Type::Float) | (Type::Float, Type::Int) => true,
-            (Type::String, Type::String) => true,
-            (Type::Timestamp, Type::Timestamp) => true,
-            (Type::Duration, Type::Duration) => true,
-            (Type::Any, _) | (_, Type::Any) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (Type::Int, Type::Int)
+                | (Type::Float, Type::Float)
+                | (Type::Int, Type::Float)
+                | (Type::Float, Type::Int)
+                | (Type::String, Type::String)
+                | (Type::Timestamp, Type::Timestamp)
+                | (Type::Duration, Type::Duration)
+                | (Type::Any, _)
+                | (_, Type::Any)
+        )
     }
 
     /// Get the result type of a binary operation.

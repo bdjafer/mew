@@ -37,6 +37,7 @@ impl<'r> Analyzer<'r> {
             Stmt::Unlink(u) => self.analyze_unlink(u),
             Stmt::Set(s) => self.analyze_set(s),
             Stmt::Walk(w) => self.analyze_walk(w),
+            Stmt::Inspect(_) => Ok(Type::Any), // INSPECT returns entity data
             Stmt::Txn(_) => Ok(Type::Null), // Txn statements don't produce a value
         }
     }
