@@ -427,6 +427,11 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 let max_d = max_depth.unwrap_or(100); // Default max depth
 
                 while let Some((current_id, depth, path)) = frontier.pop_front() {
+                    // Skip if already visited (cycle prevention) - check BEFORE yielding
+                    if !visited.insert(current_id) {
+                        continue;
+                    }
+
                     // Check if we should yield this node
                     if depth >= *min_depth && depth <= max_d {
 
@@ -451,11 +456,6 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
 
                     // Stop expanding if at max depth
                     if depth >= max_d {
-                        continue;
-                    }
-
-                    // Skip if already visited at a lower depth (cycle prevention)
-                    if !visited.insert(current_id) {
                         continue;
                     }
 
