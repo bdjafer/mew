@@ -26,7 +26,6 @@ pub enum TransactionState {
 /// A savepoint within a transaction.
 #[derive(Debug, Clone)]
 struct Savepoint {
-    name: String,
     buffer: TransactionBuffer,
 }
 
@@ -169,7 +168,6 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
         self.savepoints.insert(
             name.to_string(),
             Savepoint {
-                name: name.to_string(),
                 buffer: self.buffer.savepoint(),
             },
         );

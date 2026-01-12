@@ -12,8 +12,10 @@ use crate::QueryResult;
 
 /// Query executor.
 pub struct QueryExecutor<'r, 'g> {
+    #[allow(dead_code)]
     registry: &'r Registry,
     graph: &'g Graph,
+    #[allow(dead_code)]
     matcher: Matcher<'r, 'g>,
     evaluator: Evaluator<'r, 'g>,
 }

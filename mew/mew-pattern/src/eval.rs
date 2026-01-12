@@ -8,6 +8,7 @@ use mew_registry::Registry;
 
 /// Expression evaluator.
 pub struct Evaluator<'r, 'g> {
+    #[allow(dead_code)]
     registry: &'r Registry,
     graph: &'g Graph,
 }

@@ -7,6 +7,7 @@ use mew_registry::Registry;
 
 /// Pattern matcher that finds all matches in a graph.
 pub struct Matcher<'r, 'g> {
+    #[allow(dead_code)]
     registry: &'r Registry,
     graph: &'g Graph,
     evaluator: Evaluator<'r, 'g>,
