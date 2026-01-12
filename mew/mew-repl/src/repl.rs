@@ -16,8 +16,8 @@ use crate::block::{
     should_continue_parse,
 };
 use crate::executor::{
-    execute_kill, execute_link, execute_match, execute_set, execute_spawn, execute_txn,
-    execute_unlink,
+    execute_inspect, execute_kill, execute_link, execute_match, execute_set, execute_spawn,
+    execute_txn, execute_unlink, execute_walk,
 };
 use crate::format::print_help;
 
@@ -146,7 +146,12 @@ impl Repl {
                 execute_set(&self.registry, &mut self.graph, &self.bindings, set_stmt)
             }
             Stmt::Txn(ref txn_stmt) => execute_txn(&mut self.in_transaction, txn_stmt),
-            Stmt::Walk(_) => Ok("WALK not yet implemented".to_string()),
+            Stmt::Walk(ref walk_stmt) => {
+                execute_walk(&self.registry, &self.graph, &self.bindings, walk_stmt)
+            }
+            Stmt::Inspect(ref inspect_stmt) => {
+                execute_inspect(&self.registry, &self.graph, inspect_stmt)
+            }
         }
     }
 
