@@ -15,7 +15,7 @@ pub struct ConstraintChecker<'r, 'g> {
     #[allow(dead_code)]
     matcher: Matcher<'r, 'g>,
     #[allow(dead_code)]
-    evaluator: Evaluator<'r, 'g>,
+    evaluator: Evaluator<'r>,
 }
 
 impl<'r, 'g> ConstraintChecker<'r, 'g> {
@@ -25,7 +25,7 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
             registry,
             graph,
             matcher: Matcher::new(registry, graph),
-            evaluator: Evaluator::new(registry, graph),
+            evaluator: Evaluator::new(registry),
         }
     }
 

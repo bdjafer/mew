@@ -10,7 +10,7 @@ pub struct Matcher<'r, 'g> {
     #[allow(dead_code)]
     registry: &'r Registry,
     graph: &'g Graph,
-    evaluator: Evaluator<'r, 'g>,
+    evaluator: Evaluator<'r>,
 }
 
 impl<'r, 'g> Matcher<'r, 'g> {
@@ -19,7 +19,7 @@ impl<'r, 'g> Matcher<'r, 'g> {
         Self {
             registry,
             graph,
-            evaluator: Evaluator::new(registry, graph),
+            evaluator: Evaluator::new(registry),
         }
     }
 
@@ -168,7 +168,7 @@ impl<'r, 'g> Matcher<'r, 'g> {
 
             PatternOp::Filter { condition } => {
                 // Evaluate the filter condition
-                let result = self.evaluator.eval_bool(condition, bindings)?;
+                let result = self.evaluator.eval_bool(condition, bindings, self.graph)?;
 
                 if result {
                     Ok(vec![bindings.clone()])
