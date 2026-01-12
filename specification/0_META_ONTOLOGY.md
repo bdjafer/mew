@@ -1541,8 +1541,8 @@ _NodeType, _EdgeType, _AttributeDef, _ConstraintDef, _RuleDef,
 _PatternDef, _VarDef, _EdgePattern, _ProductionDef, _Action,
 _SpawnAction, _LinkAction, _KillAction, _UnlinkAction, _SetAction,
 _Expr, _LiteralExpr, _VarRefExpr, _AttrAccessExpr, _BinaryOpExpr,
-_UnaryOpExpr, _ExistsExpr, _IfExpr, _CaseExpr, _WhenClause, _CoalesceExpr,
-_ListExpr, _TypeExpr, _NamedTypeExpr, _OptionalTypeExpr, _UnionTypeExpr,
+_UnaryOpExpr, _ExistsExpr, _CoalesceExpr, _ListExpr,
+_TypeExpr, _NamedTypeExpr, _OptionalTypeExpr, _UnionTypeExpr,
 _EdgeRefTypeExpr, _AnyTypeExpr, _ScalarTypeExpr, _Ontology, _Import
 ```
 
