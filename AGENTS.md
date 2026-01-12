@@ -64,7 +64,7 @@ find mew -name "*.rs" -type f 2>/dev/null | wc -l
 cd mew && cargo check --workspace 2>&1 | tail -20
 
 # 4. What passes?
-cd mew && cargo test --workspace 2>&1 | grep -E "test result|FAILED"
+./test.sh quick 2>&1 | tail -30
 
 # 5. Recent context
 git log --oneline -5
@@ -91,8 +91,14 @@ Reference: `implementation/meta-roadmap.md` section 3.
 ## Progress Measurement
 
 ```bash
-# Count passing tests
-cargo test --workspace 2>&1 | grep "test result"
+# Run all tests and see summary
+./test.sh
+
+# Quick check (unit + integration)
+./test.sh quick
+
+# Count passing tests (direct cargo)
+cd mew && cargo test --workspace 2>&1 | grep "test result"
 
 # Progress = passing / 158
 ```
@@ -223,13 +229,13 @@ Before claiming done:
 
 ```bash
 # 1. All tests pass
-cargo test --workspace  # Must be 158/158
+./test.sh  # Must show all pass
 
 # 2. Terminal session works
 # Run the session from meta-roadmap.md section 1
 
 # 3. Ontologies load
-# Start REPL, load each ontology from ontologies/
+# Start REPL, load each ontology from examples/
 
 # 4. Crash recovery works
 # Start transaction, kill -9, restart, verify recovery

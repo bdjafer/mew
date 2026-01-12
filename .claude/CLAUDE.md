@@ -59,20 +59,66 @@ Shared types go in `mew-core` (create if needed).
 # Build
 cd mew && cargo build --workspace
 
-# Test everything  
-cd mew && cargo test --workspace
-
-# Test single component
-cd mew && cargo test -p mew-graph
-
-# Test with output
-cd mew && cargo test -p mew-graph -- --nocapture
-
 # Format
 cd mew && cargo fmt --all
 
 # Lint
 cd mew && cargo clippy --workspace
+```
+
+---
+
+## Testing
+
+Use the unified test runner `test.sh` at the project root:
+
+```bash
+# Run ALL tests (unit + integration + testgen)
+./test.sh
+
+# Run only unit tests
+./test.sh unit
+
+# Run only integration tests (scenarios from examples/)
+./test.sh integration
+
+# Run only generated tests
+./test.sh testgen
+
+# Quick check (unit + integration, skip testgen)
+./test.sh quick
+
+# Test specific package
+./test.sh unit -p mew-graph
+
+# Verbose output
+./test.sh unit -v
+
+# Testgen for specific level or ontology (executes by default)
+./test.sh testgen --level 1
+./test.sh testgen --ontology contacts
+
+# Generate tests only (skip execution)
+./test.sh testgen --no-execute
+
+# Show help
+./test.sh --help
+```
+
+**Test types:**
+
+| Type | What it tests | Crates |
+|------|---------------|--------|
+| `unit` | Individual component logic | All 17 crates via cargo test |
+| `integration` | Full workflows with ontologies | `mew-tests` scenarios |
+| `testgen` | Auto-generated from schemas | `mew-testgen` oracle verification |
+
+**Direct cargo commands (if needed):**
+
+```bash
+cd mew && cargo test --workspace           # All unit tests
+cd mew && cargo test -p mew-graph          # Single component
+cd mew && cargo test -p mew-graph -- --nocapture  # With output
 ```
 
 ---
@@ -135,7 +181,7 @@ Test names correspond to acceptance tests in `implementation/tests/*.md`.
 
 **Done when ALL true:**
 
-1. All 158 acceptance tests pass (`cargo test --workspace`)
+1. All 158 acceptance tests pass (`./test.sh`)
 2. Terminal session in `meta-roadmap.md` section 1 runs without error
 3. REPL loads any ontology from `examples/`
 4. System recovers correctly after kill -9
