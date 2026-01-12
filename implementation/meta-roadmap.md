@@ -1,6 +1,6 @@
 # MEW Implementation Meta-Roadmap
 
-**Purpose:** A compass for autonomous implementation. Not a plan — a methodology.
+**Purpose:** A compass for autonomous implementation. Not a task list — a behavior repertoire with selection heuristics.
 
 ---
 
@@ -8,350 +8,409 @@
 
 **You are done when:**
 
-All 158 acceptance tests pass, AND you can execute this session without error:
+- All specifications are implemented
+- All tests pass
+- The system is production-ready (robust, recoverable, operable)
 
-```
-LOAD ONTOLOGY {
-  node Task { 
-    title: String [required]
-    priority: Int [>= 0, default: 0]
-    status: String [default: "pending"]
-    created_at: Timestamp
-  }
-  
-  node Person { name: String [required, unique] }
-  
-  edge owns(owner: Person, task: Task) [on_kill: cascade]
-  edge depends_on(a: Task, b: Task) [acyclic]
-  
-  rule auto_timestamp on Task [auto, priority: 100] {
-    SET t.created_at = NOW()
-  }
-}
-
-BEGIN
-
-SPAWN alice: Person { name = "Alice" }
-SPAWN bob: Person { name = "Bob" }
-
-SPAWN t1: Task { title = "Design API" }
-SPAWN t2: Task { title = "Implement API", priority = 5 }
-SPAWN t3: Task { title = "Write tests" }
-
-LINK owns(alice, t1)
-LINK owns(alice, t2)
-LINK owns(bob, t3)
-
-LINK depends_on(t2, t1)
-LINK depends_on(t3, t2)
-
-COMMIT
-
--- This should return 2 tasks
-MATCH t: Task, owns(alice, t) 
-WHERE t.priority >= 0 
-RETURN t.title, t.priority 
-ORDER BY t.priority DESC
-
--- This should fail (cycle)
-BEGIN
-LINK depends_on(t1, t3)
-COMMIT
-
--- This should cascade delete tasks
-BEGIN
-KILL alice
-COMMIT
-
--- Verify cascade
-MATCH t: Task RETURN COUNT(t)  -- should be 1 (bob's task)
-```
-
-**Until then, you are not done.**
+Production-ready means users can:
+- Define and load ontologies
+- Execute queries and mutations
+- Rely on constraint enforcement and rule firing
+- Trust ACID guarantees and crash recovery
+- Understand errors and act on them
+- Operate the system without reading source code
 
 ---
 
-## 2. Progress Measurement
+## 2. Canonical Behaviors
 
-### 2.1 Primary Signal: Tests Passing
+These are the activities that advance the project. At any moment, you should be doing exactly one of these.
 
-```
-Progress = (passing acceptance tests) / 158
-```
+### B1: Fix Bug
 
-This is the only metric that matters. Lines of code, components "finished," or features "implemented" are vanity metrics.
+**What:** Make failing test pass, or make behavior match specification.
 
-### 2.2 Secondary Signal: Integration Depth
+**Outputs:** Code change, test now passes.
 
-How many components work together end-to-end?
-
-| Level | Description |
-|-------|-------------|
-| 0 | Nothing runs |
-| 1 | Graph stores/retrieves data |
-| 2 | Parser produces AST |
-| 3 | Mutations modify graph |
-| 4 | Queries read graph |
-| 5 | Ontology loads and types work |
-| 6 | Constraints enforce invariants |
-| 7 | Rules fire reactively |
-| 8 | Transactions provide ACID |
-| 9 | Journal provides durability |
-| 10 | Session provides interface |
-
-**Prioritize depth over breadth.** A thin vertical slice that works end-to-end beats ten components that don't connect.
+**Quality signal:** The fix is minimal and doesn't break other tests.
 
 ---
 
-## 3. What To Work On Next
+### B2: Implement Feature
 
-### Decision Procedure
+**What:** Write code for specified but unimplemented functionality.
 
-```
-1. Is there a failing test for already-written code?
-   → Fix it. Bugs compound.
+**Outputs:** New code, new tests, capability now works end-to-end.
 
-2. Is there a component blocking multiple other components?
-   → Unblock it. Maximize parallelism potential.
-
-3. Is there a test that's "almost passing"?
-   → Finish it. Momentum matters.
-
-4. Otherwise:
-   → Pick the lowest-dependency unimplemented test.
-```
-
-### Anti-Patterns
-
-- **Do not** implement features not covered by acceptance tests
-- **Do not** optimize before correctness
-- **Do not** refactor working code without failing test motivating it
-- **Do not** add abstractions "for future flexibility"
-- **Do not** work on component N+2 when component N has failing tests
+**Quality signal:** Feature works as specified, tests cover happy path and error cases.
 
 ---
 
-## 4. Stuck Detection
+### B3: Write Tests
 
-**You are stuck if:**
+**What:** Add test coverage for existing or planned behavior.
 
-- Same test failing for 3+ attempts with different approaches
-- Circular dependency discovered between components
-- Acceptance test appears to require undocumented behavior
-- Implementation contradicts spec
-- Two specs contradict each other
+**Outputs:** New test cases in appropriate test files.
 
-**Stuck is not:**
-
-- Test is hard (that's normal)
-- Implementation is tedious (that's normal)
-- You need to learn something (that's normal)
+**Quality signal:** Tests are deterministic, fast, and test one thing each.
 
 ---
 
-## 5. Unstuck Procedures
+### B4: Improve Testgen
 
-### 5.1 Test Failing Repeatedly
+**What:** Enhance `mew-testgen` to produce better/more diverse test cases.
+
+**Outputs:** Changes to testgen module, expanded generated test coverage.
+
+**Quality signal:** Generated tests find real bugs or cover previously untested paths.
+
+---
+
+### B5: Create Ontology
+
+**What:** Write new `.mew` ontology file exploring different patterns.
+
+**Outputs:** New ontology in `ontologies/`, possibly new testgen seeds.
+
+**Quality signal:** Ontology exercises features not well-covered by existing ontologies.
+
+---
+
+### B6: Discover Edge Cases
+
+**What:** Adversarial exploration — find inputs that break assumptions.
+
+**Outputs:** Bug reports, new test cases, spec clarifications.
+
+**Quality signal:** Discoveries lead to concrete fixes or spec refinements.
+
+---
+
+### B7: Refine Specification
+
+**What:** Clarify ambiguity, fix contradiction, add missing detail.
+
+**Outputs:** Updated spec documents.
+
+**Quality signal:** Refinement unblocks implementation or resolves discovered inconsistency.
+
+---
+
+### B8: Design/Plan
+
+**What:** Think through approach before implementing.
+
+**Outputs:** Notes, diagrams, or updated architecture docs.
+
+**Quality signal:** Design answers "how" questions that were blocking progress.
+
+---
+
+### B9: Refactor
+
+**What:** Restructure code without changing behavior.
+
+**Outputs:** Cleaner code, same test results.
+
+**Quality signal:** Change makes future work easier; motivated by concrete pain.
+
+---
+
+### B10: Optimize
+
+**What:** Improve performance of correct code.
+
+**Outputs:** Faster code, benchmarks proving improvement.
+
+**Quality signal:** Optimization addresses measured bottleneck, not hypothetical one.
+
+---
+
+### B11: Document
+
+**What:** Make implicit knowledge explicit.
+
+**Outputs:** Comments, READMEs, architecture notes.
+
+**Quality signal:** Documentation would help someone unfamiliar with the code.
+
+---
+
+## 3. Behavior Selection
+
+Given current context, which behavior to execute?
 
 ```
-1. Isolate: Write minimal reproduction
-2. Question: Is the test correct? Check against spec.
-3. Question: Is the spec correct? Check against architecture.
-4. Question: Is the architecture correct? Check against philosophy.
-5. If all documents align and code doesn't work:
-   → Implementation bug. Debug harder.
-6. If documents conflict:
-   → Resolve conflict at highest level, propagate down.
+┌─────────────────────────────────────────────────────────────────────┐
+│                     BEHAVIOR SELECTION TREE                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+START
+  │
+  ▼
+┌─────────────────────────────────┐
+│ Are any tests failing?          │
+└─────────────────────────────────┘
+  │ YES                      │ NO
+  ▼                          ▼
+B1: Fix Bug            ┌─────────────────────────────────┐
+                       │ Is there a spec'd feature       │
+                       │ that isn't implemented?         │
+                       └─────────────────────────────────┘
+                         │ YES                      │ NO
+                         ▼                          ▼
+                  ┌──────────────────┐    ┌─────────────────────────────────┐
+                  │ Is the feature   │    │ Is test coverage adequate?      │
+                  │ design clear?    │    │ (Can testgen find more bugs?)   │
+                  └──────────────────┘    └─────────────────────────────────┘
+                    │ YES       │ NO        │ NO                      │ YES
+                    ▼           ▼           ▼                         ▼
+              B2: Implement  B8: Design  B4: Improve Testgen    ┌─────────────────┐
+                  Feature       /Plan    or B3: Write Tests     │ Is robustness   │
+                                                                │ proven?         │
+                                                                └─────────────────┘
+                                                                  │ NO        │ YES
+                                                                  ▼           ▼
+                                                          B6: Discover    ┌─────────────┐
+                                                              Edge Cases  │Performance  │
+                                                                          │acceptable?  │
+                                                                          └─────────────┘
+                                                                           │ NO     │ YES
+                                                                           ▼        ▼
+                                                                     B10: Optimize  DONE
+                                                                           or
+                                                                     B11: Document
 ```
 
-### 5.2 Circular Dependency
+### Selection Shortcuts
+
+| Context | Behavior |
+|---------|----------|
+| Test is red | B1: Fix Bug |
+| Spec exists, code doesn't | B2: Implement Feature |
+| Code exists, tests don't | B3: Write Tests |
+| Manual test writing is bottleneck | B4: Improve Testgen |
+| Need diverse inputs for testing | B5: Create Ontology |
+| Happy path works, edge cases unknown | B6: Discover Edge Cases |
+| Spec is ambiguous or contradictory | B7: Refine Specification |
+| Don't know how to implement | B8: Design/Plan |
+| Code is painful to modify | B9: Refactor |
+| Correct but too slow | B10: Optimize |
+| Knowledge is tribal/tacit | B11: Document |
+
+### Priority When Multiple Apply
+
+If multiple behaviors seem valid:
+
+1. **B1 (Fix Bug)** — Always first. Broken code contaminates everything.
+2. **B2 (Implement)** — Features are the point.
+3. **B7 (Refine Spec)** — Unblock implementation.
+4. **B3/B4 (Tests/Testgen)** — Verify implementation.
+5. **B6 (Edge Cases)** — Harden implementation.
+6. **B5 (Ontology)** — Expand test surface.
+7. **B9 (Refactor)** — Only when pain is concrete.
+8. **B10 (Optimize)** — Only when slowness is measured.
+9. **B8 (Design)** — Only when stuck on "how."
+10. **B11 (Document)** — Fill gaps opportunistically.
+
+---
+
+## 4. Behavior Execution Patterns
+
+### B1: Fix Bug — Execution Pattern
 
 ```
-1. Draw the actual dependency (not what spec says)
-2. Identify which direction is "essential"
-3. Break the cycle by:
-   - Introducing an interface/trait
-   - Passing data instead of component reference
-   - Merging the components
-4. Update spec if architecture changed
+1. Reproduce: Ensure test fails consistently
+2. Isolate: Find minimal reproduction
+3. Diagnose: Identify root cause (not just symptom)
+4. Fix: Change code minimally
+5. Verify: Test passes, no regressions
+6. Reflect: Should this bug class be caught by testgen?
 ```
 
-### 5.3 Spec Unclear or Contradictory
+### B2: Implement Feature — Execution Pattern
 
 ```
-1. Check component spec's NOTES section
-2. Check architecture document
-3. Check acceptance tests for implicit clarification
-4. If still unclear:
-   → Make a decision
-   → Document the decision in spec
-   → Proceed
+1. Understand: Read relevant spec thoroughly
+2. Scope: Identify exactly what's in/out of scope
+3. Test first: Write tests that define "done"
+4. Implement: Make tests pass
+5. Integrate: Ensure feature works with adjacent features
+6. Cover: Add edge case tests
 ```
 
-### 5.4 Acceptance Test Seems Wrong
+### B4: Improve Testgen — Execution Pattern
 
 ```
-1. Re-read the test. Are you misunderstanding?
-2. Check if related tests clarify intent
-3. Check component spec acceptance criteria
-4. If test is genuinely wrong:
-   → Fix the test
-   → Document why
-   → Do not silently skip tests
+1. Identify gap: What's not being generated that should be?
+2. Analyze: Why isn't testgen producing this?
+3. Enhance: Add generation capability
+4. Validate: New generation finds bugs or covers new ground
+5. Tune: Adjust distribution if needed
+```
+
+### B6: Discover Edge Cases — Execution Pattern
+
+```
+1. Target: Pick a component or feature
+2. Attack: Try to break it
+   - Boundary values
+   - Empty/null inputs
+   - Malformed inputs
+   - Concurrent operations
+   - Resource exhaustion
+   - Unexpected sequences
+3. Record: Document each finding
+4. Convert: Turn discoveries into tests or spec refinements
+```
+
+### B7: Refine Spec — Execution Pattern
+
+```
+1. Identify: What's ambiguous or wrong?
+2. Research: Check architecture, philosophy for guidance
+3. Decide: Make a concrete choice
+4. Document: Update spec with decision and rationale
+5. Propagate: Update dependent specs/tests/code
 ```
 
 ---
 
-## 6. Quality Gates
+## 5. Stuck Detection and Recovery
 
-### Before Considering a Component "Working"
+### You Are Stuck When
 
-- [ ] All acceptance tests for this component pass
-- [ ] No panics on malformed input (returns errors)
-- [ ] No unsafe code without comment justifying it
-- [ ] Integrates with at least one dependent component
+- Same bug persists across 3+ fix attempts
+- Implementation contradicts spec (and both seem right)
+- Spec contradicts spec
+- Don't know which behavior applies
+- All behaviors seem blocked
 
-### Before Considering the System "Working"
+### Unstuck Procedures
 
-- [ ] All 158 acceptance tests pass
-- [ ] Terminal condition session runs without error
-- [ ] Kill -9 during transaction → recovers correctly
-- [ ] Can load, query, mutate in REPL
-- [ ] No memory leaks on extended operation
+**Stuck on B1 (can't fix bug):**
+```
+1. Question the test: Is it correct per spec?
+2. Question the spec: Is it correct per architecture?
+3. Isolate further: Make reproduction even more minimal
+4. Trace execution: Print/debug every step
+5. Sleep on it: Fresh eyes often see the obvious
+```
+
+**Stuck on B2 (can't implement):**
+```
+1. Reduce scope: Implement smallest possible slice
+2. Switch to B8: Design on paper before code
+3. Find analogous code: How do similar features work?
+4. Switch to B7: Maybe spec needs refinement first
+```
+
+**Stuck on B4 (testgen not helping):**
+```
+1. Manual first: Write the test by hand
+2. Analyze: What makes this hard to generate?
+3. Simplify: Generate simpler version first
+4. Expand ontologies: Maybe need richer input patterns
+```
+
+**Stuck on "which behavior?":**
+```
+1. Run all tests: Results will clarify (if failing → B1)
+2. Read specs: Find unimplemented feature (if found → B2)
+3. Run testgen: See if it finds anything (if bugs → B1)
+4. Do B6: Manual exploration always produces signal
+```
 
 ---
 
-## 7. Invariants (Must Always Hold)
+## 6. Invariants
 
-These are non-negotiable throughout implementation:
+These hold regardless of which behavior you're executing.
 
-### 7.1 Architectural Invariants
+### Architectural Invariants
 
-- Graph is the single source of truth for data
-- Layer 0 is always consistent with Registry
+- Graph is single source of truth for data
+- Layer 0 and Registry are consistent
 - Transactions are the only write path to committed state
 - Rules fire before constraints check
 
-### 7.2 Implementation Invariants
+### Process Invariants
 
-- Tests never silently skipped
+- Tests are never silently skipped
 - Public API never panics (returns Result)
-- Every error has context (what, where, why)
-- No premature optimization
-
-### 7.3 Process Invariants
-
-- Specs updated if and only if contract changes
-- Tests updated if and only if spec changes
-- Working code is never deleted without replacement
+- Errors include context (what, where, why)
+- No optimization without measurement
+- Specs updated only when contracts change
+- Working code not deleted without replacement
 
 ---
 
-## 8. Adaptation Protocol
+## 7. Document Hierarchy
 
-When reality contradicts documentation:
+When documents conflict, higher wins:
 
 ```
-                ┌─────────────────────────────────────┐
-                │ Reality contradicts documentation   │
-                └─────────────────────────────────────┘
-                                  │
-                                  ▼
-                ┌─────────────────────────────────────┐
-                │ Is reality correct or document?     │
-                └─────────────────────────────────────┘
-                         │                    │
-                    Reality               Document
-                         │                    │
-                         ▼                    ▼
-              ┌─────────────────┐   ┌─────────────────┐
-              │ Fix document    │   │ Fix code        │
-              │ Propagate to    │   │                 │
-              │ dependent docs  │   │                 │
-              └─────────────────┘   └─────────────────┘
+Philosophy (CONTEXT.md, core principles)
+    ↓
+Architecture (implementation/architecture.md)
+    ↓
+Component Specs (implementation/components/*.md)
+    ↓
+Test Specs (implementation/tests/*.md)
+    ↓
+Implementation (mew/**/src/)
 ```
 
-**Document hierarchy (higher overrides lower):**
-
-1. Philosophy (From Without, From Within)
-2. Architecture (mew_architecture_v1.md)
-3. Component Specs (mew_component_specs.md)
-4. Acceptance Tests (mew_acceptance_tests.md)
-5. Implementation
-
-When conflict exists, defer to higher-level document. If higher-level is wrong, fix it explicitly — never silently override.
+Fix at highest level where error exists, propagate down.
 
 ---
 
-## 9. Recovery From Major Errors
+## 8. Progress Checkpoints
 
-### 9.1 Fundamental Design Flaw Discovered
+Periodically verify overall progress:
 
-```
-1. Stop implementing
-2. Identify the flaw precisely
-3. Trace to which document level it originates
-4. Fix at that level
-5. Propagate changes downward
-6. Identify which tests need revision
-7. Identify which code needs revision
-8. Resume implementing
-```
+### Weekly Checkpoint
 
-### 9.2 Scope Creep Detected
+- [ ] All tests still pass?
+- [ ] Any new specs implemented?
+- [ ] Any new bugs found and fixed?
+- [ ] Testgen coverage improved?
+- [ ] Any specs refined?
 
-```
-Signs:
-- Implementing feature not in any test
-- Adding "nice to have" functionality
-- Optimizing without benchmark showing need
+### Phase Checkpoint
 
-Response:
-- Stop
-- Delete the uncommitted work
-- Return to section 3 (What To Work On Next)
-```
+- [ ] Current phase's features complete?
+- [ ] Test coverage adequate for phase?
+- [ ] No known critical bugs?
+- [ ] Ready to move to next phase?
 
-### 9.3 Lost Context (After Break/Interruption)
+### Pre-Release Checkpoint
 
-```
-1. Run all tests. Note what passes/fails.
-2. Read terminal condition. Assess distance.
-3. Read last modified files.
-4. Apply section 3 decision procedure.
-5. Continue.
-```
+- [ ] All specs implemented?
+- [ ] All tests pass?
+- [ ] Edge cases explored?
+- [ ] Performance acceptable?
+- [ ] Documentation current?
+- [ ] Error messages actionable?
 
 ---
 
-## 10. Communication Protocol
+## 9. Context Recovery
 
-When in doubt, prefer:
-
-- **Explicit over implicit** — State assumptions
-- **Simple over clever** — Clarity over optimization  
-- **Working over complete** — Iterate toward completeness
-- **Tested over untested** — If it's not tested, it's broken
-
----
-
-## 11. Meta-Compass Calibration
-
-This document itself may need revision if:
-
-- Terminal condition is achieved but system doesn't work
-- Progress metric shows 100% but integration fails
-- Stuck procedures don't unstick
-- Quality gates pass but bugs exist in production use
-
-If meta-roadmap fails, debug it like code:
+After interruption, to resume:
 
 ```
-1. What did it predict?
-2. What actually happened?
-3. Which section was wrong?
-4. Fix that section.
-5. Continue.
+1. Run: cargo test --workspace
+   → If failures, current behavior is B1
+
+2. Check: git status / git log
+   → What was in progress?
+
+3. Read: implementation/tests/*.md
+   → What tests exist vs should exist?
+
+4. Apply: Section 3 (Behavior Selection)
+   → Resume appropriate behavior
 ```
 
 ---
@@ -359,23 +418,31 @@ If meta-roadmap fails, debug it like code:
 ## Summary
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                         META-COMPASS                           │
-├────────────────────────────────────────────────────────────────┤
-│  DIRECTION:  All 158 tests pass + terminal session works       │
-│                                                                │
-│  PROGRESS:   Count passing tests. Nothing else matters.        │
-│                                                                │
-│  NEXT STEP:  Fix failing → Unblock others → Near-done → Low-dep│
-│                                                                │
-│  STUCK:      Isolate → Question tests → Question specs →       │
-│              Question architecture → Decide & document         │
-│                                                                │
-│  CONFLICT:   Philosophy > Architecture > Specs > Tests > Code  │
-│                                                                │
-│  ALWAYS:     Tests never skipped. Errors have context.         │
-│              No premature optimization. Depth over breadth.    │
-└────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                         META-COMPASS                                │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  TERMINAL       All specs implemented, all tests pass,             │
+│                 system is production-ready                          │
+│                                                                     │
+│  BEHAVIORS      B1:Bug  B2:Implement  B3:Test  B4:Testgen          │
+│                 B5:Ontology  B6:EdgeCase  B7:Spec  B8:Design        │
+│                 B9:Refactor  B10:Optimize  B11:Document             │
+│                                                                     │
+│  SELECTION      Test failing? → B1                                  │
+│                 Spec unimplemented? → B2                            │
+│                 Coverage gap? → B3/B4                               │
+│                 Robustness unknown? → B6                            │
+│                 Spec unclear? → B7                                  │
+│                                                                     │
+│  PRIORITY       B1 > B2 > B7 > B3/B4 > B6 > B5 > B9 > B10 > B8 > B11│
+│                                                                     │
+│  STUCK          Isolate → Question test → Question spec →          │
+│                 Reduce scope → Sleep on it                          │
+│                                                                     │
+│  HIERARCHY      Philosophy > Architecture > Specs > Tests > Code    │
+│                                                                     │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-**Now implement.**
+**Now execute the appropriate behavior.**
