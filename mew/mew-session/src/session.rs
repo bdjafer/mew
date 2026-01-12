@@ -147,7 +147,7 @@ impl<'r> Session<'r> {
         let result = executor.execute_match(stmt)?;
 
         // Convert to QueryResult
-        let columns: Vec<String> = result.column_names().iter().cloned().collect();
+        let columns: Vec<String> = result.column_names().to_vec();
         let types = vec!["any".to_string(); columns.len()]; // Simplified
 
         let mut rows = Vec::new();
