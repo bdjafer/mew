@@ -1,0 +1,18 @@
+[package]
+name = "mew-examples"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Integration test framework for MEW"
+
+[dependencies]
+mew-core = { path = "../mew-core" }
+mew-compiler = { path = "../mew-compiler" }
+mew-session = { path = "../mew-session" }
+mew-registry = { path = "../mew-registry" }
+
+thiserror.workspace = true
+regex-lite = "0.1"
+
+[dev-dependencies]

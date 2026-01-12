@@ -1,0 +1,48 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations for bookmarks
+-- ===========================================================================
+
+--# spawn_bookmark
+SPAWN b: Bookmark {
+  url = "https://example.com",
+  title = "Example Site"
+}
+
+--# query_count
+MATCH b: Bookmark RETURN count(b)
+
+--# query_all
+MATCH b: Bookmark RETURN b.title, b.url
+
+--# spawn_folder
+SPAWN f: Folder { name = "Test Folder" }
+
+--# link_bookmark_folder
+LINK in_folder(b, f)
+
+--# query_folders
+MATCH f: Folder RETURN f.name
+
+--# update_bookmark
+SET b { title = "Updated Example" }
+
+--# query_updated
+MATCH b: Bookmark WHERE b.url = "https://example.com"
+RETURN b.title
+
+--# spawn_tag
+SPAWN t: Tag { name = "test-tag" }
+
+--# link_bookmark_tag
+LINK tagged(b, t)
+
+--# query_tags
+MATCH t: Tag RETURN t.name
+
+--# kill_bookmark
+KILL b
+
+--# query_empty
+MATCH b: Bookmark WHERE b.url = "https://example.com"
+RETURN b

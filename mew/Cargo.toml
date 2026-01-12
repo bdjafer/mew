@@ -17,6 +17,7 @@ members = [
     "mew-session",
     "mew-repl",
     "mew-testgen",
+    "mew-examples",
 ]
 
 [workspace.package]
