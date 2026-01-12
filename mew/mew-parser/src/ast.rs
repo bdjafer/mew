@@ -32,6 +32,7 @@ pub enum Stmt {
     Unlink(UnlinkStmt),
     Set(SetStmt),
     Walk(WalkStmt),
+    Inspect(InspectStmt),
     Txn(TxnStmt),
 }
 
@@ -249,6 +250,18 @@ pub enum WalkReturnType {
     Edges,
     Terminal,
     Projections(Vec<Projection>),
+}
+
+// ==================== INSPECT ====================
+
+/// INSPECT statement for direct entity lookup by ID.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InspectStmt {
+    /// The ID to look up (as a string without the # prefix)
+    pub id: String,
+    /// Optional projections to return (defaults to all attributes)
+    pub projections: Option<Vec<Projection>>,
+    pub span: Span,
 }
 
 // ==================== TRANSACTION ====================

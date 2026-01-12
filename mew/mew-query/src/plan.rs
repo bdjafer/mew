@@ -359,7 +359,7 @@ impl<'r> QueryPlanner<'r> {
 
         Ok(QueryPlan {
             root: plan,
-            columns: vec!["path".to_string()],
+            columns: vec!["node".to_string(), "path".to_string()],
         })
     }
 }

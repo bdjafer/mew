@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use mew_core::EntityId;
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{MatchStmt, Target, TargetRef, TxnStmt};
+use mew_parser::{InspectStmt, MatchStmt, Target, TargetRef, TxnStmt, WalkStmt};
 use mew_pattern::{Binding, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -55,6 +55,123 @@ pub fn execute_match(
     output.push_str(&format!("\n({} rows)", results.len()));
 
     Ok(output)
+}
+
+/// Execute a WALK statement and return formatted results.
+pub fn execute_walk(
+    registry: &Registry,
+    graph: &Graph,
+    bindings: &HashMap<String, EntityId>,
+    stmt: &WalkStmt,
+) -> Result<String, String> {
+    let executor = QueryExecutor::new(registry, graph);
+    let _initial_bindings = to_pattern_bindings(bindings);
+    let results = executor
+        .execute_walk(stmt)
+        .map_err(|e| format!("Walk error: {}", e))?;
+
+    if results.is_empty() {
+        return Ok("(no paths found)".to_string());
+    }
+
+    let mut output = String::new();
+
+    // Header
+    let columns = results.column_names();
+    output.push_str(&columns.join(" | "));
+    output.push('\n');
+    output.push_str(&"-".repeat(columns.len() * 15));
+    output.push('\n');
+
+    // Rows
+    for row in results.rows() {
+        let values: Vec<String> = columns
+            .iter()
+            .map(|c| {
+                row.get_by_name(c)
+                    .map(format_value)
+                    .unwrap_or_else(|| "NULL".to_string())
+            })
+            .collect();
+        output.push_str(&values.join(" | "));
+        output.push('\n');
+    }
+
+    output.push_str(&format!("\n({} paths)", results.len()));
+
+    Ok(output)
+}
+
+/// Execute an INSPECT statement and return formatted results.
+pub fn execute_inspect(
+    registry: &Registry,
+    graph: &Graph,
+    stmt: &InspectStmt,
+) -> Result<String, String> {
+    use mew_core::{NodeId, Value};
+
+    // Try to parse the ID as a node ID (format: "node_N" or just a number)
+    let id_str = &stmt.id;
+    let node_id = if let Some(num_str) = id_str.strip_prefix("node_") {
+        num_str.parse::<u64>().ok().map(NodeId::new)
+    } else {
+        id_str.parse::<u64>().ok().map(NodeId::new)
+    };
+
+    // Try to look up as node first
+    if let Some(nid) = node_id {
+        if let Some(node) = graph.get_node(nid) {
+            // Get the type name from registry
+            let type_name = registry
+                .get_type(node.type_id)
+                .map(|t| t.name.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+
+            let mut output = String::new();
+
+            // Build columns based on projections or all attributes
+            if let Some(ref projections) = stmt.projections {
+                for proj in projections {
+                    let col_name = proj.alias.clone().unwrap_or_else(|| {
+                        if let mew_parser::Expr::Var(name, _) = &proj.expr {
+                            name.clone()
+                        } else if let mew_parser::Expr::AttrAccess(_, attr, _) = &proj.expr {
+                            attr.clone()
+                        } else {
+                            "?".to_string()
+                        }
+                    });
+
+                    let value = match col_name.as_str() {
+                        "_type" => Value::String(type_name.clone()),
+                        "_id" => Value::NodeRef(nid),
+                        "*" => {
+                            for (attr_name, attr_val) in node.attributes.iter() {
+                                output.push_str(&format!("{}: {}\n", attr_name, format_value(attr_val)));
+                            }
+                            continue;
+                        }
+                        attr => node.get_attr(attr).cloned().unwrap_or(Value::Null),
+                    };
+
+                    output.push_str(&format!("{}: {}\n", col_name, format_value(&value)));
+                }
+            } else {
+                // Default: return all attributes plus _type and _id
+                output.push_str(&format!("_type: {}\n", type_name));
+                output.push_str(&format!("_id: #{}\n", nid.raw()));
+
+                for (attr_name, attr_val) in node.attributes.iter() {
+                    output.push_str(&format!("{}: {}\n", attr_name, format_value(attr_val)));
+                }
+            }
+
+            return Ok(output.trim_end().to_string());
+        }
+    }
+
+    // Entity not found
+    Ok(format!("Entity #{} not found", id_str))
 }
 
 /// Execute a SPAWN statement.
