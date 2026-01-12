@@ -1,0 +1,62 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Folders
+--# seed_folder_work
+SPAWN work: Folder { name = "Work" }
+
+--# seed_folder_personal
+SPAWN personal: Folder { name = "Personal" }
+
+--# seed_folder_reading
+SPAWN reading: Folder { name = "Reading List" }
+
+-- Tags
+--# seed_tag_dev
+SPAWN dev: Tag { name = "dev", color = "#00ff00" }
+
+--# seed_tag_news
+SPAWN news: Tag { name = "news", color = "#0000ff" }
+
+--# seed_tag_reference
+SPAWN reference: Tag { name = "reference", color = "#ff0000" }
+
+-- Bookmarks
+--# seed_bm_google
+SPAWN google: Bookmark {
+  url = "https://google.com",
+  title = "Google",
+  description = "Search engine",
+  is_favorite = true
+}
+
+--# seed_bm_github
+SPAWN github: Bookmark {
+  url = "https://github.com",
+  title = "GitHub",
+  description = "Code hosting platform"
+}
+
+--# seed_bm_rust
+SPAWN rust: Bookmark {
+  url = "https://rust-lang.org",
+  title = "Rust Programming Language",
+  description = "Official Rust website"
+}
+
+--# seed_bm_hn
+SPAWN hn: Bookmark {
+  url = "https://news.ycombinator.com",
+  title = "Hacker News",
+  description = "Tech news aggregator",
+  is_favorite = true
+}
+
+--# seed_bm_wiki
+SPAWN wiki: Bookmark {
+  url = "https://wikipedia.org",
+  title = "Wikipedia",
+  description = "Free encyclopedia"
+}

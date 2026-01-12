@@ -1,0 +1,17 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_folder
+SPAWN work: Folder { name = "Work" }
+
+--# seed_bookmark
+SPAWN google: Bookmark {
+  url = "https://google.com",
+  title = "Google",
+  description = "Search engine"
+}
+
+--# seed_tag
+SPAWN dev: Tag { name = "dev", color = "#00ff00" }

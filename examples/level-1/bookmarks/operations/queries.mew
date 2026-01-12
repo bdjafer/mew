@@ -1,0 +1,30 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_bookmarks
+MATCH b: Bookmark RETURN count(b)
+
+--# count_all_folders
+MATCH f: Folder RETURN count(f)
+
+--# count_all_tags
+MATCH t: Tag RETURN count(t)
+
+--# query_favorites
+MATCH b: Bookmark WHERE b.is_favorite = true
+RETURN b.title
+
+--# query_by_title_pattern
+MATCH b: Bookmark WHERE b.title = "Google"
+RETURN b.url
+
+--# query_all_titles
+MATCH b: Bookmark RETURN b.title
+
+--# query_folders
+MATCH f: Folder RETURN f.name
+
+--# query_tags
+MATCH t: Tag RETURN t.name, t.color
