@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use mew_examples::prelude::*;
+//! use mew_tests::prelude::*;
 //!
 //! pub fn scenario() -> Scenario {
 //!     Scenario::new("crud")
@@ -43,14 +43,14 @@ pub mod value_ext;
 
 pub use assertion::{Assertion, AssertionBuilder, Row};
 pub use error::{ExampleError, ExampleResult};
-pub use scenario::Scenario;
+pub use scenario::{examples_path, Scenario};
 
 /// Prelude for convenient imports.
 pub mod prelude {
     pub use crate::assertion::{Assertion, AssertionBuilder, Row};
     pub use crate::error::{ExampleError, ExampleResult};
     pub use crate::row;
-    pub use crate::scenario::Scenario;
+    pub use crate::scenario::{examples_path, Scenario};
 }
 
 /// Macro for creating a Row with field values.
@@ -58,7 +58,7 @@ pub mod prelude {
 /// # Example
 ///
 /// ```ignore
-/// use mew_examples::prelude::*;
+/// use mew_tests::prelude::*;
 ///
 /// let row = row!{ title: "Example", count: 42 };
 /// ```

@@ -46,7 +46,7 @@ impl Scenario {
             operations_path: None,
             operations: None,
             steps: Vec::new(),
-            base_path: examples_root(),
+            base_path: examples_path(),
         }
     }
 
@@ -152,11 +152,12 @@ impl Scenario {
 /// Get the examples root directory.
 ///
 /// This looks for the `examples/` directory relative to the workspace root.
-fn examples_root() -> PathBuf {
+/// Useful for tests that need to reference the examples directory directly.
+pub fn examples_path() -> PathBuf {
     // Try to find examples/ relative to CARGO_MANIFEST_DIR
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         let manifest_path = PathBuf::from(manifest_dir);
-        // mew/mew-examples -> mew -> repo root -> examples
+        // mew/mew-tests -> mew -> repo root -> examples
         if let Some(workspace) = manifest_path.parent().and_then(|p| p.parent()) {
             let examples = workspace.join("examples");
             if examples.exists() {

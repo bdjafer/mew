@@ -2,25 +2,13 @@
 //!
 //! These tests run against the bookmarks ontology with various scenarios.
 
-use mew_examples::prelude::*;
-
-/// Base path helper for this test file.
-fn examples_path() -> std::path::PathBuf {
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    std::path::PathBuf::from(manifest_dir)
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("examples")
-}
+use mew_tests::prelude::*;
 
 mod crud {
     use super::*;
 
     pub fn scenario() -> Scenario {
         Scenario::new("crud")
-            .base_path(examples_path())
             .ontology("level-1/bookmarks/ontology.mew")
             .operations("level-1/bookmarks/operations/crud.mew")
             // No seed - start with empty database
@@ -50,7 +38,6 @@ mod queries {
 
     pub fn scenario() -> Scenario {
         Scenario::new("queries")
-            .base_path(examples_path())
             .ontology("level-1/bookmarks/ontology.mew")
             .seed("level-1/bookmarks/seeds/populated.mew")
             .operations("level-1/bookmarks/operations/queries.mew")
@@ -76,7 +63,6 @@ mod errors {
     /// Test error cases.
     pub fn scenario() -> Scenario {
         Scenario::new("errors")
-            .base_path(examples_path())
             .ontology("level-1/bookmarks/ontology.mew")
             .operations("level-1/bookmarks/operations/errors.mew")
             .step("spawn_missing_required", |a| a.error("required"))

@@ -1,5 +1,5 @@
 [package]
-name = "mew-examples"
+name = "mew-tests"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

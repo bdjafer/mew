@@ -83,18 +83,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mew-examples"
-version = "0.1.0"
-dependencies = [
- "mew-compiler",
- "mew-core",
- "mew-registry",
- "mew-session",
- "regex-lite",
- "thiserror",
-]
-
-[[package]]
 name = "mew-graph"
 version = "0.1.0"
 dependencies = [
@@ -224,6 +212,18 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "mew-tests"
+version = "0.1.0"
+dependencies = [
+ "mew-compiler",
+ "mew-core",
+ "mew-registry",
+ "mew-session",
+ "regex-lite",
  "thiserror",
 ]
 
