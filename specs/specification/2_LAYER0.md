@@ -1,6 +1,12 @@
-# 
+# MEW Language Specification
 
-This is the fixed foundation. It is hardcoded into the engine and cannot be modified by any rewrite rule. Everything else builds on this.
+## Part II: Layer 0 Meta-Ontology
+
+**Version:** 1.0
+**Status:** Foundation
+**Scope:** Hardcoded meta-types and execution semantics
+
+---This is the fixed foundation. It is hardcoded into the engine and cannot be modified by any rewrite rule. Everything else builds on this.
 
 ---
 
@@ -820,7 +826,7 @@ constraint _attr_access_has_base:
 
 ## 5. Built-in Operations
 
-These are primitive operations implemented by the engine. The HOHG language uses specific keywords for these operations:
+These are primitive operations implemented by the engine. The MEW language uses specific keywords for these operations:
 
 - **SPAWN**: Create a node
 - **KILL**: Remove a node
@@ -999,7 +1005,7 @@ All Layer 0 type names (prefixed with `_`) are reserved.
 
 ### 8.1 Initial state
 
-When a new HOHG database is created:
+When a new MEW database is created:
 
 1. Layer 0 types are registered (but not stored as nodes—they're built-in)
 2. Layer 0 edges are registered

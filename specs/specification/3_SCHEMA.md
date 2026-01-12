@@ -1,6 +1,6 @@
-# HOHG Language Specification
+# MEW Language Specification
 
-## Part II: Ontology DSL (Revised)
+## Part III: Schema Definition Language
 
 **Version:** 1.1
 **Status:** Draft
@@ -8,9 +8,9 @@
 
 ---
 
-# 7. Ontology DSL Overview
+# 1. Ontology DSL Overview
 
-## 7.1 Purpose
+## 1.1 Purpose
 
 The Ontology DSL defines the structure of a graph:
 
@@ -21,7 +21,7 @@ The Ontology DSL defines the structure of a graph:
 
 An ontology is a schema. It does not contain instance data — it describes what instance data can look like.
 
-## 7.2 Design Principles
+## 1.2 Design Principles
 
 | Principle | Meaning |
 |-----------|---------|
@@ -30,13 +30,13 @@ An ontology is a schema. It does not contain instance data — it describes what
 | **Sugar for DX** | Inline modifiers compile to constraints |
 | **Explicit over implicit** | Behavior is declared, not assumed |
 
-## 7.3 Compilation Model
+## 1.3 Compilation Model
 
 Ontology DSL source files are **compiled**, not interpreted:
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────────────────┐
-│  .hog file   │────▶│   Compiler   │────▶│  Layer 0 Graph Structure │
+│  .mew file   │────▶│   Compiler   │────▶│  Layer 0 Graph Structure │
 │  (source)    │     │              │     │  + Runtime Registries    │
 └──────────────┘     └──────────────┘     └──────────────────────────┘
 ```
@@ -48,17 +48,17 @@ The compiler:
 4. Generates Layer 0 nodes and edges
 5. Builds runtime registries for type checking
 
-## 7.4 File Extension
+## 1.4 File Extension
 
-Ontology files use the `.hog` extension:
+Ontology files use the `.mew` extension:
 
 ```
-physics.hog
-social.hog
-task_management.hog
+physics.mew
+social.mew
+task_management.mew
 ```
 
-## 7.5 Top-Level Structure
+## 1.5 Top-Level Structure
 
 ```
 OntologyFile = OntologyDecl? Declaration*
@@ -73,13 +73,13 @@ Declaration =
 
 ---
 
-# 8. Type Aliases
+# 2. Type Aliases
 
-## 8.1 Purpose
+## 2.1 Purpose
 
 Type aliases define reusable type expressions with optional modifiers. They reduce repetition and establish domain vocabulary.
 
-## 8.2 Syntax
+## 2.2 Syntax
 
 ```
 TypeAliasDecl = 
@@ -89,7 +89,7 @@ TypeAliasDecl =
 UnionTypeExpr = TypeExpr ("|" TypeExpr)+
 ```
 
-## 8.3 Examples
+## 2.3 Examples
 
 ### 8.3.1 Scalar Aliases with Modifiers
 
@@ -132,7 +132,7 @@ type UniqueEmail = RequiredEmail [unique]
 
 Expansion is recursive at compile time. `UniqueEmail` becomes `String [match: "...", required, unique]`.
 
-## 8.4 Usage
+## 2.4 Usage
 
 Aliases can be used anywhere a type is expected:
 
@@ -151,7 +151,7 @@ node Task {
 edge created_by(item: Assignable, creator: Person)
 ```
 
-## 8.5 Modifier Composition
+## 2.5 Modifier Composition
 
 When an alias is used with additional modifiers, they combine:
 
@@ -175,13 +175,13 @@ node Task {
 }
 ```
 
-## 8.6 Restrictions
+## 2.6 Restrictions
 
 - Aliases cannot be recursive (directly or indirectly)
 - Alias names cannot shadow built-in types or node/edge type names
 - Union aliases cannot have modifiers (modifiers only apply to scalar types)
 
-## 8.7 AST
+## 2.7 AST
 
 ```typescript
 interface TypeAliasDecl {
@@ -197,7 +197,7 @@ interface UnionTypeExpr {
 }
 ```
 
-## 8.8 Compilation
+## 2.8 Compilation
 
 Type aliases are expanded at compile time. They do not generate Layer 0 nodes — they are purely syntactic sugar.
 
@@ -232,9 +232,9 @@ edge owns(owner: Person | Organization, asset: Asset)
 
 ---
 
-# 9. Ontology Declaration
+# 3. Ontology Declaration
 
-## 9.1 Syntax
+## 3.1 Syntax
 
 ```
 OntologyDecl = "ontology" Identifier InheritanceClause? "{" Declaration* "}"
@@ -242,7 +242,7 @@ OntologyDecl = "ontology" Identifier InheritanceClause? "{" Declaration* "}"
 InheritanceClause = ":" QualifiedIdentifier ("," QualifiedIdentifier)*
 ```
 
-## 9.2 Examples
+## 3.2 Examples
 
 ```
 -- Simple ontology
@@ -261,11 +261,11 @@ ontology GameWorld : Physics, Social {
 }
 ```
 
-## 9.3 Implicit Ontology
+## 3.3 Implicit Ontology
 
 If no `ontology` declaration is present, the file defines an anonymous ontology that implicitly inherits from Layer0.
 
-## 9.4 Inheritance Semantics
+## 3.4 Inheritance Semantics
 
 When ontology B inherits from ontology A:
 
@@ -278,7 +278,7 @@ When ontology B inherits from ontology A:
 
 Inheritance is **additive only**. Child ontologies cannot remove or modify inherited definitions.
 
-## 9.5 AST
+## 3.5 AST
 
 ```typescript
 interface OntologyDecl {
@@ -289,7 +289,7 @@ interface OntologyDecl {
 }
 ```
 
-## 9.6 Compilation
+## 3.6 Compilation
 
 An `OntologyDecl` compiles to:
 
@@ -303,9 +303,9 @@ For each parent P:
 
 ---
 
-# 10. Node Type Declarations
+# 4. Node Type Declarations
 
-## 10.1 Syntax
+## 4.1 Syntax
 
 ```
 NodeTypeDecl = 
@@ -315,7 +315,7 @@ NodeTypeDecl =
 InheritanceClause = ":" QualifiedIdentifier ("," QualifiedIdentifier)*
 ```
 
-## 10.2 Examples
+## 4.2 Examples
 
 ```
 -- Simple node type
@@ -344,7 +344,7 @@ node Document : Named, Timestamped {
 }
 ```
 
-## 10.3 Type Inheritance
+## 4.3 Type Inheritance
 
 ### 10.3.1 Semantics
 
@@ -393,7 +393,7 @@ node Document : Named, Timestamped {
 
 If the same attribute is inherited through multiple paths from the same origin, it appears once. If different parents define the same attribute name with incompatible types, the ontology is invalid.
 
-## 10.4 AST
+## 4.4 AST
 
 ```typescript
 interface NodeTypeDecl {
@@ -405,7 +405,7 @@ interface NodeTypeDecl {
 }
 ```
 
-## 10.5 Compilation
+## 4.5 Compilation
 
 A `NodeTypeDecl` compiles to:
 
@@ -427,9 +427,9 @@ For each attribute modifier:
 
 ---
 
-# 11. Attribute Declarations
+# 5. Attribute Declarations
 
-## 11.1 Syntax
+## 5.1 Syntax
 
 ```
 AttributeDecl = 
@@ -456,7 +456,7 @@ ComparisonModifier =
 DefaultValue = "=" Literal
 ```
 
-## 11.2 Basic Examples
+## 5.2 Basic Examples
 
 ```
 node Task {
@@ -478,7 +478,7 @@ node Task {
 }
 ```
 
-## 11.2.1 Attribute Nullability and Requirements
+## 5.2.1 Attribute Nullability and Requirements
 
 Understanding the relationship between nullable types (`T?`) and the `[required]` modifier:
 
@@ -527,7 +527,7 @@ node Task {
 --        Use 'String?' if the value can be null.
 ```
 
-## 11.3 Attribute Modifiers
+## 5.3 Attribute Modifiers
 
 ### 11.3.1 Required
 
@@ -709,7 +709,7 @@ age: Int [required, >= 0]   -- Must be present AND >= 0
 
 **Rationale:** This follows SQL semantics where NULL comparisons are neither true nor false. Constraints express "if present, must satisfy X" — use `[required]` to enforce presence.
 
-## 11.4 Modifier Combinations
+## 5.4 Modifier Combinations
 
 Modifiers can be combined:
 
@@ -728,7 +728,7 @@ node User {
 
 **Order:** Modifiers can appear in any order within brackets.
 
-## 11.5 Default Values
+## 5.5 Default Values
 
 Default values are used when an attribute is not provided at SPAWN time.
 
@@ -822,7 +822,7 @@ status: String [required] = "pending"
 
 SPAWN without `status` succeeds — it defaults to `"pending"`.
 
-## 11.6 Comprehensive Example
+## 5.6 Comprehensive Example
 
 ```
 node Person {
@@ -855,7 +855,7 @@ node Person {
 }
 ```
 
-## 11.7 AST
+## 5.7 AST
 
 ```typescript
 interface AttributeDecl {
@@ -882,7 +882,7 @@ interface AttributeModifiers {
 }
 ```
 
-## 11.8 Compilation
+## 5.8 Compilation
 
 An `AttributeDecl` compiles to:
 
@@ -904,9 +904,9 @@ For each constraint modifier, generate _ConstraintDef:
 
 ---
 
-# 12. Edge Type Declarations
+# 6. Edge Type Declarations
 
-## 12.1 Syntax
+## 6.1 Syntax
 
 ```
 EdgeTypeDecl =
@@ -952,7 +952,7 @@ edge assigned_to(task: Task, person: Person) {         -- with braces
 }
 ```
 
-## 12.2 Basic Examples
+## 6.2 Basic Examples
 
 ```
 -- Simple binary edge
@@ -978,7 +978,7 @@ edge meeting(organizer: Person, attendee1: Person, attendee2: Person, room: Room
 }
 ```
 
-## 12.3 Edge Modifiers
+## 6.3 Edge Modifiers
 
 ### 12.3.1 Symmetric
 
@@ -1159,7 +1159,7 @@ edge causes(from: Event, to: Event) [indexed] {}
 - Forward lookup: given `from`, find all `to`
 - Reverse lookup: given `to`, find all `from`
 
-## 12.4 Cardinality Modifiers
+## 6.4 Cardinality Modifiers
 
 Control how many edges a node can have.
 
@@ -1323,7 +1323,7 @@ Error: Cardinality constraint violated at commit
 Hint: Use BEGIN/COMMIT to create task and project together.
 ```
 
-## 12.5 Referential Actions
+## 6.5 Referential Actions
 
 Control what happens when a connected node is killed.
 
@@ -1490,7 +1490,7 @@ Hint: Use KILL ... FORCE CASCADE to override, or delete in batches.
 
 **Rationale:** Unbounded cascades can cause runaway deletions. The limits provide safety nets.
 
-## 12.6 Combined Example
+## 6.6 Combined Example
 
 ```
 --- Task assignment with full constraints
@@ -1543,7 +1543,7 @@ LINK assigned_to(t, p)                 -- ❌ Error: assigned_at required
 LINK assigned_to(t, p) { assigned_at = now() }  -- ✅ OK
 ```
 
-## 12.7 Higher-Order Edges
+## 6.7 Higher-Order Edges
 
 Edges can target other edges using `edge<T>` types.
 
@@ -1596,7 +1596,7 @@ UNLINK c
 
 **Note:** This cascade is recursive. If edge A references edge B, and edge B references edge C, unlinking C will unlink B, which will unlink A.
 
-## 12.8 AST
+## 6.8 AST
 
 ```typescript
 interface EdgeTypeDecl {
@@ -1633,7 +1633,7 @@ interface CardinalityConstraint {
 type ReferentialAction = "unlink" | "cascade" | "prevent"
 ```
 
-## 12.9 Compilation
+## 6.9 Compilation
 
 An `EdgeTypeDecl` compiles to:
 
@@ -1667,7 +1667,7 @@ For each modifier, generate constraints/rules:
 
 ---
 
-# 13. Patterns
+# 7. Patterns
 
 Patterns are the core construct for matching graph structure. They are used in:
 - Constraint conditions
@@ -1675,7 +1675,7 @@ Patterns are the core construct for matching graph structure. They are used in:
 - MATCH clauses
 - EXISTS expressions
 
-## 13.1 Syntax
+## 7.1 Syntax
 
 ```
 Pattern = PatternElement ("," PatternElement)* WhereClause?
@@ -1695,7 +1695,7 @@ EdgeAlias = "as" Identifier
 WhereClause = "where" Expr
 ```
 
-## 13.2 Node Patterns
+## 7.2 Node Patterns
 
 Bind variables to nodes of a type:
 
@@ -1706,7 +1706,7 @@ x: Task | Project           -- x is Task or Project
 n: any                      -- n is any node
 ```
 
-## 13.3 Edge Patterns
+## 7.3 Edge Patterns
 
 Match edges between nodes:
 
@@ -1734,7 +1734,7 @@ MATCH e1: Event, e2: Event, causes(e1, e2) AS c
 WHERE c.strength > 0.5
 ```
 
-## 13.4 Where Clause
+## 7.4 Where Clause
 
 Add filtering conditions:
 
@@ -1743,7 +1743,7 @@ MATCH e: Event
 WHERE e.timestamp > 1000 AND e.completed = true
 ```
 
-## 13.5 Negative Patterns
+## 7.5 Negative Patterns
 
 Use `NOT EXISTS` for absence:
 
@@ -1753,7 +1753,7 @@ MATCH t: Task
 WHERE NOT EXISTS(assigned_to(t, _))
 ```
 
-## 13.6 Transitive Patterns
+## 7.6 Transitive Patterns
 
 Use `+` for transitive closure and `*` for reflexive transitive closure:
 
@@ -1820,7 +1820,7 @@ MATCH causes+(a, z)
 -- Does NOT return: paths requiring 101+ hops
 ```
 
-**Customizing depth (in HOHG Language):**
+**Customizing depth (in MEW Language):**
 ```
 MATCH causes+(e1, e2) [depth: 500]   -- Allow up to 500 hops
 MATCH causes+(e1, e2) [depth: 10]    -- Limit to 10 hops (faster)
@@ -1851,9 +1851,9 @@ MATCH follows+(a, b) WHERE a.name = "A"
 
 - Transitive patterns cannot bind intermediate nodes (path binding deferred to future version)
 - Transitive patterns in constraints should be used sparingly due to performance cost
-- For complex path observations, use the WALK statement in HOHG Language
+- For complex path observations, use the WALK statement in MEW Language
 
-## 13.7 AST
+## 7.7 AST
 
 ```typescript
 interface Pattern {
@@ -1879,9 +1879,9 @@ interface EdgePattern {
 
 ---
 
-# 14. Constraint Declarations
+# 8. Constraint Declarations
 
-## 14.1 Syntax
+## 8.1 Syntax
 
 ```
 ConstraintDecl =
@@ -1923,7 +1923,7 @@ constraint no_self_loop: ...              -- describes what's prevented
 constraint task_needs_project: ...        -- describes requirement
 ```
 
-## 14.2 Examples
+## 8.2 Examples
 
 ```
 -- Simple constraint
@@ -1948,7 +1948,7 @@ constraint task_needs_project [message: "Every task must belong to a project"]:
   => exists(p: Project, belongs_to(t, p))
 ```
 
-## 14.3 Constraint Modifiers
+## 8.3 Constraint Modifiers
 
 | Modifier | Meaning |
 |----------|---------|
@@ -1956,7 +1956,7 @@ constraint task_needs_project [message: "Every task must belong to a project"]:
 | `soft` | Violation logs warning, allows operation |
 | `message: "..."` | Custom error/warning message |
 
-## 14.4 Reading Constraints
+## 8.4 Reading Constraints
 
 A constraint reads as: "For all matches of pattern, condition must hold."
 
@@ -1969,7 +1969,7 @@ constraint temporal_order:
 --  e1.timestamp must be less than e2.timestamp"
 ```
 
-## 14.5 Common Patterns
+## 8.5 Common Patterns
 
 ### Prohibition
 ```
@@ -2000,7 +2000,7 @@ constraint unique_email:
   => p1.email != p2.email
 ```
 
-## 14.6 AST
+## 8.6 AST
 
 ```typescript
 interface ConstraintDecl {
@@ -2018,9 +2018,9 @@ interface ConstraintDecl {
 
 ---
 
-# 15. Rule Declarations
+# 9. Rule Declarations
 
-## 15.1 Syntax
+## 9.1 Syntax
 
 ```
 RuleDecl =
@@ -2057,7 +2057,7 @@ AttrAssignments = (AttrAssignment ","?)*
 AttrAssignment = Identifier "=" Expr
 ```
 
-## 15.2 Examples
+## 9.2 Examples
 
 ```
 -- Inference rule
@@ -2091,7 +2091,7 @@ rule archive_old [manual]:
   SET t.archived = true
 ```
 
-## 15.3 Rule Modifiers
+## 9.3 Rule Modifiers
 
 | Modifier | Meaning |
 |----------|---------|
@@ -2120,7 +2120,7 @@ rule c [priority: 10]: t: Task => SET t.x = 3
 
 **Rationale:** Declaration order provides deterministic behavior without requiring explicit priorities on every rule.
 
-## 15.4 Actions
+## 9.4 Actions
 
 | Action | Syntax | Effect |
 |--------|--------|--------|
@@ -2130,7 +2130,7 @@ rule c [priority: 10]: t: Task => SET t.x = 3
 | UNLINK | `UNLINK e` | Remove edge |
 | SET | `SET x.attr = value` | Modify attribute |
 
-## 15.5 Execution Semantics
+## 9.5 Execution Semantics
 
 ### 15.5.0 Rule vs Constraint Execution Order
 
@@ -2296,7 +2296,7 @@ rule archive_old_tasks [manual]:
 
 **Rationale:** Continuous time-based evaluation would require the engine to wake up and re-evaluate rules constantly, which is expensive and complex. Trigger-based evaluation is simpler and more predictable.
 
-## 15.6 AST
+## 9.6 AST
 
 ```typescript
 interface RuleDecl {
@@ -2321,7 +2321,7 @@ type Action =
 
 ---
 
-# 16. Complete Grammar
+# 10. Complete Grammar
 
 For shared constructs (Types, Expressions, Literals, Lexical), see **Part I: Foundations §6.3**.
 
@@ -2396,7 +2396,7 @@ AttrAccess       = Identifier ("." Identifier)+
 
 ---
 
-# 17. Complete Example
+# 11. Complete Example
 
 A compact TaskManagement ontology demonstrating all DSL features:
 
@@ -2457,9 +2457,9 @@ ontology TaskManagement : Layer0 {
 
 ---
 
-# 18. Summary
+# 12. Summary
 
-## 18.1 Modifier Quick Reference
+## 12.1 Modifier Quick Reference
 
 | Modifier | Compiles To |
 |----------|-------------|
@@ -2473,7 +2473,7 @@ ontology TaskManagement : Layer0 {
 | `[symmetric]` | Storage + matching |
 | `[on_kill_*: cascade\|unlink\|prevent]` | Rule (binary only) |
 
-## 18.2 Key Semantics
+## 12.2 Key Semantics
 
 - **Cardinality**: Checked at COMMIT, not per-operation
 - **Referential actions**: Binary edges only; use rules for n-ary
@@ -2481,7 +2481,7 @@ ontology TaskManagement : Layer0 {
 - **`now()`**: Allowed in defaults/rules (evaluated once), forbidden in constraints
 - **NULL handling**: Value modifiers skip NULL; use `[required]` to enforce
 
-## 18.3 Limits
+## 12.3 Limits
 
 | Limit | Default |
 |-------|---------|

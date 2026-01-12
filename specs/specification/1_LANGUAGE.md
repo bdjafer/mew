@@ -1,10 +1,10 @@
-# HOHG Language Specification
+# MEW Language Specification
 
-## Part I: Foundations
+## Part I: Shared Language Foundations
 
 **Version:** 1.0
 **Status:** Draft
-**Scope:** Shared constructs for Ontology DSL and HOHG Language
+**Scope:** Shared constructs for Ontology DSL and MEW Language
 
 ---
 
@@ -12,11 +12,11 @@
 
 ## 1.1 Purpose
 
-This specification defines the syntax and semantics of the HOHG language family:
+This specification defines the syntax and semantics of the MEW language family:
 
 - **Ontology DSL**: A declarative language for defining graph schemas (node types, edge types, constraints, rules). Ontology DSL files are compiled into Layer 0 structures.
 
-- **HOHG Language**: A runtime language for operating on graphs (observation, transformation, administration, versioning). HOHG statements are interpreted against a running engine.
+- **MEW Language**: A runtime language for operating on graphs (observation, transformation, administration, versioning). MEW statements are interpreted against a running engine.
 
 Both languages share common foundational constructs defined in this Part.
 
@@ -228,10 +228,10 @@ OntologyKeyword =
   | "true" | "false" | "null"
 ```
 
-### 2.5.2 HOHG Language Keywords
+### 2.5.2 MEW Language Keywords
 
 ```
-HOHGKeyword =
+MEWKeyword =
     /* Observation */
     "match" | "walk" | "from" | "follow" | "return"
   | "as" | "collect" | "until" | "depth"
@@ -271,7 +271,7 @@ HOHGKeyword =
 ### 2.5.3 All Keywords (Combined)
 
 ```
-Keyword = OntologyKeyword | HOHGKeyword
+Keyword = OntologyKeyword | MEWKeyword
 ```
 
 The complete list of reserved keywords:
@@ -565,7 +565,7 @@ Punctuation =
 
 ## 3.1 Type Overview
 
-HOHG has six scalar (primitive) types:
+MEW has six scalar (primitive) types:
 
 | Type | Description | Size |
 |------|-------------|------|
@@ -1475,7 +1475,7 @@ not "text"               -- ERROR: 'not' requires Bool
 
 ## 6.1 Part I Contents
 
-This part defined the foundational constructs shared by both HOHG languages:
+This part defined the foundational constructs shared by both MEW languages:
 
 | Section | Contents |
 |---------|----------|
@@ -1491,7 +1491,7 @@ This part defined the foundational constructs shared by both HOHG languages:
 
 **Part III: Ontology DSL** — Declarations for types, edges, constraints, rules
 
-**Part IV: HOHG Language** — Observation, transformation, administration, versioning
+**Part IV: MEW Language** — Observation, transformation, administration, versioning
 
 ---
 
