@@ -335,7 +335,8 @@ impl Parser {
 
     fn parse_attr_assignment(&mut self) -> ParseResult<AttrAssignment> {
         let start = self.peek().span;
-        let name = self.expect_ident()?;
+        // Use expect_name to allow keywords like 'order' as attribute names
+        let name = self.expect_name()?;
         self.expect(&TokenKind::Eq)?;
         let value = self.parse_expr()?;
         let span = self.span_from(start);

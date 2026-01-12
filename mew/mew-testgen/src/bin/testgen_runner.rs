@@ -225,7 +225,14 @@ fn run_tests(path: &PathBuf, name: &str, opts: &Opts) -> Result<Outcome, String>
 fn format_failure(r: &TestResult) -> String {
     match &r.actual {
         ActualResult::Error(e) => e.clone(),
-        ActualResult::Rows(rows) => format!("[{}]: got {} rows, expected {:?}", r.test_id, rows.len(), r.expected),
+        ActualResult::Rows(rows) => {
+            let actual_desc = if rows.len() <= 3 {
+                format!("{:?}", rows)
+            } else {
+                format!("{} rows", rows.len())
+            };
+            format!("[{}]: got {}, expected {:?}", r.test_id, actual_desc, r.expected)
+        }
         ActualResult::Count(n) => format!("[{}]: got count {}, expected {:?}", r.test_id, n, r.expected),
         ActualResult::Success => format!("[{}]: got success, expected {:?}", r.test_id, r.expected),
     }
