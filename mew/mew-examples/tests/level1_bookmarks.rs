@@ -22,7 +22,7 @@ mod crud {
         Scenario::new("crud")
             .base_path(examples_path())
             .ontology("level-1/bookmarks/ontology.mew")
-            .operations("level-1/bookmarks/scenarios/crud.mew")
+            .operations("level-1/bookmarks/operations/crud.mew")
             // No seed - start with empty database
             .step("spawn_bookmark", |a| a.created(1))
             .step("query_count", |a| a.value(1))
@@ -53,7 +53,7 @@ mod queries {
             .base_path(examples_path())
             .ontology("level-1/bookmarks/ontology.mew")
             .seed("level-1/bookmarks/seeds/populated.mew")
-            .operations("level-1/bookmarks/scenarios/queries.mew")
+            .operations("level-1/bookmarks/operations/queries.mew")
             .step("count_all_bookmarks", |a| a.value(5))
             .step("count_all_folders", |a| a.value(3))
             .step("count_all_tags", |a| a.value(3))
@@ -78,7 +78,7 @@ mod errors {
         Scenario::new("errors")
             .base_path(examples_path())
             .ontology("level-1/bookmarks/ontology.mew")
-            .operations("level-1/bookmarks/scenarios/errors.mew")
+            .operations("level-1/bookmarks/operations/errors.mew")
             .step("spawn_missing_required", |a| a.error("required"))
             .step("spawn_valid", |a| a.created(1))
     }
