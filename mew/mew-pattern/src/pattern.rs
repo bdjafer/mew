@@ -213,6 +213,7 @@ mod tests {
                 edge_type: "owns".to_string(),
                 targets: vec!["p".to_string(), "t".to_string()],
                 alias: None,
+                transitive: None,
                 span: Default::default(),
             }),
         ];

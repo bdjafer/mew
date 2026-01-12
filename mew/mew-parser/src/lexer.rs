@@ -90,9 +90,11 @@ pub enum TokenKind {
     Pipe,     // |
     Hash,     // #
     Dollar,   // $
-    Concat,   // ++
-    Range,    // ..
-    Question, // ?
+    Concat,     // ++
+    Range,      // ..
+    Question,   // ?
+    Arrow,      // =>
+    RightArrow, // ->
 
     // End of file
     Eof,
@@ -184,8 +186,70 @@ impl TokenKind {
             TokenKind::Concat => "++",
             TokenKind::Range => "..",
             TokenKind::Question => "?",
+            TokenKind::Arrow => "=>",
+            TokenKind::RightArrow => "->",
             TokenKind::Eof => "end of input",
         }
+    }
+
+    /// Returns true if this token is a keyword (not an identifier, literal, or punctuation).
+    pub fn is_keyword(&self) -> bool {
+        matches!(
+            self,
+            TokenKind::Match
+                | TokenKind::Where
+                | TokenKind::Return
+                | TokenKind::Order
+                | TokenKind::By
+                | TokenKind::Asc
+                | TokenKind::Desc
+                | TokenKind::Limit
+                | TokenKind::Offset
+                | TokenKind::Distinct
+                | TokenKind::Spawn
+                | TokenKind::Kill
+                | TokenKind::Link
+                | TokenKind::Unlink
+                | TokenKind::Set
+                | TokenKind::Walk
+                | TokenKind::From
+                | TokenKind::Follow
+                | TokenKind::Until
+                | TokenKind::Outbound
+                | TokenKind::Inbound
+                | TokenKind::Begin
+                | TokenKind::Commit
+                | TokenKind::Rollback
+                | TokenKind::As
+                | TokenKind::And
+                | TokenKind::Or
+                | TokenKind::Not
+                | TokenKind::Exists
+                | TokenKind::Null
+                | TokenKind::True
+                | TokenKind::False
+                | TokenKind::Cascade
+                | TokenKind::No
+                | TokenKind::Returning
+                | TokenKind::Node
+                | TokenKind::Edge
+                | TokenKind::Constraint
+                | TokenKind::Rule
+                | TokenKind::Type
+                | TokenKind::In
+                | TokenKind::On
+                | TokenKind::Read
+                | TokenKind::Serializable
+                | TokenKind::Committed
+                | TokenKind::Optional
+                | TokenKind::Any
+                | TokenKind::Path
+                | TokenKind::Nodes
+                | TokenKind::Edges
+                | TokenKind::Terminal
+                | TokenKind::Load
+                | TokenKind::Ontology
+        )
     }
 }
 
@@ -211,7 +275,6 @@ impl Token {
 
 /// Lexer state.
 pub struct Lexer<'a> {
-    input: &'a str,
     chars: std::iter::Peekable<std::str::CharIndices<'a>>,
     pos: usize,
     line: usize,
@@ -221,7 +284,6 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
-            input,
             chars: input.char_indices().peekable(),
             pos: 0,
             line: 1,
@@ -308,7 +370,14 @@ impl<'a> Lexer<'a> {
                     TokenKind::Dot
                 }
             }
-            '=' => TokenKind::Eq,
+            '=' => {
+                if self.peek_char() == Some('>') {
+                    self.next_char();
+                    TokenKind::Arrow
+                } else {
+                    TokenKind::Eq
+                }
+            }
             '<' => {
                 if self.peek_char() == Some('=') {
                     self.next_char();
@@ -345,19 +414,25 @@ impl<'a> Lexer<'a> {
                 }
             }
             '-' => {
-                // Check for comment
-                if self.peek_char() == Some('-') {
-                    self.next_char();
-                    // Skip to end of line
-                    while let Some(c) = self.peek_char() {
-                        if c == '\n' {
-                            break;
-                        }
+                // Check for comment or right arrow
+                match self.peek_char() {
+                    Some('-') => {
                         self.next_char();
+                        // Skip to end of line
+                        while let Some(c) = self.peek_char() {
+                            if c == '\n' {
+                                break;
+                            }
+                            self.next_char();
+                        }
+                        return self.next_token();
                     }
-                    return self.next_token();
+                    Some('>') => {
+                        self.next_char();
+                        TokenKind::RightArrow
+                    }
+                    _ => TokenKind::Minus,
                 }
-                TokenKind::Minus
             }
             '*' => TokenKind::Star,
             '/' => TokenKind::Slash,
@@ -762,6 +837,60 @@ mod tests {
                 TokenKind::Colon,
                 TokenKind::Ident("String".into()),
                 TokenKind::Question,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_arrow_tokens() {
+        let kinds = tokenize("=> -> = >");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Arrow,
+                TokenKind::RightArrow,
+                TokenKind::Eq,
+                TokenKind::Gt,
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_constraint_syntax_tokens() {
+        let kinds = tokenize("constraint foo: e: Event => e.x > 0");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Constraint,
+                TokenKind::Ident("foo".into()),
+                TokenKind::Colon,
+                TokenKind::Ident("e".into()),
+                TokenKind::Colon,
+                TokenKind::Ident("Event".into()),
+                TokenKind::Arrow,
+                TokenKind::Ident("e".into()),
+                TokenKind::Dot,
+                TokenKind::Ident("x".into()),
+                TokenKind::Gt,
+                TokenKind::Int(0),
+                TokenKind::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_cardinality_tokens() {
+        let kinds = tokenize("[task -> 1]");
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::LBracket,
+                TokenKind::Ident("task".into()),
+                TokenKind::RightArrow,
+                TokenKind::Int(1),
+                TokenKind::RBracket,
                 TokenKind::Eof
             ]
         );
