@@ -1,0 +1,78 @@
+-- ===========================================================================
+-- SCENARIO: Edge Operations
+-- DESCRIPTION: Test edge creation, querying, and deletion patterns
+-- ===========================================================================
+
+--# spawn_entities
+SPAWN b1: Bookmark { url = "https://edge1.com", title = "Edge Test 1" }
+SPAWN b2: Bookmark { url = "https://edge2.com", title = "Edge Test 2" }
+SPAWN b3: Bookmark { url = "https://edge3.com", title = "Edge Test 3" }
+SPAWN f1: Folder { name = "Work" }
+SPAWN f2: Folder { name = "Personal" }
+SPAWN t1: Tag { name = "important" }
+SPAWN t2: Tag { name = "reference" }
+SPAWN t3: Tag { name = "tutorial" }
+
+--# link_bookmarks_to_folder
+LINK in_folder(b1, f1)
+LINK in_folder(b2, f1)
+LINK in_folder(b3, f2)
+
+--# count_work_folder_bookmarks
+MATCH b: Bookmark, f: Folder, in_folder(b, f)
+WHERE f.name = "Work"
+RETURN count(b)
+
+--# count_personal_folder_bookmarks
+MATCH b: Bookmark, f: Folder, in_folder(b, f)
+WHERE f.name = "Personal"
+RETURN count(b)
+
+--# link_multiple_tags_to_bookmark
+LINK tagged(b1, t1)
+LINK tagged(b1, t2)
+LINK tagged(b1, t3)
+
+--# count_tags_on_b1
+MATCH b: Bookmark, t: Tag, tagged(b, t)
+WHERE b.url = "https://edge1.com"
+RETURN count(t)
+
+--# query_bookmarks_by_tag
+MATCH b: Bookmark, t: Tag, tagged(b, t)
+WHERE t.name = "important"
+RETURN b.title
+
+--# link_nested_folders
+SPAWN f_parent: Folder { name = "Main" }
+SPAWN f_child: Folder { name = "Subfolder" }
+LINK parent_folder(f_child, f_parent)
+
+--# query_nested_folders
+MATCH child: Folder, parent: Folder, parent_folder(child, parent)
+RETURN child.name, parent.name
+
+--# unlink_bookmark_from_folder
+UNLINK in_folder(b1, f1)
+
+--# verify_unlinked
+MATCH b: Bookmark, f: Folder, in_folder(b, f)
+WHERE b.url = "https://edge1.com" AND f.name = "Work"
+RETURN count(b)
+
+--# unlink_tag_from_bookmark
+UNLINK tagged(b1, t1)
+
+--# count_tags_after_unlink
+MATCH b: Bookmark, t: Tag, tagged(b, t)
+WHERE b.url = "https://edge1.com"
+RETURN count(t)
+
+--# unlink_all_tags_from_bookmark
+UNLINK tagged(b1, t2)
+UNLINK tagged(b1, t3)
+
+--# verify_no_tags
+MATCH b: Bookmark, t: Tag, tagged(b, t)
+WHERE b.url = "https://edge1.com"
+RETURN count(t)

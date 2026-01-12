@@ -1,0 +1,76 @@
+-- ===========================================================================
+-- SCENARIO: Query Filtering
+-- DESCRIPTION: Test WHERE clauses with various operators and conditions
+-- ===========================================================================
+
+--# seed_data
+SPAWN b1: Bookmark { url = "https://alpha.com", title = "Alpha", visit_count = 5, is_favorite = true }
+SPAWN b2: Bookmark { url = "https://beta.com", title = "Beta", visit_count = 10, is_favorite = false }
+SPAWN b3: Bookmark { url = "https://gamma.com", title = "Gamma", visit_count = 15, is_favorite = true }
+SPAWN b4: Bookmark { url = "https://delta.com", title = "Delta", visit_count = 20, is_favorite = false }
+SPAWN b5: Bookmark { url = "https://epsilon.com", title = "Epsilon", visit_count = 0, is_favorite = true }
+
+--# filter_by_boolean_true
+MATCH b: Bookmark WHERE b.is_favorite = true
+RETURN count(b)
+
+--# filter_by_boolean_false
+MATCH b: Bookmark WHERE b.is_favorite = false
+RETURN count(b)
+
+--# filter_by_int_equality
+MATCH b: Bookmark WHERE b.visit_count = 10
+RETURN b.title
+
+--# filter_by_int_greater
+MATCH b: Bookmark WHERE b.visit_count > 10
+RETURN count(b)
+
+--# filter_by_int_greater_equal
+MATCH b: Bookmark WHERE b.visit_count >= 10
+RETURN count(b)
+
+--# filter_by_int_less
+MATCH b: Bookmark WHERE b.visit_count < 10
+RETURN count(b)
+
+--# filter_by_int_less_equal
+MATCH b: Bookmark WHERE b.visit_count <= 10
+RETURN count(b)
+
+--# filter_by_int_not_equal
+MATCH b: Bookmark WHERE b.visit_count != 0
+RETURN count(b)
+
+--# filter_by_string_equality
+MATCH b: Bookmark WHERE b.title = "Beta"
+RETURN b.url
+
+--# filter_by_string_not_equal
+MATCH b: Bookmark WHERE b.title != "Alpha"
+RETURN count(b)
+
+--# filter_null_check
+SPAWN b_null: Bookmark { url = "https://null.com", title = "Null Test", description = null }
+MATCH b: Bookmark WHERE b.description = null
+RETURN count(b)
+
+--# filter_not_null
+SPAWN b_desc: Bookmark { url = "https://desc.com", title = "Has Desc", description = "Some text" }
+MATCH b: Bookmark WHERE b.description != null
+RETURN count(b)
+
+--# filter_and_condition
+MATCH b: Bookmark 
+WHERE b.is_favorite = true AND b.visit_count > 0
+RETURN count(b)
+
+--# filter_or_condition
+MATCH b: Bookmark 
+WHERE b.visit_count = 0 OR b.visit_count >= 20
+RETURN count(b)
+
+--# filter_complex_condition
+MATCH b: Bookmark
+WHERE (b.is_favorite = true AND b.visit_count > 5) OR b.visit_count = 0
+RETURN count(b)

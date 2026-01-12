@@ -1,0 +1,145 @@
+-- ===========================================================================
+-- SCENARIO: Multi-Entity Contact Management
+-- DESCRIPTION: Test complex scenarios with multiple related entities
+-- ===========================================================================
+
+--# create_person_with_full_profile
+SPAWN alice: Person {
+  first_name = "Alice",
+  last_name = "Johnson",
+  nickname = "AJ",
+  notes = "Important client contact",
+  is_favorite = true
+}
+
+--# add_multiple_emails
+SPAWN email1: Email { label = "work", address = "alice@work.com", is_primary = true }
+SPAWN email2: Email { label = "personal", address = "alice@personal.com" }
+LINK has_email(alice, email1)
+LINK has_email(alice, email2)
+
+--# query_person_emails
+MATCH p: Person, e: Email, has_email(p, e)
+WHERE p.first_name = "Alice"
+RETURN count(e)
+
+--# query_primary_email
+MATCH p: Person, e: Email, has_email(p, e)
+WHERE p.first_name = "Alice" AND e.is_primary = true
+RETURN e.address
+
+--# add_multiple_phones
+SPAWN phone1: Phone { label = "mobile", number = "555-0100", is_primary = true }
+SPAWN phone2: Phone { label = "work", number = "555-0200" }
+SPAWN phone3: Phone { label = "home", number = "555-0300" }
+LINK has_phone(alice, phone1)
+LINK has_phone(alice, phone2)
+LINK has_phone(alice, phone3)
+
+--# count_phones
+MATCH p: Person, ph: Phone, has_phone(p, ph)
+WHERE p.first_name = "Alice"
+RETURN count(ph)
+
+--# add_multiple_addresses
+SPAWN addr1: Address {
+  label = "home",
+  street1 = "123 Main St",
+  city = "Springfield",
+  is_primary = true
+}
+SPAWN addr2: Address {
+  label = "work",
+  street1 = "456 Office Blvd",
+  street2 = "Suite 200",
+  city = "Metropolis",
+  state = "NY"
+}
+LINK has_address(alice, addr1)
+LINK has_address(alice, addr2)
+
+--# query_primary_address
+MATCH p: Person, a: Address, has_address(p, a)
+WHERE p.first_name = "Alice" AND a.is_primary = true
+RETURN a.street1, a.city
+
+--# add_social_profiles
+SPAWN twitter: SocialProfile {
+  platform = "Twitter",
+  username = "alice_j",
+  url = "https://twitter.com/alice_j"
+}
+SPAWN linkedin: SocialProfile {
+  platform = "LinkedIn",
+  username = "alicejohnson"
+}
+LINK has_social(alice, twitter)
+LINK has_social(alice, linkedin)
+
+--# count_social_profiles
+MATCH p: Person, s: SocialProfile, has_social(p, s)
+WHERE p.first_name = "Alice"
+RETURN count(s)
+
+--# create_organization_with_contacts
+SPAWN corp: Organization {
+  name = "Tech Solutions Inc",
+  industry = "Software",
+  website = "https://techsolutions.com"
+}
+
+SPAWN corp_email: Email { address = "info@techsolutions.com" }
+SPAWN corp_phone: Phone { number = "555-9999" }
+SPAWN corp_addr: Address {
+  street1 = "789 Business Ave",
+  city = "Tech City"
+}
+
+LINK org_email(corp, corp_email)
+LINK org_phone(corp, corp_phone)
+LINK org_address(corp, corp_addr)
+
+--# verify_org_contacts
+MATCH o: Organization
+WHERE o.name = "Tech Solutions Inc"
+RETURN count(o)
+
+--# link_person_to_org
+LINK works_at(alice, corp) {
+  title = "CTO",
+  department = "Executive",
+  is_current = true
+}
+
+--# query_employment
+MATCH p: Person, o: Organization, works_at(p, o) AS w
+WHERE p.first_name = "Alice"
+RETURN o.name, w.title, w.department
+
+--# add_tags_to_person
+SPAWN tag1: Tag { name = "vip" }
+SPAWN tag2: Tag { name = "executive" }
+SPAWN tag3: Tag { name = "tech" }
+LINK person_tagged(alice, tag1)
+LINK person_tagged(alice, tag2)
+LINK person_tagged(alice, tag3)
+
+--# count_person_tags
+MATCH p: Person, t: Tag, person_tagged(p, t)
+WHERE p.first_name = "Alice"
+RETURN count(t)
+
+--# add_groups
+SPAWN group1: Group { name = "Board Members", description = "Company board" }
+SPAWN group2: Group { name = "Tech Leaders", description = "CTO network" }
+LINK in_group(alice, group1)
+LINK in_group(alice, group2)
+
+--# query_person_groups
+MATCH p: Person, g: Group, in_group(p, g)
+WHERE p.first_name = "Alice"
+RETURN g.name, g.description
+
+--# count_all_alice_relationships
+MATCH p: Person WHERE p.first_name = "Alice"
+RETURN count(p)

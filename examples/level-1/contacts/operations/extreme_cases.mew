@@ -1,0 +1,102 @@
+-- ===========================================================================
+-- SCENARIO: Edge Cases
+-- DESCRIPTION: Boundary conditions and unusual but valid contact data
+-- ===========================================================================
+
+-- ===========================================================================
+-- NAME BOUNDARY CONDITIONS
+-- ===========================================================================
+
+--# spawn_minimal_names
+SPAWN short: Person { first_name = "A", last_name = "B" }
+
+--# spawn_unicode_names
+SPAWN jose: Person { first_name = "José", last_name = "François-Müller" }
+SPAWN chinese: Person { first_name = "李", last_name = "明" }
+SPAWN cyrillic: Person { first_name = "Владимир", last_name = "Петров" }
+
+--# query_unicode_names_preserved
+MATCH p: Person WHERE p.first_name = "José" OR p.first_name = "李"
+RETURN count(p)
+
+-- ===========================================================================
+-- MULTIPLE PRIMARY FLAGS
+-- ===========================================================================
+
+--# spawn_person_multiple_primary_emails
+SPAWN conflict: Person { first_name = "Primary", last_name = "Conflict" }
+SPAWN e1: Email { label = "work", address = "e1@test.com", is_primary = true }
+SPAWN e2: Email { label = "personal", address = "e2@test.com", is_primary = true }
+SPAWN e3: Email { label = "backup", address = "e3@test.com", is_primary = true }
+
+LINK has_email(conflict, e1)
+LINK has_email(conflict, e2)
+LINK has_email(conflict, e3)
+
+--# query_multiple_primary_flags
+MATCH p: Person, e: Email, has_email(p, e)
+WHERE p.first_name = "Primary" AND e.is_primary = true
+RETURN count(e)
+
+-- ===========================================================================
+-- BIDIRECTIONAL RELATIONSHIP ASYMMETRY
+-- ===========================================================================
+
+--# create_asymmetric_knows
+SPAWN alice: Person { first_name = "Alice", last_name = "Asymmetric" }
+SPAWN bob: Person { first_name = "Bob", last_name = "Asymmetric" }
+
+LINK knows(alice, bob) { relationship = "friend" }
+LINK knows(bob, alice) { relationship = "acquaintance" }
+
+--# query_relationship_differs_by_direction
+MATCH p1: Person, p2: Person, knows(p1, p2) AS k
+WHERE p1.first_name = "Alice" AND p2.first_name = "Bob"
+RETURN k.relationship
+
+MATCH p1: Person, p2: Person, knows(p1, p2) AS k
+WHERE p1.first_name = "Bob" AND p2.first_name = "Alice"
+RETURN k.relationship
+
+-- ===========================================================================
+-- EMPLOYMENT EDGE CASES
+-- ===========================================================================
+
+--# spawn_person_multiple_current_jobs
+SPAWN multi: Person { first_name = "Multi", last_name = "Job" }
+SPAWN o1: Organization { name = "Company A" }
+SPAWN o2: Organization { name = "Company B" }
+
+LINK works_at(multi, o1) { title = "Consultant", is_current = true }
+LINK works_at(multi, o2) { title = "Advisor", is_current = true }
+
+--# query_multiple_current_employments
+MATCH p: Person, o: Organization, works_at(p, o) AS w
+WHERE p.first_name = "Multi" AND w.is_current = true
+RETURN count(o)
+
+-- ===========================================================================
+-- ORPHANED CONTACT INFO
+-- ===========================================================================
+
+--# create_then_delete_person
+SPAWN deleteme: Person { first_name = "Delete", last_name = "Me" }
+SPAWN orphan_email: Email { address = "orphan@test.com" }
+SPAWN orphan_phone: Phone { number = "555-ORPHAN" }
+
+LINK has_email(deleteme, orphan_email)
+LINK has_phone(deleteme, orphan_phone)
+
+KILL deleteme
+
+--# verify_contact_info_remains
+MATCH e: Email WHERE e.address = "orphan@test.com"
+RETURN count(e)
+
+MATCH ph: Phone WHERE ph.number = "555-ORPHAN"
+RETURN count(ph)
+
+--# verify_edges_cascade_removed
+MATCH p: Person, e: Email, has_email(p, e)
+WHERE e.address = "orphan@test.com"
+RETURN count(p)

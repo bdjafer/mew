@@ -1,0 +1,58 @@
+-- ===========================================================================
+-- SCENARIO: Query Aggregations
+-- DESCRIPTION: Test aggregate functions (COUNT, SUM, AVG, MIN, MAX)
+-- ===========================================================================
+
+--# seed_for_aggregation
+SPAWN b1: Bookmark { url = "https://1.com", title = "One", visit_count = 10 }
+SPAWN b2: Bookmark { url = "https://2.com", title = "Two", visit_count = 20 }
+SPAWN b3: Bookmark { url = "https://3.com", title = "Three", visit_count = 30 }
+SPAWN b4: Bookmark { url = "https://4.com", title = "Four", visit_count = 40 }
+SPAWN b5: Bookmark { url = "https://5.com", title = "Five", visit_count = 50 }
+
+--# count_all
+MATCH b: Bookmark
+RETURN count(b)
+
+--# count_with_filter
+MATCH b: Bookmark
+WHERE b.visit_count >= 30
+RETURN count(b)
+
+--# sum_visit_counts
+MATCH b: Bookmark
+RETURN sum(b.visit_count)
+
+--# avg_visit_count
+MATCH b: Bookmark
+RETURN avg(b.visit_count)
+
+--# min_visit_count
+MATCH b: Bookmark
+RETURN min(b.visit_count)
+
+--# max_visit_count
+MATCH b: Bookmark
+RETURN max(b.visit_count)
+
+--# multiple_aggregates
+MATCH b: Bookmark
+RETURN count(b), sum(b.visit_count), avg(b.visit_count), min(b.visit_count), max(b.visit_count)
+
+--# aggregation_with_grouping
+SPAWN f1: Folder { name = "Work" }
+SPAWN f2: Folder { name = "Personal" }
+LINK in_folder(b1, f1)
+LINK in_folder(b2, f1)
+LINK in_folder(b3, f2)
+LINK in_folder(b4, f2)
+LINK in_folder(b5, f2)
+
+MATCH b: Bookmark, f: Folder, in_folder(b, f)
+RETURN f.name, count(b)
+ORDER BY f.name
+
+--# sum_by_folder
+MATCH b: Bookmark, f: Folder, in_folder(b, f)
+RETURN f.name, sum(b.visit_count)
+ORDER BY f.name
