@@ -1402,12 +1402,12 @@ SYNC TO REMOTE backup
   [trigger: immediate]
   [include_edges: true]
 
--- Monitor sync lag
-SUBSCRIBE MATCH r: _Remote WHERE r.name = "backup"
-  [mode: watch]
-  ON MATCH DO
-    IF r.sync_lag > 5m THEN
-      SPAWN Alert { message = "DR sync lag: " + r.sync_lag }
+-- Monitor sync lag (using rule-based approach, no IF expressions)
+rule sync_lag_alert:
+  r: _Remote
+  WHERE r.name = "backup" AND r.sync_lag > 5.minutes
+  =>
+  SPAWN Alert { message = "DR sync lag exceeded threshold" }
 ```
 
 ---
