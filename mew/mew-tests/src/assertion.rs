@@ -10,6 +10,7 @@ use crate::error::{ExampleError, ExampleResult};
 pub type Row = HashMap<String, Value>;
 
 /// A complete assertion for a step result.
+#[derive(Default)]
 pub struct Assertion {
     // Mutation assertions
     pub created: Option<usize>,
@@ -45,32 +46,6 @@ pub struct Assertion {
     pub custom: Option<Box<dyn Fn(&StatementResult) -> bool + Send + Sync>>,
 }
 
-impl Default for Assertion {
-    fn default() -> Self {
-        Self {
-            created: None,
-            modified: None,
-            deleted: None,
-            linked: None,
-            value: None,
-            value_min: None,
-            value_max: None,
-            rows: None,
-            rows_min: None,
-            rows_max: None,
-            empty: None,
-            contains: Vec::new(),
-            exactly: None,
-            ordered: false,
-            first: None,
-            last: None,
-            error: None,
-            error_pattern: None,
-            capture: None,
-            custom: None,
-        }
-    }
-}
 
 impl std::fmt::Debug for Assertion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

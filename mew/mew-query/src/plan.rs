@@ -215,7 +215,7 @@ impl<'r> QueryPlanner<'r> {
                 };
                 kind.map(|k| {
                     // For count(), use a placeholder expression if no args
-                    let arg = fc.args.first().cloned().unwrap_or_else(|| {
+                    let arg = fc.args.first().cloned().unwrap_or({
                         Expr::Literal(mew_parser::Literal {
                             kind: mew_parser::LiteralKind::Int(1),
                             span: fc.span,
@@ -279,6 +279,7 @@ impl<'r> QueryPlanner<'r> {
     }
 
     /// Plan projections from RETURN clause.
+    #[allow(clippy::type_complexity)]
     fn plan_projections(
         &self,
         projections: &[Projection],

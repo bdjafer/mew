@@ -215,12 +215,11 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                                 for (i, var) in from_vars.iter().enumerate() {
                                     if let Some(binding) = bindings.get(var) {
                                         if let Some(expected_id) = binding.as_node() {
-                                            if i < edge.targets.len() {
-                                                if edge.targets[i].as_node() != Some(expected_id) {
+                                            if i < edge.targets.len()
+                                                && edge.targets[i].as_node() != Some(expected_id) {
                                                     all_match = false;
                                                     break;
                                                 }
-                                            }
                                         }
                                     }
                                 }
@@ -277,19 +276,11 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 let mut results = self.execute_op(input, initial_bindings)?;
 
                 // Sort by the order expressions
-                results.sort_by(|(a_bindings, a_values), (b_bindings, b_values)| {
+                results.sort_by(|(a_bindings, _a_values), (b_bindings, _b_values)| {
                     for (expr, ascending) in order_by {
                         // Evaluate the expression for both rows
-                        let a_val = if !a_values.is_empty() {
-                            self.evaluator.eval(expr, a_bindings, self.graph).ok()
-                        } else {
-                            self.evaluator.eval(expr, a_bindings, self.graph).ok()
-                        };
-                        let b_val = if !b_values.is_empty() {
-                            self.evaluator.eval(expr, b_bindings, self.graph).ok()
-                        } else {
-                            self.evaluator.eval(expr, b_bindings, self.graph).ok()
-                        };
+                        let a_val = self.evaluator.eval(expr, a_bindings, self.graph).ok();
+                        let b_val = self.evaluator.eval(expr, b_bindings, self.graph).ok();
 
                         let cmp = self.compare_values(&a_val, &b_val);
                         if cmp != std::cmp::Ordering::Equal {
@@ -525,18 +516,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
     }
 
     fn compare_values_inner(&self, a: &Value, b: &Value) -> std::cmp::Ordering {
-        match (a, b) {
-            (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
-            (Value::Null, _) => std::cmp::Ordering::Less,
-            (_, Value::Null) => std::cmp::Ordering::Greater,
-            (Value::Int(a), Value::Int(b)) => a.cmp(b),
-            (Value::Float(a), Value::Float(b)) => {
-                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-            }
-            (Value::String(a), Value::String(b)) => a.cmp(b),
-            (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
-            _ => std::cmp::Ordering::Equal,
-        }
+        a.cmp_sortable(b)
     }
 
     /// Check if two values are equal.

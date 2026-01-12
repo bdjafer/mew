@@ -50,7 +50,7 @@ pub fn validate_range(
 
     // Check minimum constraint
     if let Some(min_val) = min {
-        if !value_gte(value, min_val) {
+        if !value.gte(min_val) {
             let range_desc = match max {
                 Some(max_val) => format!(" [{:?}..{:?}]", min_val, max_val),
                 None => format!(" [>= {:?}]", min_val),
@@ -65,7 +65,7 @@ pub fn validate_range(
 
     // Check maximum constraint
     if let Some(max_val) = max {
-        if !value_lte(value, max_val) {
+        if !value.lte(max_val) {
             let range_desc = match min {
                 Some(min_val) => format!(" [{:?}..{:?}]", min_val, max_val),
                 None => format!(" [<= {:?}]", max_val),
@@ -116,17 +116,7 @@ pub fn apply_defaults(
 
 /// Get the type name of a value.
 pub fn value_type_name(value: &Value) -> String {
-    match value {
-        Value::Null => "Null".to_string(),
-        Value::Bool(_) => "Bool".to_string(),
-        Value::Int(_) => "Int".to_string(),
-        Value::Float(_) => "Float".to_string(),
-        Value::String(_) => "String".to_string(),
-        Value::Timestamp(_) => "Timestamp".to_string(),
-        Value::Duration(_) => "Duration".to_string(),
-        Value::NodeRef(_) => "NodeRef".to_string(),
-        Value::EdgeRef(_) => "EdgeRef".to_string(),
-    }
+    value.type_name().to_string()
 }
 
 /// Check if types are compatible.
@@ -145,24 +135,3 @@ pub fn types_compatible(expected: &str, actual: &str) -> bool {
     false
 }
 
-/// Check if value >= min_val.
-fn value_gte(value: &Value, min_val: &Value) -> bool {
-    match (value, min_val) {
-        (Value::Int(v), Value::Int(m)) => *v >= *m,
-        (Value::Float(v), Value::Float(m)) => *v >= *m,
-        (Value::Int(v), Value::Float(m)) => (*v as f64) >= *m,
-        (Value::Float(v), Value::Int(m)) => *v >= (*m as f64),
-        _ => true, // Non-numeric types pass
-    }
-}
-
-/// Check if value <= max_val.
-fn value_lte(value: &Value, max_val: &Value) -> bool {
-    match (value, max_val) {
-        (Value::Int(v), Value::Int(m)) => *v <= *m,
-        (Value::Float(v), Value::Float(m)) => *v <= *m,
-        (Value::Int(v), Value::Float(m)) => (*v as f64) <= *m,
-        (Value::Float(v), Value::Int(m)) => *v <= (*m as f64),
-        _ => true, // Non-numeric types pass
-    }
-}

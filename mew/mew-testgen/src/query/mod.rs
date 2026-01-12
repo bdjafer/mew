@@ -299,6 +299,7 @@ impl<'a> QueryGenerator<'a> {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 enum QueryType {
     MatchAll,
     MatchByAttr,

@@ -24,7 +24,7 @@ impl TrustAuditor {
         report
             .by_trust_level
             .entry(result.trust_level)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(result.clone());
 
         // Flag potential issues

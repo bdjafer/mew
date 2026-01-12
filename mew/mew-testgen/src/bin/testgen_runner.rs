@@ -32,7 +32,7 @@ fn main() {
     for (path, name) in &ontologies {
         print!("  {:<30} ", name);
 
-        match run_tests(path, &name, &opts) {
+        match run_tests(path, name, &opts) {
             Ok(outcome) => {
                 stats.passed += outcome.passed;
                 stats.failed += outcome.failed;
@@ -309,7 +309,7 @@ fn run_tests(path: &PathBuf, name: &str, opts: &Opts) -> Result<Outcome, String>
     let first_failure = results
         .iter()
         .find(|r| !r.passed)
-        .map(|r| format_failure(r));
+        .map(format_failure);
 
     Ok(Outcome {
         passed: summary.passed,

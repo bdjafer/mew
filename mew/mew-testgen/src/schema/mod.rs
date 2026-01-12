@@ -51,8 +51,7 @@ impl SchemaAnalyzer {
             }
 
             // Detect block start
-            if line.starts_with("node ") {
-                let rest = &line[5..];
+            if let Some(rest) = line.strip_prefix("node ") {
                 let (name, parents) = Self::parse_node_header(rest);
                 current_name = name;
                 current_parents = parents;
@@ -76,8 +75,7 @@ impl SchemaAnalyzer {
                 continue;
             }
 
-            if line.starts_with("edge ") {
-                let rest = &line[5..];
+            if let Some(rest) = line.strip_prefix("edge ") {
                 let (name, params) = Self::parse_edge_header(rest);
                 current_name = name;
                 current_params = params;
@@ -114,8 +112,7 @@ impl SchemaAnalyzer {
                 continue;
             }
 
-            if line.starts_with("constraint ") {
-                let rest = &line[11..];
+            if let Some(rest) = line.strip_prefix("constraint ") {
                 if let Some((name, on_type)) = Self::parse_constraint_header(rest) {
                     schema.constraints.push(ConstraintInfo {
                         name,
@@ -126,8 +123,7 @@ impl SchemaAnalyzer {
                 continue;
             }
 
-            if line.starts_with("rule ") {
-                let rest = &line[5..];
+            if let Some(rest) = line.strip_prefix("rule ") {
                 if let Some((name, on_type, auto)) = Self::parse_rule_header(rest) {
                     schema.rules.push(RuleInfo {
                         name,
@@ -223,7 +219,7 @@ impl SchemaAnalyzer {
 
                     // Prepend inherited attrs
                     let mut all_attrs = new_inherited;
-                    all_attrs.extend(type_info.attrs.drain(..));
+                    all_attrs.append(&mut type_info.attrs);
                     type_info.attrs = all_attrs;
                 }
             }
@@ -299,15 +295,13 @@ impl SchemaAnalyzer {
                 let mods = &after_eq[bracket_start + 1..bracket_end];
 
                 // Check for >= constraint (minimum)
-                if mods.starts_with(">=") {
-                    let value_str = mods[2..].trim();
-                    min = Self::parse_value(value_str);
+                if let Some(suffix) = mods.strip_prefix(">=") {
+                    min = Self::parse_value(suffix.trim());
                 }
 
                 // Check for <= constraint (maximum)
-                if mods.starts_with("<=") {
-                    let value_str = mods[2..].trim();
-                    max = Self::parse_value(value_str);
+                if let Some(suffix) = mods.strip_prefix("<=") {
+                    max = Self::parse_value(suffix.trim());
                 }
 
                 // Check for range shorthand: 1..5
@@ -357,7 +351,7 @@ impl SchemaAnalyzer {
 
         // Find name (before : or {)
         let name_end = rest
-            .find(|c| c == ':' || c == '{' || c == ' ')
+            .find([':', '{', ' '])
             .unwrap_or(rest.len());
         let name = rest[..name_end].trim().to_string();
 
@@ -498,12 +492,12 @@ impl SchemaAnalyzer {
                         if let Some(eq) = modifier.find('=') {
                             default = Self::parse_value(modifier[eq + 1..].trim());
                         }
-                    } else if modifier.starts_with(">=") {
-                        min = Self::parse_value(modifier[2..].trim());
-                    } else if modifier.starts_with("<=") {
-                        max = Self::parse_value(modifier[2..].trim());
-                    } else if modifier.starts_with("in:") {
-                        let values_str = modifier[3..].trim();
+                    } else if let Some(suffix) = modifier.strip_prefix(">=") {
+                        min = Self::parse_value(suffix.trim());
+                    } else if let Some(suffix) = modifier.strip_prefix("<=") {
+                        max = Self::parse_value(suffix.trim());
+                    } else if let Some(suffix) = modifier.strip_prefix("in:") {
+                        let values_str = suffix.trim();
                         if values_str.starts_with('[') && values_str.ends_with(']') {
                             let inner = &values_str[1..values_str.len() - 1];
                             let values: Vec<Value> = inner
@@ -514,8 +508,8 @@ impl SchemaAnalyzer {
                                 allowed_values = Some(values);
                             }
                         }
-                    } else if modifier.starts_with("match:") {
-                        pattern = Some(modifier[6..].trim().trim_matches('"').to_string());
+                    } else if let Some(suffix) = modifier.strip_prefix("match:") {
+                        pattern = Some(suffix.trim().trim_matches('"').to_string());
                     } else if modifier.contains("..") {
                         // Range shorthand: 0..10
                         let parts: Vec<&str> = modifier.split("..").collect();
