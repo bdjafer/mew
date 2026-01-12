@@ -31,9 +31,13 @@ mew/                     # Rust workspace (your code goes here)
   parser/
   ...
 
-ontologies/              # Test ontologies by complexity
-  level-1/              # Simple (contacts, bookmarks)
-  level-5/              # Complex (cognitive agents)
+examples/                # Test ontologies by complexity
+  level-1/              # Simple (contacts, library)
+    contacts/
+      ontology.mew      # Schema definition
+      seeds/            # Test data (empty, minimal, populated)
+      operations/       # CRUD, queries, error tests
+  level-5/              # Complex (cognitive agents, BDI)
 
 .claude/skills/          # Learned procedures (create more as needed)
 ```
@@ -133,7 +137,7 @@ Test names correspond to acceptance tests in `implementation/tests/*.md`.
 
 1. All 158 acceptance tests pass (`cargo test --workspace`)
 2. Terminal session in `meta-roadmap.md` section 1 runs without error
-3. REPL loads any ontology from `ontologies/`
+3. REPL loads any ontology from `examples/`
 4. System recovers correctly after kill -9
 
 ---
