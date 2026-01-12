@@ -646,7 +646,7 @@ Division by zero: `x/0.0` → `±∞`, `0.0/0.0` → `NaN`.
 
 Values: `true`, `false`. Operations: `=`, `!=`, `and`, `or`, `not`.
 
-Short-circuit evaluation: `false and x` → `false`, `true or x` → `true` (x not evaluated).
+Boolean operators use short-circuit semantics: `false and x` evaluates to `false`, `true or x` evaluates to `true`.
 
 In boolean contexts, `Bool?` with `null` is treated as `false`. No implicit conversion from non-boolean types.
 

@@ -94,8 +94,8 @@ UnionTypeExpr = TypeExpr ("|" TypeExpr)+
 ### 8.3.1 Scalar Aliases with Modifiers
 
 ```
--- Simple alias
-type Email = String [match: "^.+@.+\\..+$"]
+-- Simple alias with format
+type Email = String [format: email]
 
 -- Numeric constraint (can use range syntax)
 type Priority = Int [0..10]
@@ -104,8 +104,11 @@ type NonNegativeInt = Int [>= 0]
 -- Enum alias
 type TaskStatus = String [in: ["todo", "in_progress", "done", "blocked"]]
 
--- Composite: optional with constraint
-type OptionalEmail = String? [match: "^.+@.+\\..+$"]
+-- Custom regex for domain-specific pattern
+type ProductCode = String [match: "^[A-Z]{2}[0-9]{4}-[A-Z]$"]
+
+-- Composite: optional with format
+type OptionalEmail = String? [format: email]
 ```
 
 ### 8.3.2 Union Type Aliases
@@ -125,12 +128,12 @@ edge assigned_to(item: Assignable, person: Person)
 Aliases can reference other aliases:
 
 ```
-type Email = String [match: "^.+@.+\\..+$"]
+type Email = String [format: email]
 type RequiredEmail = Email [required]
 type UniqueEmail = RequiredEmail [unique]
 ```
 
-Expansion is recursive at compile time. `UniqueEmail` becomes `String [match: "...", required, unique]`.
+Expansion is recursive at compile time. `UniqueEmail` becomes `String [format: email, required, unique]`.
 
 ## 2.4 Usage
 
@@ -156,7 +159,7 @@ edge created_by(item: Assignable, creator: Person)
 When an alias is used with additional modifiers, they combine:
 
 ```
-type Email = String [match: "^.+@.+\\..+$"]
+type Email = String [format: email]
 
 node Person {
   email: Email [required, unique, indexed]
@@ -202,7 +205,7 @@ interface UnionTypeExpr {
 Type aliases are expanded at compile time. They do not generate Layer 0 nodes — they are purely syntactic sugar.
 
 ```
-type Email = String [match: "^.+@.+\\..+$"]
+type Email = String [format: email]
 
 node Person {
   email: Email [required]
@@ -213,7 +216,7 @@ Compiles identically to:
 
 ```
 node Person {
-  email: String [required, match: "^.+@.+\\..+$"]
+  email: String [required, format: email]
 }
 ```
 
@@ -332,7 +335,7 @@ node Meeting : Event {
 -- Node type with full attribute modifiers
 node Person {
   name: String [required, length: 1..100],
-  email: String [required, unique, match: "^.+@.+$"],
+  email: String [required, unique, format: email],
   age: Int [>= 0, <= 150],
   role: String [in: ["admin", "member", "guest"]] = "member",
   active: Bool = true
@@ -444,8 +447,13 @@ AttributeModifier =
   | "indexed" (":" ("asc" | "desc"))?
   | ComparisonModifier
   | "in:" "[" Literal ("," Literal)* "]"
+  | "format:" FormatName
   | "match:" StringLiteral
   | "length:" IntLiteral ".." IntLiteral
+
+FormatName = 
+    "email" | "url" | "uuid" | "slug" | "phone"
+  | "iso_date" | "iso_datetime" | "ipv4" | "ipv6"
 
 ComparisonModifier =
     ">=" Literal
@@ -642,13 +650,59 @@ constraint <type>_<attr>_enum:
   => x.<attr> = "draft" OR x.<attr> = "active" OR x.<attr> = "archived"
 ```
 
-### 11.3.7 Match Modifier
+### 11.3.7 Format Modifier
 
-Validate string against regular expression.
+Validate string against a built-in format. Format validation can be used in query-time filtering.
 
 ```
-email: String [match: "^.+@.+\\..+$"]
-slug: String [match: "^[a-z0-9-]+$"]
+email: String [format: email]
+user_id: String [format: uuid]
+slug: String [format: slug]
+website: String [format: url]
+phone_number: String [format: phone]
+birth_date: String [format: iso_date]
+created_at: String [format: iso_datetime]
+ip_address: String [format: ipv4]
+ipv6_address: String [format: ipv6]
+```
+
+**Built-in formats:**
+
+| Format | Pattern | Description |
+|--------|---------|-------------|
+| `email` | Basic email validation | user@domain.tld |
+| `url` | HTTP/HTTPS URL | http://example.com/path |
+| `uuid` | UUID v4 format | xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx |
+| `slug` | URL-safe slug | lowercase-with-hyphens |
+| `phone` | International phone | E.164 format |
+| `iso_date` | ISO 8601 date | YYYY-MM-DD |
+| `iso_datetime` | ISO 8601 datetime | YYYY-MM-DDTHH:MM:SSZ |
+| `ipv4` | IPv4 address | 192.168.1.1 |
+| `ipv6` | IPv6 address | 2001:0db8::1 |
+
+**Compiles to:**
+```
+constraint <type>_<attr>_format:
+  x: <Type> WHERE x.<attr> != null
+  => is_<format>(x.<attr>)
+```
+
+**Query-time usage:**
+```
+-- Format validation can be used in WHERE clauses
+MATCH p: Person WHERE is_email(p.email_address)
+RETURN p
+```
+
+---
+
+### 11.3.8 Match Modifier (Custom Regex - Validation Only)
+
+Validate string against a custom regular expression. **Restricted to validation-time only** (SPAWN/SET operations). Cannot be used for query-time filtering.
+
+```
+product_code: String [match: "^[A-Z]{2}[0-9]{4}-[A-Z]$"]
+custom_id: String [match: "^[a-zA-Z0-9_-]{8,64}$"]
 ```
 
 **Compiles to:**
@@ -658,7 +712,16 @@ constraint <type>_<attr>_match:
   => matches(x.<attr>, "<pattern>")
 ```
 
-### 11.3.8 Length Modifier
+
+**Design note:** Prefer `format:` modifiers for common patterns. Use `match:` only for domain-specific patterns that don't fit built-in formats. The `matches()` function is not exposed in the expression language - it compiles internally for constraints only.
+
+**When to use which:**
+- `format:` - Common patterns (email, URL, UUID, etc.) that need query-time filtering
+- `match:` - Custom validation patterns that only need to check data at write time
+
+---
+
+### 11.3.9 Length Modifier
 
 Constrain string length.
 
@@ -677,7 +740,7 @@ constraint <type>_<attr>_length:
 
 ### 11.3.9 NULL Handling in Value Modifiers
 
-Value constraint modifiers (`>=`, `<=`, `>`, `<`, range `N..M`, `in:`, `match:`, `length:`) only apply when the attribute is **non-null**.
+Value constraint modifiers (`>=`, `<=`, `>`, `<`, range `N..M`, `in:`, `format:`, `match:`, `length:`) only apply when the attribute is **non-null**.
 
 **Example:**
 ```
@@ -715,12 +778,15 @@ Modifiers can be combined:
 
 ```
 node User {
-  -- All modifiers together
-  email: String [required, unique, match: "^.+@.+\\..+$", length: 5..100],
-  
+  -- All modifiers together (format for GPU-friendly validation)
+  email: String [required, unique, format: email, length: 5..100],
+
+  -- Custom regex for domain-specific pattern
+  product_code: String [match: "^[A-Z]{2}[0-9]{4}$"],
+
   -- Required with range and default
   priority: Int [required, >= 1, <= 5] = 3,
-  
+
   -- Unique enum
   role_code: String [unique, in: ["ADM", "USR", "GST"]]
 }
@@ -828,16 +894,16 @@ SPAWN without `status` succeeds — it defaults to `"pending"`.
 node Person {
   --- Unique identifier for external systems
   external_id: String [unique, match: "^[A-Z]{2}[0-9]{6}$"],
-  
+
   --- Full name of the person
   name: String [required, length: 1..200],
-  
+
   --- Email address (required, must be unique and valid)
-  email: String [required, unique, match: "^.+@.+\\..+$"],
-  
+  email: String [required, unique, format: email],
+
   --- Age in years (optional, but if present must be valid)
   age: Int? [>= 0, <= 150],
-  
+
   --- Role in the system
   role: String [required, in: ["admin", "moderator", "user"]] = "user",
   
@@ -876,7 +942,8 @@ interface AttributeModifiers {
   greaterThan: number | null      // > N
   lessThan: number | null         // < N
   enumValues: Literal[] | null    // in: [...]
-  match: string | null            // match: "..."
+  format: string | null           // format: <format_name>
+  match: string | null            // match: "..." (validation only)
   lengthMin: number | null        // length: N..M
   lengthMax: number | null
 }
@@ -2029,10 +2096,11 @@ RuleDecl =
 
 RuleModifiers = "[" RuleModifier ("," RuleModifier)* "]"
 
-RuleModifier = 
+RuleModifier =
     "priority:" IntLiteral
   | "auto"
   | "manual"
+  | "serialized"
 
 Production = Action ("," Action)*
 
@@ -2098,27 +2166,38 @@ rule archive_old [manual]:
 | `priority: N` | Execution order (higher = first). Default: 0 |
 | `auto` | Fire automatically when pattern matches (default) |
 | `manual` | Only fire when explicitly invoked |
+| `serialized` | Force sequential execution (disable parallel execution with other same-priority rules) |
 
 ### 15.3.1 Priority and Execution Order
 
 Rules execute in **priority order** (highest priority first).
 
-**Tie-breaking:** When multiple rules have equal priority:
+**Same-priority parallelism:** Rules with EQUAL priority MAY execute in parallel if their patterns match disjoint subgraphs. The engine is free to parallelize same-priority rules when it can prove no conflicts exist.
+
+**Deterministic execution:** When same-priority rules could conflict (modify overlapping data):
+1. Use explicit different priorities to enforce ordering, OR
+2. Use `[serialized]` modifier to force sequential execution, OR
+3. Accept declaration order execution (order in source file)
+
+**Tie-breaking (sequential execution):** When multiple rules have equal priority and execute sequentially:
 1. Rules execute in **declaration order** (order in source file)
 2. Across ontology inheritance, parent rules execute before child rules at equal priority
 
 ```
 -- These rules have equal priority (default 0)
-rule a: t: Task => SET t.x = 1    -- Executes first (declared first)
-rule b: t: Task => SET t.x = 2    -- Executes second
+-- MAY execute in parallel if they don't conflict
+rule a: t: Task => SET t.x = 1
+rule b: t: Task => SET t.x = 2    -- Conflicts with 'a', will serialize
 
--- This rule executes before both (higher priority)
-rule c [priority: 10]: t: Task => SET t.x = 3
+-- Force sequential execution for determinism
+rule c [serialized]: t: Task => SET t.y = compute_complex_value()
+
+-- This rule executes before all above (higher priority)
+rule d [priority: 10]: t: Task => SET t.z = 3
 ```
 
-**Execution order for the above:** `c` (priority 10), then `a` (priority 0, first declared), then `b` (priority 0, second declared).
+**Execution order for the above:** `d` (priority 10), then `a`, `b`, `c` may execute in parallel or sequentially based on conflict detection.
 
-**Rationale:** Declaration order provides deterministic behavior without requiring explicit priorities on every rule.
 
 ## 9.4 Actions
 
@@ -2346,8 +2425,11 @@ AttrModifier     = "required" | "unique"
                  | ">=" Literal | "<=" Literal | ">" Literal | "<" Literal
                  | IntLiteral ".." IntLiteral
                  | "in:" "[" Literal ("," Literal)* "]"
+                 | "format:" FormatName
                  | "match:" StringLiteral
                  | "length:" IntLiteral ".." IntLiteral
+FormatName       = "email" | "url" | "uuid" | "slug" | "phone"
+                 | "iso_date" | "iso_datetime" | "ipv4" | "ipv6"
 DefaultValue     = "=" (Literal | ConstantExpr)
 ConstantExpr     = "now()"
 
@@ -2404,7 +2486,7 @@ A compact TaskManagement ontology demonstrating all DSL features:
 ontology TaskManagement : Layer0 {
 
   -- Type aliases
-  type Email = String [match: "^.+@.+\\..+$"]
+  type Email = String [format: email]
   type Priority = Int [>= 0, <= 10]
   type TaskStatus = String [in: ["todo", "in_progress", "done", "blocked"]]
 
@@ -2423,7 +2505,7 @@ ontology TaskManagement : Layer0 {
     priority: Priority = 5,
     completed_at: Timestamp?
   }
-  node Tag { name: String [required, unique, match: "^[a-z0-9-]+$"] }
+  node Tag { name: String [required, unique, format: slug] }
 
   -- Edges
   edge member_of(person: Person, team: Team) [unique] { role: String = "member" }
@@ -2467,7 +2549,7 @@ ontology TaskManagement : Layer0 {
 | `[unique]` | Constraint + Index |
 | `[indexed]` | Engine index |
 | `[>= N]`, `[<= M]`, `[N..M]` | Constraint |
-| `[in: [...]]`, `[match: "..."]`, `[length: N..M]` | Constraint |
+| `[in: [...]]`, `[format: ...]`, `[match: "..."]`, `[length: N..M]` | Constraint |
 | `[no_self]`, `[acyclic]` | Constraint |
 | `[a -> 0..1]` | Constraint (at commit) |
 | `[symmetric]` | Storage + matching |
