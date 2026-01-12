@@ -1,0 +1,109 @@
+-- ===========================================================================
+-- ONTOLOGY: Argumentation
+-- LEVEL: 4 (Higher-Order)
+-- DOMAIN: Argumentation theory with attacks, supports, and debates
+-- ===========================================================================
+
+ontology Argumentation {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+
+  type Strength = Float [>= 0, <= 1]
+  type StanceType = String [in: ["support", "oppose", "neutral", "undecided"]]
+  type ArgumentStatus = String [in: ["active", "defeated", "withdrawn", "accepted"]]
+  type ClaimStatus = String [in: ["open", "accepted", "rejected", "contested"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- A claim or proposition that can be argued
+  node Claim {
+    statement: String [required],
+    status: ClaimStatus = "open",
+    created_at: Timestamp = now(),
+    resolved_at: Timestamp?
+  }
+
+  --- An argument supporting or attacking something
+  node Argument {
+    content: String [required],
+    argument_type: String?,
+    status: ArgumentStatus = "active",
+    strength: Strength = 0.5,
+    created_at: Timestamp = now()
+  }
+
+  --- Evidence or source supporting an argument
+  node Evidence {
+    description: String [required],
+    source_type: String?,
+    source_url: String?,
+    reliability: Strength = 0.5,
+    added_at: Timestamp = now()
+  }
+
+  --- A participant in debates
+  node Participant {
+    name: String [required],
+    reputation: Strength = 0.5,
+    joined_at: Timestamp = now()
+  }
+
+  --- A structured debate on a topic
+  node Debate {
+    title: String [required],
+    description: String?,
+    topic_claim: String?,
+    status: String = "open",
+    started_at: Timestamp = now(),
+    ended_at: Timestamp?
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Argument addresses a claim (supports or attacks)
+  edge addresses(argument: Argument, claim: Claim) {
+    stance: StanceType [required],
+    relevance: Strength = 0.5
+  }
+
+  --- Argument attacks another argument
+  edge attacks(attacker: Argument, target: Argument) [no_self] {
+    attack_type: String?,
+    effectiveness: Strength = 0.5
+  }
+
+  --- Argument supports another argument
+  edge reinforces(supporter: Argument, target: Argument) [no_self] {
+    relevance: Strength = 0.5
+  }
+
+  --- Evidence backs an argument
+  edge backed_by(argument: Argument, evidence: Evidence) {
+    relevance: Strength = 0.5
+  }
+
+  --- Participant made an argument
+  edge authored_by(argument: Argument, participant: Participant) {
+    authored_at: Timestamp = now()
+  }
+
+  --- Participant takes stance on claim
+  edge takes_stance(participant: Participant, claim: Claim) {
+    stance: StanceType [required],
+    confidence: Strength = 0.5,
+    stated_at: Timestamp = now()
+  }
+
+  --- Debate centers on claim
+  edge debates(debate: Debate, claim: Claim)
+
+  --- Argument is part of debate
+  edge in_debate(argument: Argument, debate: Debate)
+
+}

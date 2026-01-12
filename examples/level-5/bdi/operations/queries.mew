@@ -1,0 +1,37 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_agents
+MATCH a: Agent RETURN count(a)
+
+--# count_all_beliefs
+MATCH b: Belief RETURN count(b)
+
+--# count_all_goals
+MATCH g: Goal RETURN count(g)
+
+--# count_all_plans
+MATCH p: Plan RETURN count(p)
+
+--# query_active_goals
+MATCH g: Goal WHERE g.status = "active"
+RETURN g.description
+
+--# query_high_priority_goals
+MATCH g: Goal WHERE g.priority >= 0.8
+RETURN g.description, g.priority
+
+--# query_high_confidence_beliefs
+MATCH b: Belief WHERE b.confidence >= 0.9
+RETURN b.content
+
+--# query_all_goals
+MATCH g: Goal RETURN g.description, g.status, g.priority
+
+--# query_plans
+MATCH p: Plan RETURN p.name, p.success_rate
+
+--# query_intentions
+MATCH i: Intention RETURN i.status

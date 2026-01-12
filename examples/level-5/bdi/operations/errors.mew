@@ -1,0 +1,31 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_missing_name
+SPAWN a: Agent {
+  agent_type = "test"
+}
+
+--# spawn_missing_content
+SPAWN b: Belief {
+  confidence = 0.5
+}
+
+--# spawn_invalid_confidence
+SPAWN b: Belief {
+  content = "Test",
+  confidence = 1.5
+}
+
+--# spawn_invalid_status
+SPAWN g: Goal {
+  description = "Test",
+  status = "invalid"
+}
+
+--# spawn_valid
+SPAWN a: Agent {
+  name = "Valid Agent"
+}

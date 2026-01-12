@@ -1,0 +1,25 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_missing_statement
+SPAWN c: Claim {
+  status = "open"
+}
+
+--# spawn_missing_content
+SPAWN a: Argument {
+  argument_type = "test"
+}
+
+--# spawn_invalid_status
+SPAWN c: Claim {
+  statement = "Test",
+  status = "invalid"
+}
+
+--# spawn_valid
+SPAWN c: Claim {
+  statement = "Valid claim"
+}

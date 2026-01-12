@@ -1,0 +1,111 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Claims
+--# seed_claim_main
+SPAWN main_claim: Claim {
+  statement = "Renewable energy should replace fossil fuels",
+  status = "open"
+}
+
+--# seed_claim_economic
+SPAWN economic_claim: Claim {
+  statement = "Renewable energy is economically viable",
+  status = "contested"
+}
+
+--# seed_claim_resolved
+SPAWN resolved_claim: Claim {
+  statement = "Climate change is real",
+  status = "accepted"
+}
+
+-- Arguments
+--# seed_arg_environment
+SPAWN env_arg: Argument {
+  content = "Fossil fuels cause environmental damage",
+  argument_type = "empirical"
+}
+
+--# seed_arg_jobs
+SPAWN jobs_arg: Argument {
+  content = "Transition creates new jobs in green sector",
+  argument_type = "economic"
+}
+
+--# seed_arg_cost
+SPAWN cost_arg: Argument {
+  content = "Initial costs are high but decreasing",
+  argument_type = "economic"
+}
+
+--# seed_arg_against
+SPAWN against_arg: Argument {
+  content = "Energy storage technology is insufficient",
+  argument_type = "technical"
+}
+
+--# seed_arg_defeated
+SPAWN defeated_arg: Argument {
+  content = "Fossil fuels are cheap",
+  status = "defeated"
+}
+
+-- Evidence
+--# seed_evidence_ipcc
+SPAWN ipcc: Evidence {
+  description = "IPCC Report on Climate Change",
+  source_type = "scientific",
+  reliability = 0.95
+}
+
+--# seed_evidence_economic
+SPAWN economic_study: Evidence {
+  description = "Economic analysis of renewable transition",
+  source_type = "academic",
+  reliability = 0.8
+}
+
+--# seed_evidence_news
+SPAWN news_article: Evidence {
+  description = "News report on energy prices",
+  source_type = "news",
+  source_url = "https://example.com/news",
+  reliability = 0.5
+}
+
+-- Participants
+--# seed_participant_alice
+SPAWN alice: Participant {
+  name = "Alice (Environmentalist)",
+  reputation = 0.8
+}
+
+--# seed_participant_bob
+SPAWN bob: Participant {
+  name = "Bob (Economist)",
+  reputation = 0.7
+}
+
+--# seed_participant_charlie
+SPAWN charlie: Participant {
+  name = "Charlie (Skeptic)",
+  reputation = 0.6
+}
+
+-- Debates
+--# seed_debate_main
+SPAWN main_debate: Debate {
+  title = "The Future of Energy",
+  description = "Discussing transition to renewable energy",
+  status = "open"
+}
+
+--# seed_debate_closed
+SPAWN closed_debate: Debate {
+  title = "Climate Science",
+  description = "Is climate change real?",
+  status = "closed"
+}

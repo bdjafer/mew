@@ -1,0 +1,156 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Departments
+--# seed_dept_eng
+SPAWN eng: Department {
+  code = "ENG",
+  name = "Engineering",
+  budget = 5000000.0
+}
+
+--# seed_dept_sales
+SPAWN sales: Department {
+  code = "SALES",
+  name = "Sales",
+  budget = 3000000.0
+}
+
+--# seed_dept_hr
+SPAWN hr_dept: Department {
+  code = "HR",
+  name = "Human Resources",
+  budget = 1000000.0
+}
+
+-- Offices
+--# seed_office_hq
+SPAWN hq: Office {
+  code = "HQ",
+  name = "Headquarters",
+  address = "100 Main St",
+  city = "San Francisco",
+  country = "USA",
+  capacity = 500,
+  is_headquarters = true
+}
+
+--# seed_office_ny
+SPAWN ny_office: Office {
+  code = "NYC",
+  name = "New York Office",
+  address = "200 Broadway",
+  city = "New York",
+  country = "USA",
+  capacity = 200
+}
+
+-- Roles
+--# seed_role_swe
+SPAWN swe_role: Role {
+  code = "SWE",
+  title = "Software Engineer",
+  min_salary = 80000.0,
+  max_salary = 150000.0
+}
+
+--# seed_role_mgr
+SPAWN mgr_role: Role {
+  code = "MGR",
+  title = "Engineering Manager",
+  min_salary = 120000.0,
+  max_salary = 200000.0,
+  is_management = true
+}
+
+--# seed_role_exec
+SPAWN exec_role: Role {
+  code = "EXEC",
+  title = "Executive",
+  is_management = true
+}
+
+-- Skills
+--# seed_skill_rust
+SPAWN rust: Skill {
+  name = "Rust",
+  category = "Programming"
+}
+
+--# seed_skill_python
+SPAWN python: Skill {
+  name = "Python",
+  category = "Programming"
+}
+
+--# seed_skill_leadership
+SPAWN leadership: Skill {
+  name = "Leadership",
+  category = "Management"
+}
+
+-- Employees
+--# seed_emp_alice
+SPAWN alice: Employee {
+  first_name = "Alice",
+  last_name = "Smith",
+  email = "alice@company.com",
+  employee_id = "EMP000001",
+  hire_date = now(),
+  salary = 120000.0
+}
+
+--# seed_emp_bob
+SPAWN bob: Employee {
+  first_name = "Bob",
+  last_name = "Jones",
+  email = "bob@company.com",
+  employee_id = "EMP000002",
+  hire_date = now(),
+  salary = 100000.0
+}
+
+-- Managers
+--# seed_mgr_charlie
+SPAWN charlie: Manager {
+  first_name = "Charlie",
+  last_name = "Brown",
+  email = "charlie@company.com",
+  employee_id = "EMP000003",
+  hire_date = now(),
+  salary = 150000.0,
+  management_level = 2,
+  budget_authority = 500000.0
+}
+
+-- Executives
+--# seed_exec_diana
+SPAWN diana: Executive {
+  first_name = "Diana",
+  last_name = "Ross",
+  email = "diana@company.com",
+  employee_id = "EMP000004",
+  hire_date = now(),
+  salary = 250000.0,
+  management_level = 5,
+  budget_authority = 2000000.0,
+  title = "VP Engineering"
+}
+
+-- Certifications
+--# seed_cert_aws
+SPAWN aws_cert: Certification {
+  name = "AWS Solutions Architect",
+  issuing_body = "Amazon",
+  validity_years = 3
+}
+
+-- Courses
+--# seed_course_rust
+SPAWN rust_course: Course {
+  code = "RUST101",
+  name = "Introduction to Rust",
+  duration_hours = 40
+}

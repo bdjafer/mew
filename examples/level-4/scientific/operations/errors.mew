@@ -1,0 +1,25 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_missing_name
+SPAWN c: Concept {
+  domain = "Test"
+}
+
+--# spawn_missing_statement
+SPAWN h: Hypothesis {
+  status = "proposed"
+}
+
+--# spawn_invalid_status
+SPAWN h: Hypothesis {
+  statement = "Test",
+  status = "invalid"
+}
+
+--# spawn_valid
+SPAWN c: Concept {
+  name = "Valid Concept"
+}

@@ -1,0 +1,104 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Agents
+--# seed_agent_alice
+SPAWN alice_agent: Agent {
+  name = "Alice Agent",
+  agent_type = "rational"
+}
+
+--# seed_agent_bob
+SPAWN bob_agent: Agent {
+  name = "Bob Agent",
+  agent_type = "reactive"
+}
+
+-- Beliefs
+--# seed_belief_location
+SPAWN loc_belief: Belief {
+  content = "Agent is at position (0,0)",
+  confidence = 1.0,
+  is_perception = true
+}
+
+--# seed_belief_goal_loc
+SPAWN goal_loc_belief: Belief {
+  content = "Target is at position (10,10)",
+  confidence = 0.9
+}
+
+--# seed_belief_obstacle
+SPAWN obstacle_belief: Belief {
+  content = "Obstacle at position (5,5)",
+  confidence = 0.7
+}
+
+--# seed_belief_uncertain
+SPAWN uncertain_belief: Belief {
+  content = "Path is clear",
+  confidence = 0.5
+}
+
+-- Goals
+--# seed_goal_reach
+SPAWN reach_goal: Goal {
+  description = "Reach target location",
+  status = "active",
+  priority = 0.9,
+  utility = 10.0
+}
+
+--# seed_goal_avoid
+SPAWN avoid_goal: Goal {
+  description = "Avoid obstacles",
+  status = "active",
+  priority = 0.8
+}
+
+--# seed_goal_achieved
+SPAWN achieved_goal: Goal {
+  description = "Initialize sensors",
+  status = "achieved",
+  priority = 1.0
+}
+
+--# seed_goal_conflicting1
+SPAWN fast_goal: Goal {
+  description = "Move quickly",
+  priority = 0.6
+}
+
+--# seed_goal_conflicting2
+SPAWN careful_goal: Goal {
+  description = "Move carefully",
+  priority = 0.5
+}
+
+-- Plans
+--# seed_plan_direct
+SPAWN direct_plan: Plan {
+  name = "Direct Route",
+  description = "Move directly to target",
+  success_rate = 0.7
+}
+
+--# seed_plan_safe
+SPAWN safe_plan: Plan {
+  name = "Safe Route",
+  description = "Avoid obstacles while moving",
+  success_rate = 0.9
+}
+
+-- Intentions
+--# seed_intention_active
+SPAWN active_intention: Intention {
+  status = "executing"
+}
+
+--# seed_intention_achieved
+SPAWN achieved_intention: Intention {
+  status = "achieved"
+}

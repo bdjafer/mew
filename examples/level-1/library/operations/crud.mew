@@ -1,0 +1,60 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations for library
+-- ===========================================================================
+
+--# spawn_book
+SPAWN b: Book {
+  isbn = "978-0000000000",
+  title = "Test Book"
+}
+
+--# query_count_books
+MATCH b: Book RETURN count(b)
+
+--# query_all_books
+MATCH b: Book RETURN b.title, b.isbn
+
+--# spawn_author
+SPAWN a: Author { name = "Test Author" }
+
+--# link_book_author
+LINK written_by(b, a)
+
+--# query_authors
+MATCH a: Author RETURN a.name
+
+--# spawn_genre
+SPAWN g: Genre { name = "Test Genre" }
+
+--# link_book_genre
+LINK in_genre(b, g)
+
+--# spawn_copy
+SPAWN c: Copy { barcode = "TEST-001" }
+
+--# link_copy_book
+LINK copy_of(c, b)
+
+--# update_book
+SET b { title = "Updated Test Book" }
+
+--# query_updated
+MATCH b: Book WHERE b.isbn = "978-0000000000"
+RETURN b.title
+
+--# spawn_member
+SPAWN m: Member {
+  member_id = "TEST001",
+  name = "Test Member"
+}
+
+--# query_members
+MATCH m: Member RETURN m.name
+
+--# kill_book
+KILL b
+
+--# query_empty
+MATCH b: Book WHERE b.isbn = "978-0000000000"
+RETURN b

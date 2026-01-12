@@ -1,0 +1,37 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_products
+MATCH p: Product RETURN count(p)
+
+--# count_all_categories
+MATCH c: Category RETURN count(c)
+
+--# count_all_customers
+MATCH c: Customer RETURN count(c)
+
+--# count_all_reviews
+MATCH r: Review RETURN count(r)
+
+--# query_active_products
+MATCH p: Product WHERE p.status = "active"
+RETURN p.name
+
+--# query_verified_customers
+MATCH c: Customer WHERE c.is_verified = true
+RETURN c.name
+
+--# query_high_rated
+MATCH r: Review WHERE r.rating >= 4
+RETURN r.title
+
+--# query_all_products
+MATCH p: Product RETURN p.name, p.price, p.status
+
+--# query_categories
+MATCH c: Category RETURN c.name, c.slug
+
+--# query_physical_products
+MATCH p: PhysicalProduct RETURN p.name, p.weight_kg

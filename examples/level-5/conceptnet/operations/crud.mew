@@ -1,0 +1,54 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations
+-- ===========================================================================
+
+--# spawn_concept
+SPAWN c1: Concept {
+  name = "Test Concept"
+}
+
+--# query_count_concepts
+MATCH c: Concept RETURN count(c)
+
+--# spawn_concept2
+SPAWN c2: Concept {
+  name = "Test Concept 2"
+}
+
+--# link_related
+LINK related(c1, c2) { relation_type = "related_to" }
+
+--# link_instance
+LINK instance_of(c1, c2)
+
+--# spawn_reltype
+SPAWN rt: RelationType {
+  name = "test_relation"
+}
+
+--# query_concepts
+MATCH c: Concept RETURN c.name
+
+--# update_concept
+SET c1 { definition = "Updated definition" }
+
+--# query_updated
+MATCH c: Concept WHERE c.name = "Test Concept"
+RETURN c.definition
+
+--# spawn_learned
+SPAWN learned: Concept {
+  name = "Learned Concept",
+  learned = true,
+  confidence = 0.7
+}
+
+--# query_all
+MATCH c: Concept RETURN c.name, c.learned
+
+--# kill_concept
+KILL c2
+
+--# query_remaining
+MATCH c: Concept RETURN c.name

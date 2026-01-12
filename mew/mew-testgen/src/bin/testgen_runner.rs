@@ -239,6 +239,28 @@ fn find_ontologies(opts: &Opts) -> Vec<(PathBuf, String)> {
 
         for entry in entries.flatten() {
             let path = entry.path();
+
+            // Check for new structure: level-N/example/ontology.mew
+            if path.is_dir() {
+                let ontology_path = path.join("ontology.mew");
+                if ontology_path.exists() {
+                    let name = path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    if let Some(ref filter) = opts.filter {
+                        if !name.to_lowercase().contains(&filter.to_lowercase()) {
+                            continue;
+                        }
+                    }
+                    result.push((ontology_path, format!("{}{}", level, name)));
+                    continue;
+                }
+            }
+
+            // Fall back to old structure: level-N/XS_Name.mew
             if path.extension().map(|e| e == "mew").unwrap_or(false) {
                 let name = path
                     .file_stem()

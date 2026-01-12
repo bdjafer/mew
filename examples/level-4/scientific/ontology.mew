@@ -1,0 +1,104 @@
+-- ===========================================================================
+-- ONTOLOGY: Scientific
+-- LEVEL: 4 (Higher-Order)
+-- DOMAIN: Scientific hypothesis and evidence management
+-- ===========================================================================
+
+ontology Scientific {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+
+  type Confidence = Float [>= 0, <= 1]
+  type PValue = Float [>= 0, <= 1]
+  type ClaimStatus = String [in: ["proposed", "supported", "contested", "refuted", "established"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- A scientific concept or phenomenon
+  node Concept {
+    name: String [required],
+    definition: String?,
+    domain: String?,
+    created_at: Timestamp = now()
+  }
+
+  --- A hypothesis about relationships
+  node Hypothesis {
+    statement: String [required],
+    status: ClaimStatus = "proposed",
+    confidence: Confidence = 0.5,
+    proposed_at: Timestamp = now(),
+    proposed_by: String?
+  }
+
+  --- An experiment testing hypotheses
+  node Experiment {
+    title: String [required],
+    methodology: String?,
+    sample_size: Int?,
+    result: String?,
+    supports_hypothesis: Bool?,
+    conducted_at: Timestamp?,
+    published_at: Timestamp?,
+    doi: String?
+  }
+
+  --- A researcher or research group
+  node Researcher {
+    name: String [required],
+    institution: String?,
+    email: String?,
+    orcid: String?
+  }
+
+  --- A publication containing research
+  node Publication {
+    title: String [required],
+    journal: String?,
+    year: Int?,
+    doi: String [unique],
+    abstract_text: String?
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Hypothesis proposes that concept A causes concept B
+  edge proposes_causation(hypothesis: Hypothesis, cause: Concept, effect: Concept)
+
+  --- Concepts are correlated (symmetric - no direction implied)
+  edge correlated(concept1: Concept, concept2: Concept) [symmetric, no_self] {
+    correlation_coefficient: Float?,
+    discovered_at: Timestamp?
+  }
+
+  --- Experiment tests hypothesis
+  edge tests(experiment: Experiment, hypothesis: Hypothesis) {
+    result: String?,
+    p_value: PValue?,
+    effect_size: Float?
+  }
+
+  --- Experiment conducted by researcher
+  edge conducted_by(experiment: Experiment, researcher: Researcher) {
+    role: String = "author"
+  }
+
+  --- Experiment published in publication
+  edge published_in(experiment: Experiment, publication: Publication)
+
+  --- Researcher authored publication
+  edge authored(researcher: Researcher, publication: Publication) {
+    position: Int?,
+    corresponding: Bool = false
+  }
+
+  --- Hypothesis about concept
+  edge about_concept(hypothesis: Hypothesis, concept: Concept)
+
+}

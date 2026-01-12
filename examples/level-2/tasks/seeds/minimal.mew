@@ -1,0 +1,16 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_task
+SPAWN review: Task {
+  title = "Review code",
+  priority = 4
+}
+
+--# seed_tag
+SPAWN dev: Tag {
+  name = "development",
+  color = "#3B82F6"
+}

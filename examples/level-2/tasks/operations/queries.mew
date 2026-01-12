@@ -1,0 +1,35 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_tasks
+MATCH t: Task RETURN count(t)
+
+--# count_all_tags
+MATCH t: Tag RETURN count(t)
+
+--# query_high_priority
+MATCH t: Task WHERE t.priority >= 4
+RETURN t.title
+
+--# query_todo
+MATCH t: Task WHERE t.status = "todo"
+RETURN t.title
+
+--# query_in_progress
+MATCH t: Task WHERE t.status = "in_progress"
+RETURN t.title
+
+--# query_done
+MATCH t: Task WHERE t.status = "done"
+RETURN t.title
+
+--# query_all_titles
+MATCH t: Task RETURN t.title
+
+--# query_tags
+MATCH t: Tag RETURN t.name, t.color
+
+--# query_subtasks
+MATCH st: SubTask RETURN st.title, st.is_blocking

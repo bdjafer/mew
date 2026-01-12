@@ -1,0 +1,57 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations for HR
+-- ===========================================================================
+
+--# spawn_department
+SPAWN dept: Department {
+  code = "TEST",
+  name = "Test Department"
+}
+
+--# query_count_depts
+MATCH d: Department RETURN count(d)
+
+--# spawn_employee
+SPAWN emp: Employee {
+  first_name = "Test",
+  last_name = "Employee",
+  email = "test@company.com",
+  employee_id = "EMP000100",
+  hire_date = now()
+}
+
+--# link_employee_dept
+LINK in_department(emp, dept)
+
+--# query_employees
+MATCH e: Employee RETURN e.first_name, e.last_name
+
+--# spawn_skill
+SPAWN skill: Skill { name = "Testing" }
+
+--# link_employee_skill
+LINK has_skill(emp, skill) { level = "intermediate" }
+
+--# spawn_role
+SPAWN role: Role {
+  code = "TST",
+  title = "Test Role"
+}
+
+--# link_employee_role
+LINK has_role(emp, role)
+
+--# update_employee
+SET emp { salary = 100000.0 }
+
+--# query_updated
+MATCH e: Employee WHERE e.employee_id = "EMP000100"
+RETURN e.salary
+
+--# kill_employee
+KILL emp
+
+--# query_empty
+MATCH e: Employee WHERE e.employee_id = "EMP000100"
+RETURN e

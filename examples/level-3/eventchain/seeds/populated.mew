@@ -1,0 +1,67 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- A causal chain of events
+
+--# seed_event_root
+SPAWN root_cause: Event {
+  name = "Root Cause",
+  description = "The initial triggering event",
+  event_type = "trigger"
+}
+
+--# seed_event_intermediate1
+SPAWN intermediate1: Event {
+  name = "First Effect",
+  description = "Direct consequence of root cause",
+  event_type = "effect"
+}
+
+--# seed_event_intermediate2
+SPAWN intermediate2: Event {
+  name = "Second Effect",
+  description = "Follows from first effect",
+  event_type = "effect"
+}
+
+--# seed_event_final
+SPAWN final_effect: Event {
+  name = "Final Outcome",
+  description = "The end of the causal chain",
+  event_type = "outcome"
+}
+
+-- Independent events
+--# seed_event_unrelated1
+SPAWN unrelated1: Event {
+  name = "Unrelated Event A",
+  event_type = "independent"
+}
+
+--# seed_event_unrelated2
+SPAWN unrelated2: Event {
+  name = "Unrelated Event B",
+  event_type = "independent"
+}
+
+-- Branching cause
+--# seed_event_branch_cause
+SPAWN branch_cause: Event {
+  name = "Branch Cause",
+  description = "Causes multiple effects",
+  event_type = "trigger"
+}
+
+--# seed_event_branch_effect1
+SPAWN branch_effect1: Event {
+  name = "Branch Effect 1",
+  event_type = "effect"
+}
+
+--# seed_event_branch_effect2
+SPAWN branch_effect2: Event {
+  name = "Branch Effect 2",
+  event_type = "effect"
+}

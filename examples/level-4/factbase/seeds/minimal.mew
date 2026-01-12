@@ -1,0 +1,22 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_entity_person
+SPAWN alice: Entity {
+  name = "Alice",
+  entity_type = "person"
+}
+
+--# seed_entity_company
+SPAWN acme: Entity {
+  name = "Acme Corp",
+  entity_type = "company"
+}
+
+--# seed_evidence
+SPAWN hr_record: Evidence {
+  source = "HR Database",
+  reliability = 0.9
+}

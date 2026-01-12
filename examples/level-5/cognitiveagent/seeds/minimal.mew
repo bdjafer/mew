@@ -1,0 +1,27 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_agent
+SPAWN agent: Agent {
+  name = "Cognitive Agent Alpha"
+}
+
+--# seed_belief
+SPAWN belief: Belief {
+  content = "The environment is observable",
+  confidence = 0.9
+}
+
+--# seed_goal
+SPAWN goal: Goal {
+  description = "Learn about the environment",
+  priority = 0.8
+}
+
+--# seed_concept
+SPAWN concept: Concept {
+  name = "Environment",
+  definition = "The external world"
+}

@@ -1,0 +1,61 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations
+-- ===========================================================================
+
+--# spawn_agent
+SPAWN a: Agent {
+  name = "Test Agent"
+}
+
+--# query_count_agents
+MATCH a: Agent RETURN count(a)
+
+--# spawn_belief
+SPAWN b: Belief {
+  content = "Test belief"
+}
+
+--# link_believes
+LINK believes(a, b)
+
+--# spawn_goal
+SPAWN g: Goal {
+  description = "Test goal",
+  priority = 0.7
+}
+
+--# link_desires
+LINK desires(a, g)
+
+--# spawn_plan
+SPAWN p: Plan {
+  name = "Test Plan"
+}
+
+--# link_achieves
+LINK achieves(p, g)
+
+--# spawn_intention
+SPAWN i: Intention {
+  status = "committed"
+}
+
+--# link_intends
+LINK intends(a, i)
+
+--# link_intention_goal
+LINK intention_for(i, g)
+
+--# link_using_plan
+LINK using_plan(i, p)
+
+--# update_goal
+SET g { status = "achieved" }
+
+--# query_updated
+MATCH g: Goal WHERE g.description = "Test goal"
+RETURN g.status
+
+--# query_agents
+MATCH a: Agent RETURN a.name

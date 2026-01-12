@@ -1,0 +1,63 @@
+-- ===========================================================================
+-- ONTOLOGY: ConceptNet
+-- LEVEL: 5 (AGI-Ready)
+-- DOMAIN: Learned concepts and relations with confidence
+-- ===========================================================================
+
+ontology ConceptNet {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+
+  type Confidence = Float [>= 0, <= 1]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- A concept that can be learned or defined
+  node Concept {
+    name: String [required],
+    definition: String?,
+    is_primitive: Bool = false,
+    learned: Bool = false,
+    learned_at: Timestamp?,
+    confidence: Confidence = 1.0,
+    activation: Float = 0
+  }
+
+  --- A named relation type that can be learned
+  node RelationType {
+    name: String [required, unique],
+    inverse_name: String?,
+    is_symmetric: Bool = false,
+    is_transitive: Bool = false,
+    learned: Bool = false,
+    confidence: Confidence = 1.0
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- A learned or defined relation between concepts
+  edge related(subject: Concept, object: Concept) [no_self] {
+    relation_type: String [required],
+    confidence: Confidence = 0.5,
+    learned: Bool = false,
+    learned_at: Timestamp?,
+    source: String?
+  }
+
+  --- Concept is an instance of another concept (is-a)
+  edge instance_of(instance: Concept, category: Concept) [no_self] {
+    confidence: Confidence = 1.0
+  }
+
+  --- Concept is a specialization of another (subtype)
+  edge specializes(specific: Concept, general: Concept) [no_self] {
+    confidence: Confidence = 1.0
+  }
+
+}

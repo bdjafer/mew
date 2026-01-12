@@ -1,0 +1,41 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_invalid_sku_format
+SPAWN p: Product {
+  sku = "invalid-sku",
+  name = "Invalid SKU Product",
+  price = 10.0
+}
+
+--# spawn_negative_price
+SPAWN p: Product {
+  sku = "TEST-0001",
+  name = "Negative Price",
+  price = -10.0
+}
+
+--# spawn_invalid_rating_low
+SPAWN r: Review {
+  rating = 0
+}
+
+--# spawn_invalid_rating_high
+SPAWN r: Review {
+  rating = 6
+}
+
+--# spawn_invalid_email
+SPAWN c: Customer {
+  email = "not-an-email",
+  name = "Bad Email"
+}
+
+--# spawn_valid
+SPAWN p: Product {
+  sku = "VALID-0001",
+  name = "Valid Product",
+  price = 10.0
+}

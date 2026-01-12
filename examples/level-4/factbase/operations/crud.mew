@@ -1,0 +1,47 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations
+-- ===========================================================================
+
+--# spawn_entity1
+SPAWN e1: Entity {
+  name = "Test Entity 1",
+  entity_type = "test"
+}
+
+--# spawn_entity2
+SPAWN e2: Entity {
+  name = "Test Entity 2",
+  entity_type = "test"
+}
+
+--# query_count_entities
+MATCH e: Entity RETURN count(e)
+
+--# link_relates
+LINK relates_to(e1, e2) { relation_type = "related" }
+
+--# query_entities
+MATCH e: Entity RETURN e.name, e.entity_type
+
+--# spawn_evidence
+SPAWN ev: Evidence {
+  source = "Test Source",
+  reliability = 0.8
+}
+
+--# query_evidence
+MATCH ev: Evidence RETURN ev.source
+
+--# update_entity
+SET e1 { description = "Updated description" }
+
+--# query_updated
+MATCH e: Entity WHERE e.name = "Test Entity 1"
+RETURN e.description
+
+--# kill_entity
+KILL e2
+
+--# query_remaining
+MATCH e: Entity RETURN e.name

@@ -1,0 +1,26 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_events
+MATCH e: Event RETURN count(e)
+
+--# query_triggers
+MATCH e: Event WHERE e.event_type = "trigger"
+RETURN e.name
+
+--# query_effects
+MATCH e: Event WHERE e.event_type = "effect"
+RETURN e.name
+
+--# query_outcomes
+MATCH e: Event WHERE e.event_type = "outcome"
+RETURN e.name
+
+--# query_all_names
+MATCH e: Event RETURN e.name, e.event_type
+
+--# query_with_description
+MATCH e: Event WHERE e.description != null
+RETURN e.name, e.description

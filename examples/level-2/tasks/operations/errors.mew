@@ -1,0 +1,33 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_missing_title
+SPAWN t: Task {
+  priority = 3
+}
+
+--# spawn_invalid_priority_low
+SPAWN t: Task {
+  title = "Invalid priority",
+  priority = 0
+}
+
+--# spawn_invalid_priority_high
+SPAWN t: Task {
+  title = "Invalid priority",
+  priority = 6
+}
+
+--# spawn_invalid_status
+SPAWN t: Task {
+  title = "Invalid status",
+  status = "invalid"
+}
+
+--# spawn_valid
+SPAWN t: Task {
+  title = "Valid task",
+  priority = 3
+}

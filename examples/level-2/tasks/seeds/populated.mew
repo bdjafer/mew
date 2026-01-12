@@ -1,0 +1,76 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Tags
+--# seed_tag_dev
+SPAWN dev: Tag {
+  name = "development",
+  color = "#3B82F6"
+}
+
+--# seed_tag_urgent
+SPAWN urgent: Tag {
+  name = "urgent",
+  color = "#EF4444"
+}
+
+--# seed_tag_docs
+SPAWN docs: Tag {
+  name = "documentation",
+  color = "#10B981"
+}
+
+-- Tasks
+--# seed_task_api
+SPAWN api_task: Task {
+  title = "Implement API",
+  description = "Build REST API endpoints",
+  status = "in_progress",
+  priority = 5
+}
+
+--# seed_task_tests
+SPAWN tests_task: Task {
+  title = "Write tests",
+  description = "Add unit and integration tests",
+  status = "todo",
+  priority = 4
+}
+
+--# seed_task_docs
+SPAWN docs_task: Task {
+  title = "Write documentation",
+  status = "todo",
+  priority = 2
+}
+
+--# seed_task_deploy
+SPAWN deploy_task: Task {
+  title = "Deploy to production",
+  status = "todo",
+  priority = 3
+}
+
+--# seed_task_done
+SPAWN done_task: Task {
+  title = "Setup project",
+  status = "done",
+  priority = 5
+}
+
+-- SubTasks
+--# seed_subtask_auth
+SPAWN auth_subtask: SubTask {
+  title = "Implement authentication",
+  priority = 5,
+  is_blocking = true
+}
+
+--# seed_subtask_crud
+SPAWN crud_subtask: SubTask {
+  title = "Implement CRUD operations",
+  priority = 4,
+  is_blocking = false
+}

@@ -1,0 +1,130 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Workflow Definitions
+--# seed_wf_approval
+SPAWN approval_wf: WorkflowDef {
+  name = "Document Approval",
+  description = "Multi-stage document approval workflow",
+  version = 1
+}
+
+--# seed_wf_onboarding
+SPAWN onboarding_wf: WorkflowDef {
+  name = "Employee Onboarding",
+  description = "New employee onboarding process",
+  version = 2
+}
+
+-- States for Approval Workflow
+--# seed_state_draft
+SPAWN draft: State {
+  name = "Draft",
+  description = "Document is being created",
+  is_initial = true
+}
+
+--# seed_state_review
+SPAWN review: State {
+  name = "Under Review",
+  description = "Document is being reviewed"
+}
+
+--# seed_state_approved
+SPAWN approved: State {
+  name = "Approved",
+  description = "Document has been approved",
+  is_final = true
+}
+
+--# seed_state_rejected
+SPAWN rejected: State {
+  name = "Rejected",
+  description = "Document has been rejected",
+  is_final = true
+}
+
+-- Transitions
+--# seed_trans_submit
+SPAWN submit: Transition {
+  name = "Submit for Review",
+  priority = 10
+}
+
+--# seed_trans_approve
+SPAWN approve: Transition {
+  name = "Approve",
+  priority = 10
+}
+
+--# seed_trans_reject
+SPAWN reject: Transition {
+  name = "Reject",
+  priority = 5
+}
+
+-- Roles
+--# seed_role_author
+SPAWN author: Role {
+  name = "Author",
+  description = "Can create and submit documents"
+}
+
+--# seed_role_reviewer
+SPAWN reviewer: Role {
+  name = "Reviewer",
+  can_approve = true,
+  can_cancel = false
+}
+
+--# seed_role_admin
+SPAWN admin: Role {
+  name = "Administrator",
+  can_approve = true,
+  can_cancel = true
+}
+
+-- Actors
+--# seed_actor_alice
+SPAWN alice: Actor {
+  name = "Alice Smith",
+  actor_type = "user",
+  email = "alice@example.com"
+}
+
+--# seed_actor_bob
+SPAWN bob: Actor {
+  name = "Bob Jones",
+  actor_type = "user",
+  email = "bob@example.com"
+}
+
+--# seed_actor_system
+SPAWN system: Actor {
+  name = "System",
+  actor_type = "system"
+}
+
+-- Work Items
+--# seed_item_doc1
+SPAWN doc1: WorkItem {
+  external_id = "DOC-001",
+  status = "active",
+  data = "First document"
+}
+
+--# seed_item_doc2
+SPAWN doc2: WorkItem {
+  external_id = "DOC-002",
+  status = "draft",
+  data = "Second document"
+}
+
+--# seed_item_completed
+SPAWN completed_doc: WorkItem {
+  external_id = "DOC-000",
+  status = "completed",
+  data = "Completed document"
+}

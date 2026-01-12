@@ -1,0 +1,29 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_book
+SPAWN rust_book: Book {
+  isbn = "978-1593278281",
+  title = "The Rust Programming Language"
+}
+
+--# seed_author
+SPAWN klabnik: Author {
+  name = "Steve Klabnik",
+  nationality = "USA"
+}
+
+--# seed_genre
+SPAWN programming: Genre {
+  name = "Programming",
+  description = "Software development books"
+}
+
+--# seed_member
+SPAWN alice: Member {
+  member_id = "M001",
+  name = "Alice Smith",
+  email = "alice@example.com"
+}

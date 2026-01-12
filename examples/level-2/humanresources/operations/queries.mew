@@ -1,0 +1,35 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_employees
+MATCH e: Employee RETURN count(e)
+
+--# count_all_departments
+MATCH d: Department RETURN count(d)
+
+--# count_all_skills
+MATCH s: Skill RETURN count(s)
+
+--# count_all_roles
+MATCH r: Role RETURN count(r)
+
+--# query_active_employees
+MATCH e: Employee WHERE e.status = "active"
+RETURN e.first_name, e.last_name
+
+--# query_managers
+MATCH m: Manager RETURN m.first_name, m.management_level
+
+--# query_executives
+MATCH e: Executive RETURN e.first_name, e.title
+
+--# query_all_employees
+MATCH e: Employee RETURN e.first_name, e.last_name, e.salary
+
+--# query_departments
+MATCH d: Department RETURN d.name, d.code
+
+--# query_offices
+MATCH o: Office RETURN o.name, o.city

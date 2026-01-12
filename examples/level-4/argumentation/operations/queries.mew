@@ -1,0 +1,37 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_claims
+MATCH c: Claim RETURN count(c)
+
+--# count_all_arguments
+MATCH a: Argument RETURN count(a)
+
+--# count_all_participants
+MATCH p: Participant RETURN count(p)
+
+--# count_all_debates
+MATCH d: Debate RETURN count(d)
+
+--# query_open_claims
+MATCH c: Claim WHERE c.status = "open"
+RETURN c.statement
+
+--# query_contested_claims
+MATCH c: Claim WHERE c.status = "contested"
+RETURN c.statement
+
+--# query_active_arguments
+MATCH a: Argument WHERE a.status = "active"
+RETURN a.content
+
+--# query_all_claims
+MATCH c: Claim RETURN c.statement, c.status
+
+--# query_participants
+MATCH p: Participant RETURN p.name, p.reputation
+
+--# query_debates
+MATCH d: Debate RETURN d.title, d.status

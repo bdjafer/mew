@@ -1,0 +1,114 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Authors
+--# seed_author_klabnik
+SPAWN klabnik: Author {
+  name = "Steve Klabnik",
+  nationality = "USA"
+}
+
+--# seed_author_nichols
+SPAWN nichols: Author {
+  name = "Carol Nichols",
+  nationality = "USA"
+}
+
+--# seed_author_gamma
+SPAWN gamma: Author {
+  name = "Erich Gamma",
+  nationality = "Switzerland"
+}
+
+-- Genres
+--# seed_genre_programming
+SPAWN programming: Genre {
+  name = "Programming",
+  description = "Software development books"
+}
+
+--# seed_genre_design
+SPAWN design: Genre {
+  name = "Software Design",
+  description = "Architecture and patterns"
+}
+
+--# seed_genre_fiction
+SPAWN fiction: Genre {
+  name = "Fiction",
+  description = "Fictional works"
+}
+
+-- Books
+--# seed_book_rust
+SPAWN rust_book: Book {
+  isbn = "978-1593278281",
+  title = "The Rust Programming Language",
+  publication_year = 2019,
+  page_count = 552
+}
+
+--# seed_book_gof
+SPAWN gof_book: Book {
+  isbn = "978-0201633610",
+  title = "Design Patterns",
+  publication_year = 1994,
+  page_count = 416
+}
+
+--# seed_book_clean
+SPAWN clean_book: Book {
+  isbn = "978-0132350884",
+  title = "Clean Code",
+  publication_year = 2008,
+  page_count = 464
+}
+
+-- Copies
+--# seed_copy_rust1
+SPAWN rust_copy1: Copy {
+  barcode = "LIB-001-001",
+  condition = "good",
+  is_available = true
+}
+
+--# seed_copy_rust2
+SPAWN rust_copy2: Copy {
+  barcode = "LIB-001-002",
+  condition = "fair",
+  is_available = false
+}
+
+--# seed_copy_gof
+SPAWN gof_copy: Copy {
+  barcode = "LIB-002-001",
+  condition = "excellent",
+  is_available = true
+}
+
+-- Members
+--# seed_member_alice
+SPAWN alice: Member {
+  member_id = "M001",
+  name = "Alice Smith",
+  email = "alice@example.com",
+  active = true
+}
+
+--# seed_member_bob
+SPAWN bob: Member {
+  member_id = "M002",
+  name = "Bob Jones",
+  email = "bob@example.com",
+  active = true
+}
+
+--# seed_member_charlie
+SPAWN charlie: Member {
+  member_id = "M003",
+  name = "Charlie Brown",
+  email = "charlie@example.com",
+  active = false
+}

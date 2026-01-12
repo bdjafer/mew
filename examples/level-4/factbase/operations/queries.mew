@@ -1,0 +1,32 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_entities
+MATCH e: Entity RETURN count(e)
+
+--# count_all_evidence
+MATCH ev: Evidence RETURN count(ev)
+
+--# query_persons
+MATCH e: Entity WHERE e.entity_type = "person"
+RETURN e.name
+
+--# query_companies
+MATCH e: Entity WHERE e.entity_type = "company"
+RETURN e.name
+
+--# query_all_entities
+MATCH e: Entity RETURN e.name, e.entity_type
+
+--# query_reliable_evidence
+MATCH ev: Evidence WHERE ev.reliability >= 0.7
+RETURN ev.source, ev.reliability
+
+--# query_unreliable_evidence
+MATCH ev: Evidence WHERE ev.reliability < 0.5
+RETURN ev.source, ev.reliability
+
+--# query_all_evidence
+MATCH ev: Evidence RETURN ev.source, ev.reliability

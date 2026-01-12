@@ -1,0 +1,63 @@
+-- ===========================================================================
+-- ONTOLOGY: FactBase
+-- LEVEL: 4 (Higher-Order)
+-- DOMAIN: Simple fact storage with confidence and evidence
+-- ===========================================================================
+
+ontology FactBase {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+
+  type Confidence = Float [>= 0, <= 1]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- An entity that can be related to other entities
+  node Entity {
+    name: String [required],
+    entity_type: String?,
+    description: String?,
+    created_at: Timestamp = now()
+  }
+
+  --- A piece of evidence supporting facts
+  node Evidence {
+    source: String [required],
+    description: String?,
+    reliability: Confidence = 0.5,
+    collected_at: Timestamp = now()
+  }
+
+  --- A fact claim about relationships
+  node Fact {
+    subject_name: String [required],
+    predicate: String [required],
+    object_name: String [required],
+    confidence: Confidence = 0.5,
+    created_at: Timestamp = now()
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- A claimed relationship between entities
+  edge relates_to(subject: Entity, object: Entity) {
+    relation_type: String [required],
+    created_at: Timestamp = now()
+  }
+
+  --- Evidence supports a fact
+  edge supports_fact(evidence: Evidence, fact: Fact) {
+    strength: Confidence = 0.5
+  }
+
+  --- Fact is about entities
+  edge about_subject(fact: Fact, entity: Entity)
+  edge about_object(fact: Fact, entity: Entity)
+
+}

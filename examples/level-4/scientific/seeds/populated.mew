@@ -1,0 +1,105 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Concepts
+--# seed_concept_smoking
+SPAWN smoking: Concept {
+  name = "Smoking",
+  definition = "Regular tobacco consumption",
+  domain = "Health Behavior"
+}
+
+--# seed_concept_cancer
+SPAWN cancer: Concept {
+  name = "Lung Cancer",
+  definition = "Malignant tumor in lungs",
+  domain = "Oncology"
+}
+
+--# seed_concept_exercise
+SPAWN exercise: Concept {
+  name = "Regular Exercise",
+  definition = "Physical activity 3+ times per week",
+  domain = "Health Behavior"
+}
+
+--# seed_concept_longevity
+SPAWN longevity: Concept {
+  name = "Longevity",
+  definition = "Extended lifespan",
+  domain = "Health Outcomes"
+}
+
+--# seed_concept_stress
+SPAWN stress: Concept {
+  name = "Chronic Stress",
+  domain = "Psychology"
+}
+
+-- Hypotheses
+--# seed_hyp_smoking
+SPAWN smoking_hyp: Hypothesis {
+  statement = "Smoking causes lung cancer",
+  status = "established"
+}
+
+--# seed_hyp_exercise
+SPAWN exercise_hyp: Hypothesis {
+  statement = "Regular exercise increases longevity",
+  status = "supported"
+}
+
+--# seed_hyp_stress
+SPAWN stress_hyp: Hypothesis {
+  statement = "Chronic stress reduces longevity",
+  status = "proposed"
+}
+
+-- Researchers
+--# seed_researcher_smith
+SPAWN dr_smith: Researcher {
+  name = "Dr. Jane Smith",
+  institution = "Harvard Medical",
+  email = "smith@harvard.edu"
+}
+
+--# seed_researcher_jones
+SPAWN dr_jones: Researcher {
+  name = "Dr. Bob Jones",
+  institution = "Stanford",
+  email = "jones@stanford.edu"
+}
+
+-- Experiments
+--# seed_exp_smoking
+SPAWN smoking_study: Experiment {
+  title = "Longitudinal Smoking Study",
+  methodology = "Cohort study",
+  sample_size = 10000
+}
+
+--# seed_exp_exercise
+SPAWN exercise_study: Experiment {
+  title = "Exercise and Mortality Meta-Analysis",
+  methodology = "Meta-analysis",
+  sample_size = 500000
+}
+
+-- Publications
+--# seed_pub_smoking
+SPAWN smoking_pub: Publication {
+  title = "Smoking and Lung Cancer: A 20-Year Study",
+  journal = "NEJM",
+  year = 2020,
+  doi = "10.1000/smoking-2020"
+}
+
+--# seed_pub_exercise
+SPAWN exercise_pub: Publication {
+  title = "Exercise Benefits on Longevity",
+  journal = "Lancet",
+  year = 2021,
+  doi = "10.1000/exercise-2021"
+}
