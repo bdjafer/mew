@@ -84,7 +84,7 @@ Then apply decision procedure.
 4. Otherwise                         → Lowest-dependency unimplemented test
 ```
 
-Reference: `implementation/meta-roadmap.md` section 3.
+Reference: `specs/meta-roadmap.md` section 3.
 
 ---
 
@@ -100,7 +100,7 @@ Reference: `implementation/meta-roadmap.md` section 3.
 # Count passing tests (direct cargo)
 cd mew && cargo test --workspace 2>&1 | grep "test result"
 
-# Progress = passing / 158
+# Progress = passing / N
 ```
 
 This is the only metric that matters.
@@ -113,7 +113,7 @@ Maintain context across restarts:
 
 ```bash
 # After significant work
-echo "$(date): [component] [X/158 tests] [what you did] [next action]" >> .agent-journal.log
+echo "$(date): [component] [X/N tests] [what you did] [next action]" >> .agent-journal.log
 
 # On startup
 tail -20 .agent-journal.log
@@ -232,7 +232,7 @@ Before claiming done:
 ./test.sh  # Must show all pass
 
 # 2. Terminal session works
-# Run the session from meta-roadmap.md section 1
+# Run the session from specs/meta-roadmap.md section 1
 
 # 3. Ontologies load
 # Start REPL, load each ontology from examples/

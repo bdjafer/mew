@@ -13,25 +13,30 @@ A self-describing hypergraph database. Nodes, edges, edges about edges. Schema s
 ## Project Structure
 
 ```
-specification/           # Authoritative definitions (read carefully before modifying)
-  0_META_ONTOLOGY.md    # Layer 0 self-description
-  1_FOUNDATIONS.md      # Philosophical grounding
-  2_DSL.md              # Ontology definition language
-  3_GQL.md              # Query/mutation language
-
-implementation/          # Implementation guidance
+specs/                   # All specifications and implementation guidance
+  specification/         # Authoritative definitions (read carefully before modifying)
+    0_META_ONTOLOGY.md  # Layer 0 self-description
+    1_FOUNDATIONS.md    # Philosophical grounding
+    2_DSL.md            # Ontology definition language
+    3_GQL.md            # Query/mutation language
+  
   architecture.md       # 13-component system design
+  meta-roadmap.md       # Navigation methodology
   components/*.md       # Component contracts
   tests/*.md            # Acceptance test suites (158 total)
-  meta-roadmap.md       # Navigation methodology
+  glossary/             # Term definitions and clarifications
+  plans/                # Design documents for specific features
+  
+  v2/                   # Planned v2 features
+  v3+/                  # Future version features
 
-mew/                     # Rust workspace (your code goes here)
+mew/                    # Rust workspace (your code goes here)
   Cargo.toml
   graph/                # Each component is a crate
   parser/
   ...
 
-examples/                # Test ontologies by complexity
+examples/               # Test ontologies by complexity
   level-1/              # Simple (contacts, library)
     contacts/
       ontology.mew      # Schema definition
@@ -39,7 +44,13 @@ examples/                # Test ontologies by complexity
       operations/       # CRUD, queries, error tests
   level-5/              # Complex (cognitive agents, BDI)
 
-.claude/skills/          # Learned procedures (create more as needed)
+ontologies/             # Reference ontologies organized by complexity level
+  level-1/              # Small (S), Medium (M), Large (L)
+  level-2/              # Increasing complexity
+  ...
+  level-5/
+
+.claude/skills/         # Learned procedures (create more as needed)
 ```
 
 ---
@@ -128,14 +139,14 @@ cd mew && cargo test -p mew-graph -- --nocapture  # With output
 When documents conflict, higher level wins:
 
 ```
-1. specification/1_FOUNDATIONS.md     # Highest authority
-2. specification/2_DSL.md
-3. specification/3_GQL.md
-4. specification/0_META_ONTOLOGY.md
-5. implementation/architecture.md
-6. implementation/components/*.md
-7. implementation/tests/*.md
-8. mew/                               # Code conforms to above
+1. specs/specification/1_FOUNDATIONS.md     # Highest authority
+2. specs/specification/2_DSL.md
+3. specs/specification/3_GQL.md
+4. specs/specification/0_META_ONTOLOGY.md
+5. specs/architecture.md
+6. specs/components/*.md
+7. specs/tests/*.md
+8. mew/                                     # Code conforms to above
 ```
 
 ---
@@ -173,8 +184,6 @@ fn test_name_matches_acceptance_test() {
 }
 ```
 
-Test names correspond to acceptance tests in `implementation/tests/*.md`.
-
 ---
 
 ## Terminal Condition
@@ -182,7 +191,7 @@ Test names correspond to acceptance tests in `implementation/tests/*.md`.
 **Done when ALL true:**
 
 1. All 158 acceptance tests pass (`./test.sh`)
-2. Terminal session in `meta-roadmap.md` section 1 runs without error
+2. Terminal session in `specs/meta-roadmap.md` section 1 runs without error
 3. REPL loads any ontology from `examples/`
 4. System recovers correctly after kill -9
 
@@ -196,8 +205,8 @@ Specifications can contain errors discovered during implementation.
 
 | Document | Required Skill |
 |----------|----------------|
-| `1_FOUNDATIONS.md`, `2_DSL.md`, `3_GQL.md`, `architecture.md` | `revise-specification` |
-| `0_META_ONTOLOGY.md` | `revise-meta-ontology` |
+| `specs/specification/1_FOUNDATIONS.md`, `2_DSL.md`, `3_GQL.md`, `specs/architecture.md` | `revise-specification` |
+| `specs/specification/0_META_ONTOLOGY.md` | `revise-meta-ontology` |
 
 **Never silently diverge from specs.** If reality contradicts a spec, fix the spec explicitly using the skill, then propagate changes downward.
 
@@ -211,5 +220,5 @@ component: what changed
 - detail 1
 - detail 2
 
-Tests: X/158 passing
+Tests: X/Y passing
 ```

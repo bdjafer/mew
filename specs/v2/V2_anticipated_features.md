@@ -94,3 +94,10 @@ RETURN r.edge  -- returns the actual edge
 - Provenance can attach to edge-nodes
 
 **Implementation:** Lazy materialization — shadow nodes created on first access, cached.
+
+
+# Dynamic constraints / Pre-hooks
+- register in the graph, a "constraint" to enforce, allowing/denying certain operations (query/mutation) in a specific scope
+- should run before to apply the operation
+- should be in specific scope (not global)
+- should be performant
