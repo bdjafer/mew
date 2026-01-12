@@ -46,6 +46,14 @@ pub enum CompileError {
     #[error("Inheritance cycle detected: {cycle}")]
     InheritanceCycle { cycle: String },
 
+    /// Validation error.
+    #[error("Validation error: {message} at line {line}, column {column}")]
+    Validation {
+        message: String,
+        line: usize,
+        column: usize,
+    },
+
     /// Registry build error.
     #[error("Registry error: {0}")]
     Registry(#[from] mew_registry::RegistryError),
@@ -79,6 +87,14 @@ impl CompileError {
     pub fn unknown_parent_type(name: impl Into<String>, span: Span) -> Self {
         Self::UnknownParentType {
             name: name.into(),
+            line: span.line,
+            column: span.column,
+        }
+    }
+
+    pub fn validation(message: impl Into<String>, span: Span) -> Self {
+        Self::Validation {
+            message: message.into(),
             line: span.line,
             column: span.column,
         }

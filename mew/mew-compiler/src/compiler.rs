@@ -85,25 +85,31 @@ impl Compiler {
                     self.add_edge_type(&mut builder, e)?;
                 }
                 OntologyDef::Constraint(c) => {
+                    // Extract the primary type from the pattern (first node pattern)
+                    let primary_type = self.extract_primary_type(&c.pattern)?;
+
                     // Validate that the type exists
-                    if !self.type_names.contains(&c.on_type) {
-                        return Err(CompileError::unknown_type(&c.on_type, c.span));
+                    if !self.type_names.contains(&primary_type) {
+                        return Err(CompileError::unknown_type(&primary_type, c.span));
                     }
                     // Note: Constraints are stored as strings in the registry
                     // The actual constraint checking is done at runtime
                     builder
                         .add_constraint(&c.name, format!("{:?}", c.condition))
-                        .for_type(&c.on_type)
+                        .for_type(&primary_type)
                         .done()?;
                 }
                 OntologyDef::Rule(r) => {
+                    // Extract the primary type from the pattern (first node pattern)
+                    let primary_type = self.extract_primary_type(&r.pattern)?;
+
                     // Validate that the type exists
-                    if !self.type_names.contains(&r.on_type) {
-                        return Err(CompileError::unknown_type(&r.on_type, r.span));
+                    if !self.type_names.contains(&primary_type) {
+                        return Err(CompileError::unknown_type(&primary_type, r.span));
                     }
                     let mut rule_builder = builder
                         .add_rule(&r.name, format!("{:?}", r.production))
-                        .for_type(&r.on_type);
+                        .for_type(&primary_type);
                     if r.auto {
                         rule_builder = rule_builder.auto();
                     }
@@ -366,19 +372,60 @@ impl Compiler {
                 EdgeModifier::Symmetric => {
                     edge_builder = edge_builder.symmetric();
                 }
-                EdgeModifier::OnKill(action) => {
+                EdgeModifier::Indexed => {
+                    // Indexed modifier is an index hint, not yet implemented in registry
+                }
+                EdgeModifier::OnKillSource(action) | EdgeModifier::OnKillTarget(action) => {
                     let registry_action = match action {
-                        mew_parser::OnKillAction::Cascade => OnKillAction::Cascade,
-                        mew_parser::OnKillAction::Restrict => OnKillAction::Restrict,
-                        mew_parser::OnKillAction::SetNull => OnKillAction::SetNull,
+                        mew_parser::ReferentialAction::Cascade => OnKillAction::Cascade,
+                        mew_parser::ReferentialAction::Unlink => OnKillAction::SetNull, // Use SetNull as Unlink equivalent
+                        mew_parser::ReferentialAction::Prevent => OnKillAction::Restrict,
                     };
                     edge_builder = edge_builder.on_kill(registry_action);
+                }
+                EdgeModifier::Cardinality { param, min, max } => {
+                    // Cardinality constraints generate runtime constraints
+                    // For now, just record them as generated constraints
+                    let max_str = match max {
+                        mew_parser::CardinalityMax::Value(v) => v.to_string(),
+                        mew_parser::CardinalityMax::Unbounded => "*".to_string(),
+                    };
+                    self.generated_edge_constraints.push(GeneratedConstraint {
+                        name: format!("_{}_{}_cardinality", edge_def.name, param),
+                        on_type: edge_def.name.clone(),
+                        condition: format!("cardinality({}, {}..{})", param, min, max_str),
+                    });
                 }
             }
         }
 
         edge_builder.done()?;
         Ok(())
+    }
+
+    /// Extract the primary type from a pattern (first node pattern).
+    /// For constraints like `e: Event, causes(e, _) => ...`, returns "Event".
+    fn extract_primary_type(&self, pattern: &mew_parser::Pattern) -> CompileResult<String> {
+        for element in &pattern.elements {
+            if let mew_parser::PatternElem::Node(node) = element {
+                return Ok(node.type_name.clone());
+            }
+        }
+
+        // No node pattern found - check if there's an edge pattern we can extract from
+        for element in &pattern.elements {
+            if let mew_parser::PatternElem::Edge(edge) = element {
+                // For edge-only patterns, return a special type marker
+                // In practice, this case needs more sophisticated handling
+                return Ok(format!("edge:{}", edge.edge_type));
+            }
+        }
+
+        // Fallback - empty pattern
+        Err(CompileError::validation(
+            "Constraint/rule pattern has no node types",
+            pattern.span,
+        ))
     }
 }
 
@@ -543,7 +590,7 @@ mod tests {
         let source = r#"
             node Person { name: String }
             node Item { name: String }
-            edge owns(owner: Person, item: Item) [on_kill: cascade]
+            edge owns(owner: Person, item: Item) [on_kill_target: cascade]
         "#;
 
         // WHEN
@@ -562,7 +609,7 @@ mod tests {
             node Task {
                 priority: Int
             }
-            constraint priority_positive on Task: t.priority >= 0
+            constraint priority_positive: t: Task => t.priority >= 0
         "#;
 
         // WHEN
@@ -581,7 +628,7 @@ mod tests {
             node Task {
                 status: String
             }
-            rule auto_complete on Task [auto, priority 10]: SET t.status = "done"
+            rule auto_complete [auto, priority: 10]: t: Task => SET t.status = "done"
         "#;
 
         // WHEN

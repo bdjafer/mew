@@ -65,11 +65,30 @@ pub struct NodePattern {
 }
 
 /// Edge pattern: edge_type(targets) AS alias
+/// Or transitive: edge_type+(targets), edge_type*(targets)
 #[derive(Debug, Clone, PartialEq)]
 pub struct EdgePattern {
     pub edge_type: String,
     pub targets: Vec<String>,
     pub alias: Option<String>,
+    /// Transitive modifier: None, Plus (+, one or more), Star (*, zero or more)
+    pub transitive: Option<TransitiveKind>,
+    pub span: Span,
+}
+
+/// Transitive edge pattern modifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransitiveKind {
+    Plus,  // + (one or more hops)
+    Star,  // * (zero or more hops)
+}
+
+/// A pattern with pattern elements and an optional WHERE clause.
+/// Used in constraints and rules.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Pattern {
+    pub elements: Vec<PatternElem>,
+    pub where_clause: Option<Expr>,
     pub span: Span,
 }
 
@@ -453,32 +472,95 @@ pub enum EdgeModifier {
     Unique,
     NoSelf,
     Symmetric,
-    OnKill(OnKillAction),
+    Indexed,
+    OnKillSource(ReferentialAction),
+    OnKillTarget(ReferentialAction),
+    /// Cardinality constraint: param_name -> min..max
+    Cardinality {
+        param: String,
+        min: i64,
+        max: CardinalityMax,
+    },
 }
 
+/// Referential action for edge kill
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OnKillAction {
+pub enum ReferentialAction {
     Cascade,
-    Restrict,
-    SetNull,
+    Unlink,
+    Prevent,
+}
+
+/// Maximum cardinality value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardinalityMax {
+    Value(i64),
+    Unbounded,  // * (unlimited)
 }
 
 /// Constraint definition.
+/// Format: constraint Name [modifiers]: Pattern => Condition
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintDef {
     pub name: String,
-    pub on_type: String,
+    pub pattern: Pattern,
     pub condition: Expr,
+    pub modifiers: ConstraintModifiers,
     pub span: Span,
 }
 
+/// Constraint modifiers
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConstraintModifiers {
+    pub soft: bool,        // soft vs hard (default: hard)
+    pub message: Option<String>,
+}
+
 /// Rule definition.
+/// Format: rule Name [modifiers]: Pattern => Production
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuleDef {
     pub name: String,
-    pub on_type: String,
-    pub auto: bool,
+    pub pattern: Pattern,
+    pub auto: bool,           // true = auto (default), false = manual
     pub priority: Option<i64>,
-    pub production: Vec<Stmt>,
+    pub production: Vec<RuleAction>,
     pub span: Span,
+}
+
+/// Rule production actions
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuleAction {
+    /// SPAWN var: Type { attrs }
+    Spawn {
+        var: String,
+        type_name: String,
+        attrs: Vec<AttrAssignment>,
+        span: Span,
+    },
+    /// KILL var
+    Kill {
+        var: String,
+        span: Span,
+    },
+    /// LINK edge_type(targets) AS alias { attrs }
+    Link {
+        edge_type: String,
+        targets: Vec<String>,
+        alias: Option<String>,
+        attrs: Vec<AttrAssignment>,
+        span: Span,
+    },
+    /// UNLINK var
+    Unlink {
+        var: String,
+        span: Span,
+    },
+    /// SET var.attr = value
+    Set {
+        target: String,
+        attr: String,
+        value: Expr,
+        span: Span,
+    },
 }
