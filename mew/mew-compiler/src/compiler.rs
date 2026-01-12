@@ -376,22 +376,10 @@ impl Compiler {
                     // Indexed modifier is an index hint, not yet implemented in registry
                 }
                 EdgeModifier::OnKillSource(action) => {
-                    let registry_action = match action {
-                        mew_parser::ReferentialAction::Cascade => OnKillAction::Cascade,
-                        mew_parser::ReferentialAction::Unlink => OnKillAction::SetNull,
-                        mew_parser::ReferentialAction::Prevent => OnKillAction::Restrict,
-                    };
-                    // Source is parameter index 0
-                    edge_builder = edge_builder.on_kill_at(0, registry_action);
+                    edge_builder = edge_builder.on_kill_at(0, Self::convert_referential_action(*action));
                 }
                 EdgeModifier::OnKillTarget(action) => {
-                    let registry_action = match action {
-                        mew_parser::ReferentialAction::Cascade => OnKillAction::Cascade,
-                        mew_parser::ReferentialAction::Unlink => OnKillAction::SetNull,
-                        mew_parser::ReferentialAction::Prevent => OnKillAction::Restrict,
-                    };
-                    // Target is parameter index 1
-                    edge_builder = edge_builder.on_kill_at(1, registry_action);
+                    edge_builder = edge_builder.on_kill_at(1, Self::convert_referential_action(*action));
                 }
                 EdgeModifier::Cardinality { param, min, max } => {
                     // Cardinality constraints generate runtime constraints
@@ -436,6 +424,15 @@ impl Compiler {
             "Constraint/rule pattern has no node types",
             pattern.span,
         ))
+    }
+
+    /// Convert parser's ReferentialAction to registry's OnKillAction.
+    fn convert_referential_action(action: mew_parser::ReferentialAction) -> OnKillAction {
+        match action {
+            mew_parser::ReferentialAction::Cascade => OnKillAction::Cascade,
+            mew_parser::ReferentialAction::Unlink => OnKillAction::SetNull,
+            mew_parser::ReferentialAction::Prevent => OnKillAction::Restrict,
+        }
     }
 }
 

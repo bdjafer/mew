@@ -130,6 +130,8 @@ impl Parser {
         Ok(elements)
     }
 
+    /// Parse a pattern element: node pattern (var: Type) or edge pattern (edge(targets)).
+    /// Supports transitive edge patterns with + or * modifiers.
     fn parse_pattern_elem(&mut self) -> ParseResult<PatternElem> {
         let start = self.peek().span;
         let name = self.expect_ident()?;
@@ -148,50 +150,67 @@ impl Parser {
             || self.check(&TokenKind::Plus)
             || self.check(&TokenKind::Star)
         {
-            // Edge pattern: edge_type(targets) AS alias
-            // Or transitive: edge_type+(targets), edge_type*(targets)
-            let transitive = if self.check(&TokenKind::Plus) {
-                self.advance();
-                Some(TransitiveKind::Plus)
-            } else if self.check(&TokenKind::Star) {
-                self.advance();
-                Some(TransitiveKind::Star)
-            } else {
-                None
-            };
-
-            self.expect(&TokenKind::LParen)?;
-            let mut targets = Vec::new();
-            if !self.check(&TokenKind::RParen) {
-                targets.push(self.expect_ident()?);
-                while self.check(&TokenKind::Comma) {
-                    self.advance();
-                    targets.push(self.expect_ident()?);
-                }
-            }
-            self.expect(&TokenKind::RParen)?;
-
-            let alias = if self.check(&TokenKind::As) {
-                self.advance();
-                Some(self.expect_ident()?)
-            } else {
-                None
-            };
-
-            let span = self.span_from(start);
-            Ok(PatternElem::Edge(EdgePattern {
-                edge_type: name,
-                targets,
-                alias,
-                transitive,
-                span,
-            }))
+            self.parse_edge_pattern_body(name, start)
         } else {
             Err(ParseError::unexpected_token(
                 self.peek().span,
                 ": or (",
                 self.peek().kind.name(),
             ))
+        }
+    }
+
+    /// Parse the body of an edge pattern after the edge type name.
+    /// Handles transitive modifiers (+, *), targets, and optional alias.
+    fn parse_edge_pattern_body(&mut self, edge_type: String, start: Span) -> ParseResult<PatternElem> {
+        // Parse optional transitive modifier
+        let transitive = if self.check(&TokenKind::Plus) {
+            self.advance();
+            Some(TransitiveKind::Plus)
+        } else if self.check(&TokenKind::Star) {
+            self.advance();
+            Some(TransitiveKind::Star)
+        } else {
+            None
+        };
+
+        // Parse targets list
+        self.expect(&TokenKind::LParen)?;
+        let mut targets = Vec::new();
+        if !self.check(&TokenKind::RParen) {
+            targets.push(self.parse_edge_target()?);
+            while self.check(&TokenKind::Comma) {
+                self.advance();
+                targets.push(self.parse_edge_target()?);
+            }
+        }
+        self.expect(&TokenKind::RParen)?;
+
+        // Parse optional alias
+        let alias = if self.check(&TokenKind::As) {
+            self.advance();
+            Some(self.expect_ident()?)
+        } else {
+            None
+        };
+
+        let span = self.span_from(start);
+        Ok(PatternElem::Edge(EdgePattern {
+            edge_type,
+            targets,
+            alias,
+            transitive,
+            span,
+        }))
+    }
+
+    /// Parse an edge target: identifier or underscore for wildcard.
+    fn parse_edge_target(&mut self) -> ParseResult<String> {
+        if self.check_ident("_") {
+            self.advance();
+            Ok("_".to_string())
+        } else {
+            self.expect_ident()
         }
     }
 
@@ -997,30 +1016,8 @@ impl Parser {
         let token = self.peek().clone();
         let name = match &token.kind {
             TokenKind::Ident(name) => name.clone(),
-            // Allow keywords to be used as names
-            TokenKind::Order => "order".to_string(),
-            TokenKind::Type => "type".to_string(),
-            TokenKind::Match => "match".to_string(),
-            TokenKind::Node => "node".to_string(),
-            TokenKind::Edge => "edge".to_string(),
-            TokenKind::Rule => "rule".to_string(),
-            TokenKind::Constraint => "constraint".to_string(),
-            TokenKind::Set => "set".to_string(),
-            TokenKind::In => "in".to_string(),
-            TokenKind::As => "as".to_string(),
-            TokenKind::And => "and".to_string(),
-            TokenKind::Or => "or".to_string(),
-            TokenKind::Not => "not".to_string(),
-            TokenKind::From => "from".to_string(),
-            TokenKind::Path => "path".to_string(),
-            TokenKind::Nodes => "nodes".to_string(),
-            TokenKind::Edges => "edges".to_string(),
-            TokenKind::By => "by".to_string(),
-            TokenKind::Asc => "asc".to_string(),
-            TokenKind::Desc => "desc".to_string(),
-            TokenKind::Limit => "limit".to_string(),
-            TokenKind::Offset => "offset".to_string(),
-            TokenKind::Read => "read".to_string(),
+            // Allow keywords to be used as names (convert to lowercase)
+            kind if kind.is_keyword() => kind.name().to_lowercase(),
             _ => {
                 return Err(ParseError::unexpected_token(
                     token.span,
@@ -1287,9 +1284,7 @@ impl Parser {
             Ok(AttrModifier::Unique)
         } else if self.check_ident("default") {
             self.advance();
-            if self.check(&TokenKind::Eq) {
-                self.advance();
-            } else if self.check(&TokenKind::Colon) {
+            if self.check(&TokenKind::Eq) || self.check(&TokenKind::Colon) {
                 self.advance();
             } else {
                 let token = self.peek();
@@ -1646,8 +1641,8 @@ impl Parser {
         let start_span = self.peek().span;
         let mut elements = Vec::new();
 
-        // Parse first element
-        elements.push(self.parse_pattern_element()?);
+        // Parse first element (reuse parse_pattern_elem for consistency)
+        elements.push(self.parse_pattern_elem()?);
 
         // Parse remaining elements separated by comma
         while self.check(&TokenKind::Comma) {
@@ -1656,7 +1651,7 @@ impl Parser {
             if self.check(&TokenKind::Where) || self.check(&TokenKind::Arrow) {
                 break;
             }
-            elements.push(self.parse_pattern_element()?);
+            elements.push(self.parse_pattern_elem()?);
         }
 
         // Parse optional WHERE clause
@@ -1673,83 +1668,6 @@ impl Parser {
             where_clause,
             span,
         })
-    }
-
-    /// Parse a pattern element: either node pattern or edge pattern
-    fn parse_pattern_element(&mut self) -> ParseResult<PatternElem> {
-        let name = self.expect_ident()?;
-        let start_span = self.peek().span;
-
-        // Check what follows: ':' for node, '(' or '+' or '*' for edge
-        if self.check(&TokenKind::Colon) {
-            // Node pattern: var: Type
-            self.advance();
-            let type_name = self.expect_ident()?;
-            let span = self.span_from(start_span);
-            Ok(PatternElem::Node(NodePattern {
-                var: name,
-                type_name,
-                span,
-            }))
-        } else if self.check(&TokenKind::LParen)
-            || self.check(&TokenKind::Plus)
-            || self.check(&TokenKind::Star)
-        {
-            // Edge pattern: edge_type(targets) or edge_type+(targets)
-            let transitive = if self.check(&TokenKind::Plus) {
-                self.advance();
-                Some(TransitiveKind::Plus)
-            } else if self.check(&TokenKind::Star) {
-                self.advance();
-                Some(TransitiveKind::Star)
-            } else {
-                None
-            };
-
-            self.expect(&TokenKind::LParen)?;
-            let mut targets = Vec::new();
-            if !self.check(&TokenKind::RParen) {
-                targets.push(self.parse_edge_target()?);
-                while self.check(&TokenKind::Comma) {
-                    self.advance();
-                    targets.push(self.parse_edge_target()?);
-                }
-            }
-            self.expect(&TokenKind::RParen)?;
-
-            // Parse optional AS alias
-            let alias = if self.check(&TokenKind::As) {
-                self.advance();
-                Some(self.expect_ident()?)
-            } else {
-                None
-            };
-
-            let span = self.span_from(start_span);
-            Ok(PatternElem::Edge(EdgePattern {
-                edge_type: name,
-                targets,
-                alias,
-                transitive,
-                span,
-            }))
-        } else {
-            // Could be a bare edge name without parens in some contexts
-            Err(ParseError::new(
-                format!("expected ':' or '(' after identifier '{}'", name),
-                self.peek().span,
-            ))
-        }
-    }
-
-    /// Parse a target in edge pattern (variable name or underscore for wildcard)
-    fn parse_edge_target(&mut self) -> ParseResult<String> {
-        if self.check_ident("_") {
-            self.advance();
-            Ok("_".to_string())
-        } else {
-            self.expect_ident()
-        }
     }
 
     /// Parse a rule definition.

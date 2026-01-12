@@ -191,6 +191,66 @@ impl TokenKind {
             TokenKind::Eof => "end of input",
         }
     }
+
+    /// Returns true if this token is a keyword (not an identifier, literal, or punctuation).
+    pub fn is_keyword(&self) -> bool {
+        matches!(
+            self,
+            TokenKind::Match
+                | TokenKind::Where
+                | TokenKind::Return
+                | TokenKind::Order
+                | TokenKind::By
+                | TokenKind::Asc
+                | TokenKind::Desc
+                | TokenKind::Limit
+                | TokenKind::Offset
+                | TokenKind::Distinct
+                | TokenKind::Spawn
+                | TokenKind::Kill
+                | TokenKind::Link
+                | TokenKind::Unlink
+                | TokenKind::Set
+                | TokenKind::Walk
+                | TokenKind::From
+                | TokenKind::Follow
+                | TokenKind::Until
+                | TokenKind::Outbound
+                | TokenKind::Inbound
+                | TokenKind::Begin
+                | TokenKind::Commit
+                | TokenKind::Rollback
+                | TokenKind::As
+                | TokenKind::And
+                | TokenKind::Or
+                | TokenKind::Not
+                | TokenKind::Exists
+                | TokenKind::Null
+                | TokenKind::True
+                | TokenKind::False
+                | TokenKind::Cascade
+                | TokenKind::No
+                | TokenKind::Returning
+                | TokenKind::Node
+                | TokenKind::Edge
+                | TokenKind::Constraint
+                | TokenKind::Rule
+                | TokenKind::Type
+                | TokenKind::In
+                | TokenKind::On
+                | TokenKind::Read
+                | TokenKind::Serializable
+                | TokenKind::Committed
+                | TokenKind::Optional
+                | TokenKind::Any
+                | TokenKind::Path
+                | TokenKind::Nodes
+                | TokenKind::Edges
+                | TokenKind::Terminal
+                | TokenKind::Load
+                | TokenKind::Ontology
+        )
+    }
 }
 
 /// A token with its span.
@@ -215,7 +275,6 @@ impl Token {
 
 /// Lexer state.
 pub struct Lexer<'a> {
-    input: &'a str,
     chars: std::iter::Peekable<std::str::CharIndices<'a>>,
     pos: usize,
     line: usize,
@@ -225,7 +284,6 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
-            input,
             chars: input.char_indices().peekable(),
             pos: 0,
             line: 1,
