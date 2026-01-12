@@ -1530,7 +1530,7 @@ impl Parser {
         if self.check(&TokenKind::Cascade) || self.check_ident("cascade") {
             self.advance();
             Ok(ReferentialAction::Cascade)
-        } else if self.check_ident("unlink") {
+        } else if self.check(&TokenKind::Unlink) || self.check_ident("unlink") {
             self.advance();
             Ok(ReferentialAction::Unlink)
         } else if self.check_ident("prevent") {

@@ -307,9 +307,20 @@ impl<'a> EdgeTypeBuilder<'a> {
         self
     }
 
-    /// Set on-kill action for a parameter.
+    /// Set on-kill action for a parameter (deprecated, use on_kill_at instead).
     pub fn on_kill(mut self, action: OnKillAction) -> Self {
         self.on_kill.push(action);
+        self
+    }
+
+    /// Set on-kill action for a specific parameter by index.
+    /// Index 0 = source (first param), Index 1 = target (second param), etc.
+    pub fn on_kill_at(mut self, param_index: usize, action: OnKillAction) -> Self {
+        // Extend the vector if needed, filling with default (no action)
+        while self.on_kill.len() <= param_index {
+            self.on_kill.push(OnKillAction::Restrict); // Default: prevent deletion
+        }
+        self.on_kill[param_index] = action;
         self
     }
 

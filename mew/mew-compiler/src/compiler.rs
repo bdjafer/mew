@@ -375,13 +375,23 @@ impl Compiler {
                 EdgeModifier::Indexed => {
                     // Indexed modifier is an index hint, not yet implemented in registry
                 }
-                EdgeModifier::OnKillSource(action) | EdgeModifier::OnKillTarget(action) => {
+                EdgeModifier::OnKillSource(action) => {
                     let registry_action = match action {
                         mew_parser::ReferentialAction::Cascade => OnKillAction::Cascade,
-                        mew_parser::ReferentialAction::Unlink => OnKillAction::SetNull, // Use SetNull as Unlink equivalent
+                        mew_parser::ReferentialAction::Unlink => OnKillAction::SetNull,
                         mew_parser::ReferentialAction::Prevent => OnKillAction::Restrict,
                     };
-                    edge_builder = edge_builder.on_kill(registry_action);
+                    // Source is parameter index 0
+                    edge_builder = edge_builder.on_kill_at(0, registry_action);
+                }
+                EdgeModifier::OnKillTarget(action) => {
+                    let registry_action = match action {
+                        mew_parser::ReferentialAction::Cascade => OnKillAction::Cascade,
+                        mew_parser::ReferentialAction::Unlink => OnKillAction::SetNull,
+                        mew_parser::ReferentialAction::Prevent => OnKillAction::Restrict,
+                    };
+                    // Target is parameter index 1
+                    edge_builder = edge_builder.on_kill_at(1, registry_action);
                 }
                 EdgeModifier::Cardinality { param, min, max } => {
                     // Cardinality constraints generate runtime constraints
@@ -598,8 +608,10 @@ mod tests {
 
         // THEN
         let edge_type = registry.get_edge_type_by_name("owns").unwrap();
-        assert_eq!(edge_type.on_kill.len(), 1);
-        assert_eq!(edge_type.on_kill[0], OnKillAction::Cascade);
+        // on_kill[0] is source (default Restrict), on_kill[1] is target (Cascade)
+        assert_eq!(edge_type.on_kill.len(), 2);
+        assert_eq!(edge_type.on_kill[0], OnKillAction::Restrict); // source default
+        assert_eq!(edge_type.on_kill[1], OnKillAction::Cascade);  // target explicit
     }
 
     #[test]
