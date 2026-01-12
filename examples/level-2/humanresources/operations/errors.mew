@@ -1,0 +1,47 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_invalid_employee_id
+SPAWN e: Employee {
+  first_name = "Invalid",
+  last_name = "Employee",
+  email = "invalid@company.com",
+  employee_id = "INVALID",
+  hire_date = now()
+}
+
+--# spawn_invalid_email
+SPAWN e: Employee {
+  first_name = "Bad",
+  last_name = "Email",
+  email = "not-an-email",
+  employee_id = "EMP000200",
+  hire_date = now()
+}
+
+--# spawn_invalid_dept_code
+SPAWN d: Department {
+  code = "invalid-code",
+  name = "Invalid Department"
+}
+
+--# spawn_invalid_management_level
+SPAWN m: Manager {
+  first_name = "Bad",
+  last_name = "Manager",
+  email = "bad.mgr@company.com",
+  employee_id = "EMP000201",
+  hire_date = now(),
+  management_level = 10
+}
+
+--# spawn_valid
+SPAWN e: Employee {
+  first_name = "Valid",
+  last_name = "Employee",
+  email = "valid@company.com",
+  employee_id = "EMP000300",
+  hire_date = now()
+}

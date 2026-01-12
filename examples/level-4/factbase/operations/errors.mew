@@ -1,0 +1,31 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_missing_name
+SPAWN e: Entity {
+  entity_type = "test"
+}
+
+--# spawn_missing_source
+SPAWN ev: Evidence {
+  reliability = 0.5
+}
+
+--# spawn_invalid_reliability_low
+SPAWN ev: Evidence {
+  source = "Test",
+  reliability = -0.1
+}
+
+--# spawn_invalid_reliability_high
+SPAWN ev: Evidence {
+  source = "Test",
+  reliability = 1.5
+}
+
+--# spawn_valid
+SPAWN e: Entity {
+  name = "Valid Entity"
+}

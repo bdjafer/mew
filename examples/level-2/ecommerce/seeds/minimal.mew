@@ -1,0 +1,24 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_category
+SPAWN electronics: Category {
+  name = "Electronics",
+  slug = "electronics"
+}
+
+--# seed_product
+SPAWN laptop: Product {
+  sku = "ELEC-0001",
+  name = "Laptop Pro",
+  price = 999.99,
+  status = "active"
+}
+
+--# seed_customer
+SPAWN alice: Customer {
+  email = "alice@example.com",
+  name = "Alice Smith"
+}

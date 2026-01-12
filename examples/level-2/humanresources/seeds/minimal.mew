@@ -1,0 +1,32 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_department
+SPAWN eng: Department {
+  code = "ENG",
+  name = "Engineering"
+}
+
+--# seed_role
+SPAWN dev_role: Role {
+  code = "SWE",
+  title = "Software Engineer"
+}
+
+--# seed_skill
+SPAWN rust: Skill {
+  name = "Rust",
+  category = "Programming"
+}
+
+--# seed_office
+SPAWN hq: Office {
+  code = "HQ",
+  name = "Headquarters",
+  address = "100 Main St",
+  city = "San Francisco",
+  country = "USA",
+  is_headquarters = true
+}

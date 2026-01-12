@@ -1,0 +1,27 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_concept_cause
+SPAWN smoking: Concept {
+  name = "Smoking",
+  domain = "Health"
+}
+
+--# seed_concept_effect
+SPAWN lung_cancer: Concept {
+  name = "Lung Cancer",
+  domain = "Health"
+}
+
+--# seed_hypothesis
+SPAWN hypothesis: Hypothesis {
+  statement = "Smoking causes lung cancer"
+}
+
+--# seed_researcher
+SPAWN researcher: Researcher {
+  name = "Dr. Jane Smith",
+  institution = "University Research"
+}

@@ -1,0 +1,60 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations
+-- ===========================================================================
+
+--# spawn_claim
+SPAWN c: Claim {
+  statement = "Test claim"
+}
+
+--# query_count_claims
+MATCH c: Claim RETURN count(c)
+
+--# spawn_argument
+SPAWN a: Argument {
+  content = "Test argument"
+}
+
+--# link_addresses
+LINK addresses(a, c) { stance = "support" }
+
+--# spawn_participant
+SPAWN p: Participant {
+  name = "Test Participant"
+}
+
+--# link_authored
+LINK authored_by(a, p)
+
+--# link_stance
+LINK takes_stance(p, c) { stance = "support" }
+
+--# spawn_evidence
+SPAWN e: Evidence {
+  description = "Test evidence"
+}
+
+--# link_backed
+LINK backed_by(a, e)
+
+--# spawn_debate
+SPAWN d: Debate {
+  title = "Test Debate"
+}
+
+--# link_debates
+LINK debates(d, c)
+
+--# link_in_debate
+LINK in_debate(a, d)
+
+--# update_argument
+SET a { status = "accepted" }
+
+--# query_updated
+MATCH a: Argument WHERE a.content = "Test argument"
+RETURN a.status
+
+--# query_all
+MATCH c: Claim RETURN c.statement

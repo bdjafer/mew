@@ -1,0 +1,27 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_person
+SPAWN alice: Person {
+  first_name = "Alice",
+  last_name = "Smith"
+}
+
+--# seed_org
+SPAWN acme: Organization {
+  name = "Acme Corp",
+  industry = "Technology"
+}
+
+--# seed_tag
+SPAWN work: Tag {
+  name = "work",
+  color = "#10B981"
+}
+
+--# seed_group
+SPAWN friends: Group {
+  name = "Friends"
+}

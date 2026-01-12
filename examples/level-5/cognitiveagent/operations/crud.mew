@@ -1,0 +1,68 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations
+-- ===========================================================================
+
+--# spawn_agent
+SPAWN a: Agent {
+  name = "Test Agent"
+}
+
+--# query_count_agents
+MATCH a: Agent RETURN count(a)
+
+--# spawn_belief
+SPAWN b: Belief {
+  content = "Test belief"
+}
+
+--# link_believes
+LINK believes(a, b)
+
+--# spawn_goal
+SPAWN g: Goal {
+  description = "Test goal",
+  priority = 0.7
+}
+
+--# link_has_goal
+LINK has_goal(a, g)
+
+--# spawn_plan
+SPAWN p: Plan {
+  name = "Test Plan"
+}
+
+--# link_plan_goal
+LINK plan_for(p, g)
+
+--# spawn_action
+SPAWN act: Action {
+  name = "Test Action"
+}
+
+--# link_plan_action
+LINK contains_action(p, act)
+
+--# spawn_concept
+SPAWN c: Concept {
+  name = "Test Concept"
+}
+
+--# spawn_selfmodel
+SPAWN sm: SelfModel {
+  aspect = "test"
+}
+
+--# link_selfmodel
+LINK has_self_model(a, sm)
+
+--# update_agent
+SET a { arousal_level = 0.8 }
+
+--# query_updated
+MATCH a: Agent WHERE a.name = "Test Agent"
+RETURN a.arousal_level
+
+--# query_agents
+MATCH a: Agent RETURN a.name

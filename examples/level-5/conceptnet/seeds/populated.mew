@@ -1,0 +1,95 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Primitive concepts
+--# seed_concept_entity
+SPAWN entity: Concept {
+  name = "Entity",
+  definition = "Something that exists",
+  is_primitive = true
+}
+
+--# seed_concept_living
+SPAWN living: Concept {
+  name = "Living Thing",
+  definition = "Organism with life",
+  is_primitive = true
+}
+
+--# seed_concept_object
+SPAWN object: Concept {
+  name = "Physical Object",
+  is_primitive = true
+}
+
+-- Derived concepts
+--# seed_concept_animal
+SPAWN animal: Concept {
+  name = "Animal",
+  definition = "Living multicellular organism"
+}
+
+--# seed_concept_mammal
+SPAWN mammal: Concept {
+  name = "Mammal",
+  definition = "Warm-blooded vertebrate"
+}
+
+--# seed_concept_dog
+SPAWN dog: Concept {
+  name = "Dog",
+  definition = "Domesticated canine"
+}
+
+--# seed_concept_cat
+SPAWN cat: Concept {
+  name = "Cat",
+  definition = "Domesticated feline"
+}
+
+-- Learned concepts (with uncertainty)
+--# seed_concept_learned
+SPAWN learned_concept: Concept {
+  name = "AI Assistant",
+  definition = "Software that helps users",
+  learned = true,
+  confidence = 0.85
+}
+
+-- Instances
+--# seed_concept_fido
+SPAWN fido: Concept {
+  name = "Fido",
+  definition = "A specific dog"
+}
+
+--# seed_concept_whiskers
+SPAWN whiskers: Concept {
+  name = "Whiskers",
+  definition = "A specific cat"
+}
+
+-- Relation types
+--# seed_reltype_isa
+SPAWN is_a: RelationType {
+  name = "is_a",
+  is_transitive = true
+}
+
+--# seed_reltype_has
+SPAWN has_part: RelationType {
+  name = "has_part",
+  inverse_name = "part_of"
+}
+
+--# seed_reltype_capable
+SPAWN capable_of: RelationType {
+  name = "capable_of"
+}
+
+--# seed_reltype_lives
+SPAWN lives_in: RelationType {
+  name = "lives_in"
+}

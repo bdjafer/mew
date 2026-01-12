@@ -1,0 +1,21 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_concept_animal
+SPAWN animal: Concept {
+  name = "Animal",
+  is_primitive = true
+}
+
+--# seed_concept_dog
+SPAWN dog: Concept {
+  name = "Dog"
+}
+
+--# seed_relation_type
+SPAWN is_a: RelationType {
+  name = "is_a",
+  is_transitive = true
+}

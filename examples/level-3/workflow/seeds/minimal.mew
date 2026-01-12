@@ -1,0 +1,28 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_workflow
+SPAWN approval: WorkflowDef {
+  name = "Simple Approval",
+  description = "Basic approval workflow"
+}
+
+--# seed_state_start
+SPAWN start_state: State {
+  name = "Pending",
+  is_initial = true
+}
+
+--# seed_state_end
+SPAWN end_state: State {
+  name = "Approved",
+  is_final = true
+}
+
+--# seed_role
+SPAWN approver: Role {
+  name = "Approver",
+  can_approve = true
+}

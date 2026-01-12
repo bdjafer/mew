@@ -1,0 +1,37 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_concepts
+MATCH c: Concept RETURN count(c)
+
+--# count_all_hypotheses
+MATCH h: Hypothesis RETURN count(h)
+
+--# count_all_experiments
+MATCH e: Experiment RETURN count(e)
+
+--# count_all_researchers
+MATCH r: Researcher RETURN count(r)
+
+--# query_health_concepts
+MATCH c: Concept WHERE c.domain = "Health Behavior"
+RETURN c.name
+
+--# query_proposed_hypotheses
+MATCH h: Hypothesis WHERE h.status = "proposed"
+RETURN h.statement
+
+--# query_established_hypotheses
+MATCH h: Hypothesis WHERE h.status = "established"
+RETURN h.statement
+
+--# query_all_hypotheses
+MATCH h: Hypothesis RETURN h.statement, h.status
+
+--# query_researchers
+MATCH r: Researcher RETURN r.name, r.institution
+
+--# query_publications
+MATCH p: Publication RETURN p.title, p.journal

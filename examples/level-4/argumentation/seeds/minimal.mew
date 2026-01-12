@@ -1,0 +1,26 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_claim
+SPAWN main_claim: Claim {
+  statement = "Climate change requires immediate action"
+}
+
+--# seed_argument
+SPAWN support_arg: Argument {
+  content = "Scientific consensus supports urgent action",
+  argument_type = "appeal to authority"
+}
+
+--# seed_participant
+SPAWN alice: Participant {
+  name = "Alice",
+  reputation = 0.8
+}
+
+--# seed_debate
+SPAWN debate: Debate {
+  title = "Climate Policy Debate"
+}

@@ -1,0 +1,25 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_agent
+SPAWN agent: Agent {
+  name = "Test Agent"
+}
+
+--# seed_belief
+SPAWN belief: Belief {
+  content = "The world is observable"
+}
+
+--# seed_goal
+SPAWN goal: Goal {
+  description = "Achieve success",
+  priority = 0.8
+}
+
+--# seed_plan
+SPAWN plan: Plan {
+  name = "Basic Plan"
+}

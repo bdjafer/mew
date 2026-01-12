@@ -1,0 +1,103 @@
+-- ===========================================================================
+-- ONTOLOGY: BDI
+-- LEVEL: 5 (AGI-Ready)
+-- DOMAIN: BDI agent architecture
+-- ===========================================================================
+
+ontology BDI {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+
+  type Confidence = Float [>= 0, <= 1]
+  type Priority = Float [>= 0, <= 1]
+  type GoalStatus = String [in: ["active", "achieved", "failed", "suspended", "dropped"]]
+  type PlanStatus = String [in: ["available", "executing", "completed", "failed", "aborted"]]
+  type IntentionStatus = String [in: ["committed", "executing", "achieved", "failed", "reconsidering"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- An agent with beliefs, desires, and intentions
+  node Agent {
+    name: String [required],
+    agent_type: String = "rational",
+    created_at: Timestamp = now(),
+    last_reasoning_cycle: Timestamp?
+  }
+
+  --- A belief held by an agent
+  node Belief {
+    content: String [required],
+    confidence: Confidence = 1.0,
+    acquired_at: Timestamp = now(),
+    source: String?,
+    is_perception: Bool = false,
+    last_verified: Timestamp?
+  }
+
+  --- A goal (desire) that an agent wants to achieve
+  node Goal {
+    description: String [required],
+    status: GoalStatus = "active",
+    priority: Priority = 0.5,
+    deadline: Timestamp?,
+    created_at: Timestamp = now(),
+    achieved_at: Timestamp?,
+    utility: Float = 1.0
+  }
+
+  --- A plan to achieve a goal
+  node Plan {
+    name: String [required],
+    description: String?,
+    status: PlanStatus = "available",
+    success_rate: Confidence = 0.5,
+    last_executed: Timestamp?
+  }
+
+  --- An intention (committed goal with plan)
+  node Intention {
+    status: IntentionStatus = "committed",
+    committed_at: Timestamp = now(),
+    started_at: Timestamp?,
+    completed_at: Timestamp?
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Agent holds belief
+  edge believes(agent: Agent, belief: Belief) {
+    since: Timestamp = now()
+  }
+
+  --- Agent has goal
+  edge desires(agent: Agent, goal: Goal) {
+    adopted_at: Timestamp = now()
+  }
+
+  --- Agent has intention
+  edge intends(agent: Agent, intention: Intention)
+
+  --- Intention is for goal
+  edge intention_for(intention: Intention, goal: Goal)
+
+  --- Intention uses plan
+  edge using_plan(intention: Intention, plan: Plan)
+
+  --- Plan achieves goal
+  edge achieves(plan: Plan, goal: Goal) {
+    probability: Confidence = 0.5
+  }
+
+  --- Goal depends on another goal
+  edge depends_on(dependent: Goal, dependency: Goal) [no_self]
+
+  --- Goal conflicts with another goal
+  edge conflicts_with(goal1: Goal, goal2: Goal) [symmetric, no_self]
+
+}

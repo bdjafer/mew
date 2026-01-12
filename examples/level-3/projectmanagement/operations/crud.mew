@@ -1,0 +1,61 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations
+-- ===========================================================================
+
+--# spawn_project
+SPAWN p: Project {
+  name = "Test Project"
+}
+
+--# query_count_projects
+MATCH p: Project RETURN count(p)
+
+--# spawn_task
+SPAWN t: Task {
+  title = "Test Task",
+  priority = 5
+}
+
+--# link_task_project
+LINK belongs_to(t, p)
+
+--# spawn_milestone
+SPAWN m: Milestone {
+  name = "Test Milestone"
+}
+
+--# link_milestone_project
+LINK milestone_of(m, p)
+
+--# link_task_milestone
+LINK targets_milestone(t, m)
+
+--# spawn_member
+SPAWN mem: TeamMember {
+  name = "Test Member",
+  email = "test@example.com"
+}
+
+--# link_assigned
+LINK assigned_to(t, mem)
+
+--# link_member_project
+LINK member_of(mem, p)
+
+--# update_task_status
+SET t { status = "in_progress" }
+
+--# query_updated
+MATCH t: Task WHERE t.title = "Test Task"
+RETURN t.status
+
+--# update_task_done
+SET t { status = "done" }
+
+--# kill_task
+KILL t
+
+--# query_empty
+MATCH t: Task WHERE t.title = "Test Task"
+RETURN t

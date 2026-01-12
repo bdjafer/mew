@@ -1,0 +1,38 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_projects
+MATCH p: Project RETURN count(p)
+
+--# count_all_tasks
+MATCH t: Task RETURN count(t)
+
+--# count_all_milestones
+MATCH m: Milestone RETURN count(m)
+
+--# count_all_members
+MATCH m: TeamMember RETURN count(m)
+
+--# query_active_projects
+MATCH p: Project WHERE p.status = "active"
+RETURN p.name
+
+--# query_high_priority_tasks
+MATCH t: Task WHERE t.priority >= 7
+RETURN t.title
+
+--# query_todo_tasks
+MATCH t: Task WHERE t.status = "todo"
+RETURN t.title
+
+--# query_in_progress
+MATCH t: Task WHERE t.status = "in_progress"
+RETURN t.title
+
+--# query_all_tasks
+MATCH t: Task RETURN t.title, t.status, t.priority
+
+--# query_members
+MATCH m: TeamMember RETURN m.name, m.role

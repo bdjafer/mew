@@ -1,0 +1,105 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Projects
+--# seed_proj_mvp
+SPAWN mvp: Project {
+  name = "MVP Release",
+  description = "Minimum viable product launch",
+  status = "active"
+}
+
+--# seed_proj_v2
+SPAWN v2: Project {
+  name = "Version 2.0",
+  description = "Major feature update",
+  status = "planning"
+}
+
+-- Team Members
+--# seed_member_alice
+SPAWN alice: TeamMember {
+  name = "Alice Smith",
+  email = "alice@example.com",
+  role = "Developer"
+}
+
+--# seed_member_bob
+SPAWN bob: TeamMember {
+  name = "Bob Jones",
+  email = "bob@example.com",
+  role = "Developer"
+}
+
+--# seed_member_charlie
+SPAWN charlie: TeamMember {
+  name = "Charlie Brown",
+  email = "charlie@example.com",
+  role = "Manager"
+}
+
+-- Milestones
+--# seed_milestone_alpha
+SPAWN alpha: Milestone {
+  name = "Alpha Release",
+  description = "Internal testing release"
+}
+
+--# seed_milestone_beta
+SPAWN beta: Milestone {
+  name = "Beta Release",
+  description = "External beta testing"
+}
+
+-- Tasks
+--# seed_task_auth
+SPAWN auth_task: Task {
+  title = "Implement authentication",
+  description = "User login and registration",
+  status = "done",
+  priority = 10
+}
+
+--# seed_task_api
+SPAWN api_task: Task {
+  title = "Build REST API",
+  description = "Core API endpoints",
+  status = "in_progress",
+  priority = 9
+}
+
+--# seed_task_ui
+SPAWN ui_task: Task {
+  title = "Create UI components",
+  status = "todo",
+  priority = 7
+}
+
+--# seed_task_tests
+SPAWN tests_task: Task {
+  title = "Write integration tests",
+  status = "backlog",
+  priority = 6
+}
+
+--# seed_task_docs
+SPAWN docs_task: Task {
+  title = "Write documentation",
+  status = "backlog",
+  priority = 4
+}
+
+-- Notifications
+--# seed_notif_1
+SPAWN notif1: Notification {
+  message = "Task auth_task completed",
+  is_read = true
+}
+
+--# seed_notif_2
+SPAWN notif2: Notification {
+  message = "New task assigned: api_task",
+  is_read = false
+}

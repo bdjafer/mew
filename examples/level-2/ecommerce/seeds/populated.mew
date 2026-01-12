@@ -1,0 +1,126 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Categories
+--# seed_cat_electronics
+SPAWN electronics: Category {
+  name = "Electronics",
+  slug = "electronics",
+  description = "Electronic devices and accessories"
+}
+
+--# seed_cat_computers
+SPAWN computers: Category {
+  name = "Computers",
+  slug = "computers",
+  description = "Laptops and desktops"
+}
+
+--# seed_cat_books
+SPAWN books: Category {
+  name = "Books",
+  slug = "books",
+  description = "Physical and digital books"
+}
+
+-- Products
+--# seed_prod_laptop
+SPAWN laptop: PhysicalProduct {
+  sku = "COMP-0001",
+  name = "Laptop Pro 15",
+  description = "High-performance laptop",
+  price = 1299.99,
+  status = "active",
+  weight_kg = 2.1
+}
+
+--# seed_prod_phone
+SPAWN phone: PhysicalProduct {
+  sku = "ELEC-0001",
+  name = "SmartPhone X",
+  price = 799.99,
+  status = "active",
+  weight_kg = 0.2
+}
+
+--# seed_prod_ebook
+SPAWN ebook: DigitalProduct {
+  sku = "BOOK-0001",
+  name = "Rust Programming Guide",
+  price = 29.99,
+  status = "active",
+  file_size_mb = 15.5
+}
+
+--# seed_prod_headphones
+SPAWN headphones: PhysicalProduct {
+  sku = "ELEC-0002",
+  name = "Wireless Headphones",
+  price = 199.99,
+  status = "active",
+  weight_kg = 0.3
+}
+
+--# seed_prod_discontinued
+SPAWN old_product: Product {
+  sku = "OLD-0001",
+  name = "Old Product",
+  price = 49.99,
+  status = "discontinued"
+}
+
+-- Customers
+--# seed_cust_alice
+SPAWN alice: Customer {
+  email = "alice@example.com",
+  name = "Alice Smith",
+  is_verified = true
+}
+
+--# seed_cust_bob
+SPAWN bob: Customer {
+  email = "bob@example.com",
+  name = "Bob Jones",
+  is_verified = true
+}
+
+--# seed_cust_charlie
+SPAWN charlie: Customer {
+  email = "charlie@example.com",
+  name = "Charlie Brown",
+  is_verified = false
+}
+
+-- Reviews
+--# seed_review_laptop
+SPAWN laptop_review: Review {
+  rating = 5,
+  title = "Great laptop!",
+  body = "Best laptop I have ever owned.",
+  is_verified_purchase = true
+}
+
+--# seed_review_phone
+SPAWN phone_review: Review {
+  rating = 4,
+  title = "Good phone",
+  body = "Works well, battery could be better.",
+  is_verified_purchase = true
+}
+
+-- Images
+--# seed_img_laptop
+SPAWN laptop_img: ProductImage {
+  url = "https://example.com/laptop.jpg",
+  alt_text = "Laptop Pro 15",
+  is_primary = true
+}
+
+--# seed_img_phone
+SPAWN phone_img: ProductImage {
+  url = "https://example.com/phone.jpg",
+  alt_text = "SmartPhone X",
+  is_primary = true
+}

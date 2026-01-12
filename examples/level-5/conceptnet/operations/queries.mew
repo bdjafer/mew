@@ -1,0 +1,32 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_concepts
+MATCH c: Concept RETURN count(c)
+
+--# count_all_reltypes
+MATCH rt: RelationType RETURN count(rt)
+
+--# query_primitive_concepts
+MATCH c: Concept WHERE c.is_primitive = true
+RETURN c.name
+
+--# query_learned_concepts
+MATCH c: Concept WHERE c.learned = true
+RETURN c.name, c.confidence
+
+--# query_high_confidence
+MATCH c: Concept WHERE c.confidence >= 0.9
+RETURN c.name
+
+--# query_all_concepts
+MATCH c: Concept RETURN c.name, c.is_primitive, c.learned
+
+--# query_relation_types
+MATCH rt: RelationType RETURN rt.name, rt.is_transitive
+
+--# query_symmetric_relations
+MATCH rt: RelationType WHERE rt.is_symmetric = true
+RETURN rt.name

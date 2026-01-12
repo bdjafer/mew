@@ -1,0 +1,37 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_books
+MATCH b: Book RETURN count(b)
+
+--# count_all_authors
+MATCH a: Author RETURN count(a)
+
+--# count_all_members
+MATCH m: Member RETURN count(m)
+
+--# count_all_copies
+MATCH c: Copy RETURN count(c)
+
+--# query_active_members
+MATCH m: Member WHERE m.active = true
+RETURN m.name
+
+--# query_available_copies
+MATCH c: Copy WHERE c.is_available = true
+RETURN c.barcode
+
+--# query_by_title
+MATCH b: Book WHERE b.title = "The Rust Programming Language"
+RETURN b.isbn
+
+--# query_all_titles
+MATCH b: Book RETURN b.title
+
+--# query_genres
+MATCH g: Genre RETURN g.name
+
+--# query_authors
+MATCH a: Author RETURN a.name, a.nationality

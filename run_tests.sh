@@ -2,7 +2,7 @@
 # MEW Generative Test Runner Helper
 #
 # Usage:
-#   ./run_tests.sh              # Generate tests for all ontologies
+#   ./run_tests.sh              # Generate tests for all examples
 #   ./run_tests.sh --level 1    # Generate tests for level-1 only
 #   ./run_tests.sh --execute    # Execute tests against MEW
 #   ./run_tests.sh --help       # Show all options
@@ -20,7 +20,7 @@ cd ..
 
 # Run with passed arguments
 ./mew/target/debug/testgen-runner \
-    --ontologies-dir ontologies \
+    --ontologies-dir examples \
     --output mew/tests/reports \
     "$@"
 

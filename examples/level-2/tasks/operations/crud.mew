@@ -1,0 +1,48 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations for tasks
+-- ===========================================================================
+
+--# spawn_task
+SPAWN t: Task {
+  title = "Test task",
+  priority = 3
+}
+
+--# query_count_tasks
+MATCH t: Task RETURN count(t)
+
+--# query_all_tasks
+MATCH t: Task RETURN t.title, t.status
+
+--# spawn_subtask
+SPAWN st: SubTask {
+  title = "Test subtask",
+  is_blocking = true
+}
+
+--# link_subtask
+LINK subtask_of(st, t)
+
+--# spawn_tag
+SPAWN tag: Tag { name = "test" }
+
+--# link_tag
+LINK tagged(t, tag)
+
+--# update_task_status
+SET t { status = "in_progress" }
+
+--# query_updated
+MATCH t: Task WHERE t.title = "Test task"
+RETURN t.status
+
+--# update_task_done
+SET t { status = "done" }
+
+--# kill_task
+KILL t
+
+--# query_empty
+MATCH t: Task WHERE t.title = "Test task"
+RETURN t

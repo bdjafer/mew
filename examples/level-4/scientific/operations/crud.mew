@@ -1,0 +1,61 @@
+-- ===========================================================================
+-- SCENARIO: CRUD Operations
+-- DESCRIPTION: Basic create, read, update, delete operations
+-- ===========================================================================
+
+--# spawn_concept1
+SPAWN c1: Concept {
+  name = "Test Cause",
+  domain = "Test"
+}
+
+--# spawn_concept2
+SPAWN c2: Concept {
+  name = "Test Effect",
+  domain = "Test"
+}
+
+--# query_count_concepts
+MATCH c: Concept RETURN count(c)
+
+--# spawn_hypothesis
+SPAWN h: Hypothesis {
+  statement = "Test cause leads to test effect"
+}
+
+--# link_causation
+LINK proposes_causation(h, c1, c2)
+
+--# spawn_researcher
+SPAWN r: Researcher {
+  name = "Dr. Test",
+  institution = "Test University"
+}
+
+--# spawn_experiment
+SPAWN e: Experiment {
+  title = "Test Experiment",
+  sample_size = 100
+}
+
+--# link_tests
+LINK tests(e, h)
+
+--# link_conducted
+LINK conducted_by(e, r)
+
+--# update_hypothesis
+SET h { status = "supported" }
+
+--# query_updated
+MATCH h: Hypothesis WHERE h.statement = "Test cause leads to test effect"
+RETURN h.status
+
+--# query_concepts
+MATCH c: Concept RETURN c.name, c.domain
+
+--# kill_concept
+KILL c2
+
+--# query_remaining
+MATCH c: Concept RETURN c.name

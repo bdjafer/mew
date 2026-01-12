@@ -1,0 +1,26 @@
+-- ===========================================================================
+-- SCENARIO: Error Cases
+-- DESCRIPTION: Tests constraint violations and error handling
+-- ===========================================================================
+
+--# spawn_missing_name
+SPAWN c: Concept {
+  definition = "Test"
+}
+
+--# spawn_invalid_confidence_low
+SPAWN c: Concept {
+  name = "Test",
+  confidence = -0.1
+}
+
+--# spawn_invalid_confidence_high
+SPAWN c: Concept {
+  name = "Test",
+  confidence = 1.5
+}
+
+--# spawn_valid
+SPAWN c: Concept {
+  name = "Valid Concept"
+}

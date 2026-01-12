@@ -1,0 +1,74 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Entities
+--# seed_entity_alice
+SPAWN alice: Entity {
+  name = "Alice Smith",
+  entity_type = "person",
+  description = "Software engineer"
+}
+
+--# seed_entity_bob
+SPAWN bob: Entity {
+  name = "Bob Jones",
+  entity_type = "person",
+  description = "Product manager"
+}
+
+--# seed_entity_acme
+SPAWN acme: Entity {
+  name = "Acme Corporation",
+  entity_type = "company",
+  description = "Technology company"
+}
+
+--# seed_entity_globex
+SPAWN globex: Entity {
+  name = "Globex Industries",
+  entity_type = "company",
+  description = "Manufacturing company"
+}
+
+--# seed_entity_project
+SPAWN proj: Entity {
+  name = "Project Alpha",
+  entity_type = "project"
+}
+
+--# seed_entity_city
+SPAWN sf: Entity {
+  name = "San Francisco",
+  entity_type = "location"
+}
+
+-- Evidence sources
+--# seed_evidence_hr
+SPAWN hr_db: Evidence {
+  source = "HR Database",
+  description = "Official employee records",
+  reliability = 0.95
+}
+
+--# seed_evidence_linkedin
+SPAWN linkedin: Evidence {
+  source = "LinkedIn",
+  description = "Professional network profile",
+  reliability = 0.7
+}
+
+--# seed_evidence_news
+SPAWN news: Evidence {
+  source = "News Article",
+  description = "Published news report",
+  reliability = 0.6
+}
+
+--# seed_evidence_rumor
+SPAWN rumor: Evidence {
+  source = "Industry Rumor",
+  description = "Unverified information",
+  reliability = 0.2
+}

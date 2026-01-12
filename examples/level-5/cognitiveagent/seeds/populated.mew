@@ -1,0 +1,172 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- Agents
+--# seed_agent_alpha
+SPAWN alpha: Agent {
+  name = "Alpha",
+  arousal_level = 0.6,
+  total_beliefs = 5,
+  total_goals_achieved = 2
+}
+
+--# seed_agent_beta
+SPAWN beta: Agent {
+  name = "Beta",
+  arousal_level = 0.4
+}
+
+-- Beliefs
+--# seed_belief_location
+SPAWN loc_belief: Belief {
+  content = "Current location is origin",
+  status = "active",
+  confidence = 1.0,
+  memory_type = "working"
+}
+
+--# seed_belief_goal
+SPAWN goal_belief: Belief {
+  content = "Target exists at destination",
+  status = "active",
+  confidence = 0.9,
+  memory_type = "semantic"
+}
+
+--# seed_belief_uncertain
+SPAWN uncertain_belief: Belief {
+  content = "Path is safe",
+  status = "active",
+  confidence = 0.5,
+  memory_type = "working"
+}
+
+--# seed_belief_dormant
+SPAWN dormant_belief: Belief {
+  content = "Old information",
+  status = "dormant",
+  confidence = 0.3,
+  activation = 0.05
+}
+
+-- Goals
+--# seed_goal_primary
+SPAWN primary_goal: Goal {
+  description = "Reach the target location",
+  status = "active",
+  priority = 0.95,
+  utility = 10.0
+}
+
+--# seed_goal_secondary
+SPAWN secondary_goal: Goal {
+  description = "Minimize energy expenditure",
+  status = "active",
+  priority = 0.6,
+  utility = 3.0
+}
+
+--# seed_goal_achieved
+SPAWN achieved_goal: Goal {
+  description = "Initialize systems",
+  status = "achieved",
+  priority = 1.0
+}
+
+-- SubGoals
+--# seed_subgoal_navigate
+SPAWN navigate_subgoal: SubGoal {
+  description = "Navigate to waypoint",
+  status = "active",
+  priority = 0.8,
+  is_mandatory = true
+}
+
+-- Plans
+--# seed_plan_direct
+SPAWN direct_plan: Plan {
+  name = "Direct Approach",
+  description = "Move directly toward target",
+  status = "draft",
+  success_probability = 0.7
+}
+
+--# seed_plan_cautious
+SPAWN cautious_plan: Plan {
+  name = "Cautious Approach",
+  description = "Move carefully with obstacle avoidance",
+  status = "active",
+  success_probability = 0.9
+}
+
+-- Actions
+--# seed_action_move
+SPAWN move: Action {
+  name = "MoveForward",
+  action_type = "primitive",
+  success_rate = 0.95,
+  execution_count = 10
+}
+
+--# seed_action_sense
+SPAWN sense: Action {
+  name = "SenseEnvironment",
+  action_type = "primitive",
+  success_rate = 0.99
+}
+
+-- Episodes
+--# seed_episode_init
+SPAWN init_episode: Episode {
+  description = "System initialization completed",
+  occurred_at = now(),
+  vividness = 0.8
+}
+
+-- Concepts
+--# seed_concept_location
+SPAWN location_concept: Concept {
+  name = "Location",
+  definition = "A point in space",
+  category = "spatial",
+  abstraction_level = 1
+}
+
+--# seed_concept_obstacle
+SPAWN obstacle_concept: Concept {
+  name = "Obstacle",
+  definition = "An object blocking movement",
+  category = "spatial"
+}
+
+-- Percepts
+--# seed_percept_visual
+SPAWN visual_percept: Percept {
+  content = "Object detected at bearing 45 degrees",
+  modality = "vision",
+  confidence = 0.92
+}
+
+-- Self Model
+--# seed_selfmodel_capabilities
+SPAWN capabilities_model: SelfModel {
+  aspect = "capabilities",
+  description = "Can move, sense, and plan",
+  confidence = 0.9
+}
+
+-- Performance Metrics
+--# seed_metric_accuracy
+SPAWN accuracy_metric: PerformanceMetric {
+  name = "perception_accuracy",
+  value = 0.92
+}
+
+-- Coherence
+--# seed_coherence
+SPAWN coherence: CoherenceScore {
+  coherence = 0.85,
+  computation_method = "belief_consistency"
+}

@@ -1,0 +1,36 @@
+-- ===========================================================================
+-- SCENARIO: Query Operations
+-- DESCRIPTION: Various query patterns against a populated database
+-- ===========================================================================
+
+--# count_all_persons
+MATCH p: Person RETURN count(p)
+
+--# count_all_orgs
+MATCH o: Organization RETURN count(o)
+
+--# count_all_tags
+MATCH t: Tag RETURN count(t)
+
+--# count_all_groups
+MATCH g: Group RETURN count(g)
+
+--# query_favorites
+MATCH p: Person WHERE p.is_favorite = true
+RETURN p.first_name
+
+--# query_by_name
+MATCH p: Person WHERE p.first_name = "Alice"
+RETURN p.last_name
+
+--# query_all_names
+MATCH p: Person RETURN p.first_name, p.last_name
+
+--# query_orgs
+MATCH o: Organization RETURN o.name, o.industry
+
+--# query_tags
+MATCH t: Tag RETURN t.name, t.color
+
+--# query_groups
+MATCH g: Group RETURN g.name

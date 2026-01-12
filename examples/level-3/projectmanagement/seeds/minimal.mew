@@ -1,0 +1,22 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_project
+SPAWN project: Project {
+  name = "MVP Release",
+  status = "active"
+}
+
+--# seed_task
+SPAWN task: Task {
+  title = "Implement feature",
+  priority = 7
+}
+
+--# seed_member
+SPAWN alice: TeamMember {
+  name = "Alice",
+  email = "alice@example.com"
+}

@@ -1,0 +1,168 @@
+-- ===========================================================================
+-- ONTOLOGY: ProjectManagement
+-- LEVEL: 3 (Dynamics)
+-- DOMAIN: Project and task management with dependencies
+-- ===========================================================================
+
+ontology ProjectManagement {
+
+  -- =========================================================================
+  -- TYPE ALIASES
+  -- =========================================================================
+
+  type TaskStatus = String [in: ["backlog", "todo", "in_progress", "review", "done", "cancelled"]]
+  type Priority = Int [1..10]
+  type ProjectStatus = String [in: ["planning", "active", "on_hold", "completed", "cancelled"]]
+
+  -- =========================================================================
+  -- NODE TYPES
+  -- =========================================================================
+
+  --- A project containing tasks
+  node Project {
+    name: String [required],
+    description: String?,
+    status: ProjectStatus = "planning",
+    start_date: Timestamp?,
+    target_date: Timestamp?,
+    created_at: Timestamp = now()
+  }
+
+  --- A milestone within a project
+  node Milestone {
+    name: String [required],
+    description: String?,
+    target_date: Timestamp?,
+    completed_at: Timestamp?,
+    created_at: Timestamp = now()
+  }
+
+  --- A task to be completed
+  node Task {
+    title: String [required],
+    description: String?,
+    status: TaskStatus = "backlog",
+    priority: Priority = 5,
+    estimated_hours: Float?,
+    actual_hours: Float?,
+    created_at: Timestamp = now(),
+    started_at: Timestamp?,
+    completed_at: Timestamp?
+  }
+
+  --- A person who can be assigned to tasks
+  node TeamMember {
+    name: String [required],
+    email: String [required, unique],
+    role: String?,
+    capacity_hours_week: Float = 40
+  }
+
+  --- A notification about task/project events
+  node Notification {
+    message: String [required],
+    is_read: Bool = false,
+    created_at: Timestamp = now()
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Task belongs to project
+  edge belongs_to(task: Task, project: Project) [
+    task -> 1,
+    on_kill_target: cascade
+  ]
+
+  --- Milestone belongs to project
+  edge milestone_of(milestone: Milestone, project: Project) [
+    on_kill_target: cascade
+  ]
+
+  --- Task targets milestone
+  edge targets_milestone(task: Task, milestone: Milestone)
+
+  --- Task depends on another task (must complete first)
+  edge depends_on(dependent: Task, dependency: Task) [no_self, acyclic]
+
+  --- Task assigned to team member
+  edge assigned_to(task: Task, member: TeamMember) [task -> 0..1] {
+    assigned_at: Timestamp = now(),
+    assigned_by: String?
+  }
+
+  --- Team member is on project
+  edge member_of(member: TeamMember, project: Project) {
+    joined_at: Timestamp = now(),
+    role: String?
+  }
+
+  --- Notification is for team member
+  edge notification_for(notification: Notification, member: TeamMember)
+
+  -- =========================================================================
+  -- CONSTRAINTS
+  -- =========================================================================
+
+  --- Task can only target milestone from same project
+  constraint task_milestone_same_project [message: "Task can only target milestone from its own project"]:
+    t: Task, m: Milestone, p1: Project, p2: Project,
+    targets_milestone(t, m),
+    belongs_to(t, p1),
+    milestone_of(m, p2)
+    => p1.id = p2.id
+
+  --- Completed task must have completion timestamp
+  constraint completed_has_timestamp [message: "Completed tasks must have completed_at"]:
+    t: Task
+    WHERE t.status = "done"
+    => t.completed_at != null
+
+  --- In-progress task should have started timestamp (soft)
+  constraint in_progress_has_start [soft, message: "In-progress tasks should have started_at"]:
+    t: Task
+    WHERE t.status = "in_progress"
+    => t.started_at != null
+
+  -- =========================================================================
+  -- RULES
+  -- =========================================================================
+
+  --- Auto-set started_at when task moves to in_progress
+  rule set_started_at [priority: 10]:
+    t: Task
+    WHERE t.status = "in_progress" AND t.started_at = null
+    =>
+    SET t.started_at = now()
+
+  --- Auto-set completed_at when task moves to done
+  rule set_completed_at [priority: 10]:
+    t: Task
+    WHERE t.status = "done" AND t.completed_at = null
+    =>
+    SET t.completed_at = now()
+
+  --- When all tasks for a milestone are done, notify
+  rule milestone_complete_notification [priority: 5]:
+    m: Milestone, p: Project,
+    milestone_of(m, p)
+    WHERE m.completed_at = null
+      AND NOT EXISTS(
+        t: Task, targets_milestone(t, m)
+        WHERE t.status != "done" AND t.status != "cancelled"
+      )
+      AND EXISTS(t: Task, targets_milestone(t, m))
+    =>
+    SET m.completed_at = now(),
+    SPAWN n: Notification { message = "Milestone completed: " ++ m.name }
+
+  --- When task is blocked by incomplete dependency, suggest review
+  rule blocked_task_warning [priority: 1]:
+    t: Task, dep: Task,
+    depends_on(t, dep)
+    WHERE t.status = "in_progress" AND dep.status != "done" AND dep.status != "cancelled"
+    =>
+    SET t.status = "todo"
+
+}

@@ -1,0 +1,16 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- DESCRIPTION: A minimal set of data for basic testing
+-- ===========================================================================
+
+--# seed_event_trigger
+SPAWN trigger: Event {
+  name = "Trigger Event",
+  event_type = "trigger"
+}
+
+--# seed_event_response
+SPAWN response: Event {
+  name = "Response Event",
+  event_type = "response"
+}

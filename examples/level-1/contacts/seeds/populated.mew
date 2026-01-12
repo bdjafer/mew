@@ -1,0 +1,126 @@
+-- ===========================================================================
+-- SEED: Populated
+-- DESCRIPTION: A rich dataset for comprehensive testing
+-- ===========================================================================
+
+-- People
+--# seed_person_alice
+SPAWN alice: Person {
+  first_name = "Alice",
+  last_name = "Smith",
+  nickname = "Ali",
+  is_favorite = true
+}
+
+--# seed_person_bob
+SPAWN bob: Person {
+  first_name = "Bob",
+  last_name = "Jones",
+  is_favorite = true
+}
+
+--# seed_person_charlie
+SPAWN charlie: Person {
+  first_name = "Charlie",
+  last_name = "Brown"
+}
+
+--# seed_person_diana
+SPAWN diana: Person {
+  first_name = "Diana",
+  last_name = "Ross"
+}
+
+-- Organizations
+--# seed_org_acme
+SPAWN acme: Organization {
+  name = "Acme Corp",
+  industry = "Technology",
+  website = "https://acme.example.com"
+}
+
+--# seed_org_globex
+SPAWN globex: Organization {
+  name = "Globex Industries",
+  industry = "Manufacturing"
+}
+
+-- Addresses
+--# seed_addr_alice_home
+SPAWN alice_home: Address {
+  label = "home",
+  street1 = "123 Main St",
+  city = "Springfield",
+  state = "IL",
+  postal_code = "62701"
+}
+
+--# seed_addr_acme
+SPAWN acme_hq: Address {
+  label = "headquarters",
+  street1 = "100 Corporate Way",
+  city = "Tech City",
+  state = "CA",
+  postal_code = "94000",
+  is_primary = true
+}
+
+-- Phones
+--# seed_phone_alice
+SPAWN alice_phone: Phone {
+  label = "mobile",
+  number = "555-0101",
+  is_primary = true
+}
+
+--# seed_phone_bob
+SPAWN bob_phone: Phone {
+  label = "work",
+  number = "555-0102"
+}
+
+-- Emails
+--# seed_email_alice
+SPAWN alice_email: Email {
+  label = "personal",
+  address = "alice@example.com",
+  is_primary = true
+}
+
+--# seed_email_bob
+SPAWN bob_email: Email {
+  label = "work",
+  address = "bob@acme.example.com"
+}
+
+-- Tags
+--# seed_tag_work
+SPAWN work: Tag {
+  name = "work",
+  color = "#10B981"
+}
+
+--# seed_tag_family
+SPAWN family: Tag {
+  name = "family",
+  color = "#F59E0B"
+}
+
+--# seed_tag_vip
+SPAWN vip: Tag {
+  name = "VIP",
+  color = "#EF4444"
+}
+
+-- Groups
+--# seed_group_friends
+SPAWN friends: Group {
+  name = "Friends",
+  description = "Personal friends"
+}
+
+--# seed_group_colleagues
+SPAWN colleagues: Group {
+  name = "Colleagues",
+  description = "Work colleagues"
+}
