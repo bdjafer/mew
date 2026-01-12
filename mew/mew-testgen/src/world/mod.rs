@@ -122,11 +122,13 @@ impl<'a> WorldGenerator<'a> {
         let target_type = &edge_info.params[1].1;
 
         // Get candidate nodes
-        let source_indices: Vec<usize> = world.nodes_by_type
+        let source_indices: Vec<usize> = world
+            .nodes_by_type
             .get(source_type)
             .cloned()
             .unwrap_or_default();
-        let target_indices: Vec<usize> = world.nodes_by_type
+        let target_indices: Vec<usize> = world
+            .nodes_by_type
             .get(target_type)
             .cloned()
             .unwrap_or_default();
@@ -136,7 +138,8 @@ impl<'a> WorldGenerator<'a> {
         }
 
         // Track created edges for uniqueness
-        let mut created: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
+        let mut created: std::collections::HashSet<(usize, usize)> =
+            std::collections::HashSet::new();
 
         for _ in 0..self.config.edges_per_type {
             // Pick random source and target

@@ -1,7 +1,7 @@
 //! Transaction buffer for tracking pending changes.
 
-use std::collections::{HashMap, HashSet};
 use mew_core::{Attributes, EdgeId, EdgeTypeId, NodeId, TypeId, Value};
+use std::collections::{HashMap, HashSet};
 
 /// A pending node creation.
 #[derive(Debug, Clone)]
@@ -91,27 +91,15 @@ impl TransactionBuffer {
     /// Record a node creation (allocates new ID).
     pub fn create_node(&mut self, type_id: TypeId, attrs: Attributes) -> NodeId {
         let id = self.allocate_node_id();
-        self.created_nodes.insert(
-            id,
-            PendingNode {
-                id,
-                type_id,
-                attrs,
-            },
-        );
+        self.created_nodes
+            .insert(id, PendingNode { id, type_id, attrs });
         id
     }
 
     /// Track a node that was created (with externally provided ID).
     pub fn track_created_node(&mut self, id: NodeId, type_id: TypeId, attrs: Attributes) {
-        self.created_nodes.insert(
-            id,
-            PendingNode {
-                id,
-                type_id,
-                attrs,
-            },
-        );
+        self.created_nodes
+            .insert(id, PendingNode { id, type_id, attrs });
     }
 
     /// Track a node deletion (for rollback tracking).
@@ -184,7 +172,13 @@ impl TransactionBuffer {
     }
 
     /// Record an attribute update.
-    pub fn update_attr(&mut self, node_id: NodeId, attr_name: String, old_value: Option<Value>, new_value: Value) {
+    pub fn update_attr(
+        &mut self,
+        node_id: NodeId,
+        attr_name: String,
+        old_value: Option<Value>,
+        new_value: Value,
+    ) {
         // If node was created in this transaction, update it directly
         if let Some(pending) = self.created_nodes.get_mut(&node_id) {
             pending.attrs.insert(attr_name, new_value);
@@ -363,7 +357,12 @@ mod tests {
         let node_id = buffer.create_node(TypeId(1), attrs! { "name" => "Original" });
 
         // WHEN
-        buffer.update_attr(node_id, "name".to_string(), None, Value::String("Updated".to_string()));
+        buffer.update_attr(
+            node_id,
+            "name".to_string(),
+            None,
+            Value::String("Updated".to_string()),
+        );
 
         // THEN - update applied directly to pending node
         let buffered = buffer.get_buffered_attr(node_id, "name");

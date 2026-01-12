@@ -285,10 +285,7 @@ impl Compiler {
                         self.generated_type_constraints.push(GeneratedConstraint {
                             name: format!("_{}_{}_{}", node_def.name, attr_def.name, "match"),
                             on_type: node_def.name.clone(),
-                            condition: format!(
-                                "t.{} MATCHES \"{}\"",
-                                attr_def.name, pattern
-                            ),
+                            condition: format!("t.{} MATCHES \"{}\"", attr_def.name, pattern),
                         });
                     }
                 }
@@ -410,10 +407,12 @@ impl Compiler {
                     // Indexed modifier is an index hint, not yet implemented in registry
                 }
                 EdgeModifier::OnKillSource(action) => {
-                    edge_builder = edge_builder.on_kill_at(0, Self::convert_referential_action(*action));
+                    edge_builder =
+                        edge_builder.on_kill_at(0, Self::convert_referential_action(*action));
                 }
                 EdgeModifier::OnKillTarget(action) => {
-                    edge_builder = edge_builder.on_kill_at(1, Self::convert_referential_action(*action));
+                    edge_builder =
+                        edge_builder.on_kill_at(1, Self::convert_referential_action(*action));
                 }
                 EdgeModifier::Cardinality { param, min, max } => {
                     // Cardinality constraints generate runtime constraints
@@ -590,7 +589,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CompileError::DuplicateType { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            CompileError::DuplicateType { .. }
+        ));
     }
 
     #[test]
@@ -606,7 +608,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CompileError::UnknownType { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            CompileError::UnknownType { .. }
+        ));
     }
 
     #[test]
@@ -642,7 +647,7 @@ mod tests {
         // on_kill[0] is source (default Restrict), on_kill[1] is target (Cascade)
         assert_eq!(edge_type.on_kill.len(), 2);
         assert_eq!(edge_type.on_kill[0], OnKillAction::Restrict); // source default
-        assert_eq!(edge_type.on_kill[1], OnKillAction::Cascade);  // target explicit
+        assert_eq!(edge_type.on_kill[1], OnKillAction::Cascade); // target explicit
     }
 
     #[test]

@@ -28,20 +28,17 @@ impl Oracle {
                 } else {
                     VerifyResult::Fail(format!(
                         "Expected {} rows, got {}",
-                        expected_count, rows.len()
+                        expected_count,
+                        rows.len()
                     ))
                 }
             }
-            (Expected::Success(_effect), ActualResult::Success) => {
-                VerifyResult::Pass
-            }
+            (Expected::Success(_effect), ActualResult::Success) => VerifyResult::Pass,
             (Expected::Error(pattern), ActualResult::Error(msg)) => {
                 // Check if error message matches pattern
                 // Supports: simple contains, or patterns with .* wildcards
                 let patterns: Vec<&str> = pattern.split('|').collect();
-                let matches = patterns.iter().any(|p| {
-                    Self::pattern_matches(p, msg)
-                });
+                let matches = patterns.iter().any(|p| Self::pattern_matches(p, msg));
                 if matches {
                     VerifyResult::Pass
                 } else {
@@ -51,16 +48,12 @@ impl Oracle {
                     ))
                 }
             }
-            (Expected::Property(prop), actual) => {
-                Self::verify_property(prop, actual)
-            }
-            (expected, actual) => {
-                VerifyResult::Fail(format!(
-                    "Type mismatch: expected {:?}, got {:?}",
-                    std::mem::discriminant(expected),
-                    std::mem::discriminant(actual)
-                ))
-            }
+            (Expected::Property(prop), actual) => Self::verify_property(prop, actual),
+            (expected, actual) => VerifyResult::Fail(format!(
+                "Type mismatch: expected {:?}, got {:?}",
+                std::mem::discriminant(expected),
+                std::mem::discriminant(actual)
+            )),
         }
     }
 
@@ -96,7 +89,8 @@ impl Oracle {
         if expected.len() != actual.len() {
             return VerifyResult::Fail(format!(
                 "Row count mismatch: expected {}, got {}",
-                expected.len(), actual.len()
+                expected.len(),
+                actual.len()
             ));
         }
 
@@ -125,18 +119,22 @@ impl Oracle {
                 let count = match actual {
                     ActualResult::Count(c) => *c,
                     ActualResult::Rows(rows) => rows.len(),
-                    _ => return VerifyResult::Fail("Cannot check count on non-row result".to_string()),
+                    _ => {
+                        return VerifyResult::Fail(
+                            "Cannot check count on non-row result".to_string(),
+                        )
+                    }
                 };
                 if count >= *min && count <= *max {
                     VerifyResult::Pass
                 } else {
-                    VerifyResult::Fail(format!(
-                        "Count {} not in range {}..{}",
-                        count, min, max
-                    ))
+                    VerifyResult::Fail(format!("Count {} not in range {}..{}", count, min, max))
                 }
             }
-            PropertySpec::AllMatch { column: _, pattern: _ } => {
+            PropertySpec::AllMatch {
+                column: _,
+                pattern: _,
+            } => {
                 // Would require parsing actual values and matching
                 VerifyResult::Skip("AllMatch not fully implemented".to_string())
             }
@@ -183,12 +181,20 @@ mod tests {
     #[test]
     fn test_verify_rows() {
         let expected = Expected::Rows(vec![
-            Row { columns: vec![Value::Int(1)] },
-            Row { columns: vec![Value::Int(2)] },
+            Row {
+                columns: vec![Value::Int(1)],
+            },
+            Row {
+                columns: vec![Value::Int(2)],
+            },
         ]);
         let actual = ActualResult::Rows(vec![
-            Row { columns: vec![Value::Int(2)] },
-            Row { columns: vec![Value::Int(1)] },
+            Row {
+                columns: vec![Value::Int(2)],
+            },
+            Row {
+                columns: vec![Value::Int(1)],
+            },
         ]);
         // Unordered match
         assert!(Oracle::verify(&expected, &actual).is_pass());

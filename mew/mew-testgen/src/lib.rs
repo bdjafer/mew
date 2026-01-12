@@ -8,29 +8,29 @@
 //! - Reports comprehensive test results
 
 pub mod config;
-pub mod types;
-pub mod schema;
-pub mod world;
-pub mod query;
+pub mod execution;
 pub mod mutation;
 pub mod oracle;
-pub mod execution;
-pub mod trust;
+pub mod query;
 pub mod report;
+pub mod schema;
+pub mod trust;
+pub mod types;
+pub mod world;
 
 pub use config::TestConfig;
-pub use types::*;
-pub use schema::SchemaAnalyzer;
-pub use world::WorldGenerator;
-pub use query::QueryGenerator;
+pub use execution::TestExecutor;
 pub use mutation::MutationGenerator;
 pub use oracle::Oracle;
-pub use execution::TestExecutor;
-pub use trust::TrustAuditor;
+pub use query::QueryGenerator;
 pub use report::ReportGenerator;
+pub use schema::SchemaAnalyzer;
+pub use trust::TrustAuditor;
+pub use types::*;
+pub use world::WorldGenerator;
 
-use rand::SeedableRng;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 
 /// Main entry point for the test generator
 pub struct TestGenerator {

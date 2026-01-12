@@ -58,7 +58,9 @@ pub enum AnalyzerError {
     },
 
     /// Invalid operator for types.
-    #[error("Invalid operator '{op}' for types {left} and {right} at line {line}, column {column}")]
+    #[error(
+        "Invalid operator '{op}' for types {left} and {right} at line {line}, column {column}"
+    )]
     InvalidOperator {
         op: String,
         left: String,
@@ -85,7 +87,9 @@ pub enum AnalyzerError {
     },
 
     /// Wrong number of targets for edge.
-    #[error("Edge '{edge}' expects {expected} targets, got {actual} at line {line}, column {column}")]
+    #[error(
+        "Edge '{edge}' expects {expected} targets, got {actual} at line {line}, column {column}"
+    )]
     WrongTargetCount {
         edge: String,
         expected: usize,
@@ -112,7 +116,11 @@ impl AnalyzerError {
         }
     }
 
-    pub fn unknown_attribute(attr: impl Into<String>, type_name: impl Into<String>, span: Span) -> Self {
+    pub fn unknown_attribute(
+        attr: impl Into<String>,
+        type_name: impl Into<String>,
+        span: Span,
+    ) -> Self {
         Self::UnknownAttribute {
             attr: attr.into(),
             type_name: type_name.into(),

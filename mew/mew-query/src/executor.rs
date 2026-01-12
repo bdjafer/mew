@@ -332,7 +332,10 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                     let key: String = group_by
                         .iter()
                         .map(|e| {
-                            let v = self.evaluator.eval(e, &bindings, self.graph).unwrap_or(Value::Null);
+                            let v = self
+                                .evaluator
+                                .eval(e, &bindings, self.graph)
+                                .unwrap_or(Value::Null);
                             format!("{:?}", v)
                         })
                         .collect::<Vec<_>>()

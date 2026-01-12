@@ -84,7 +84,8 @@ impl<'a> MutationGenerator<'a> {
         } else {
             format!(
                 " {{ {} }}",
-                attrs.iter()
+                attrs
+                    .iter()
                     .map(|(k, v)| format!("{} = {}", k, v))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -107,7 +108,10 @@ impl<'a> MutationGenerator<'a> {
     fn gen_spawn_missing_required(&mut self, rng: &mut impl Rng) -> Option<GeneratedMutation> {
         // Find a type with required attributes (including inherited)
         let node_types = &self.schema.node_types;
-        let types_with_required: Vec<(&String, &NodeTypeInfo)> = self.schema.node_types.iter()
+        let types_with_required: Vec<(&String, &NodeTypeInfo)> = self
+            .schema
+            .node_types
+            .iter()
             .filter(|(_, info)| {
                 let all_attrs = Self::collect_all_attrs_static(info, node_types);
                 all_attrs.iter().any(|a| a.required)
@@ -118,19 +122,20 @@ impl<'a> MutationGenerator<'a> {
             return None;
         }
 
-        let (type_name, type_info) = types_with_required[rng.gen_range(0..types_with_required.len())];
+        let (type_name, type_info) =
+            types_with_required[rng.gen_range(0..types_with_required.len())];
         let var = self.next_var();
 
         // Get all attrs including inherited
         let all_attrs = self.collect_all_attrs(type_info);
 
         // Skip one required attribute
-        let required_attr = all_attrs.iter()
-            .find(|a| a.required)?;
+        let required_attr = all_attrs.iter().find(|a| a.required)?;
 
         // Generate other required attrs but skip selected required one
         let type_aliases = &self.schema.type_aliases;
-        let attrs: Vec<(String, String)> = all_attrs.iter()
+        let attrs: Vec<(String, String)> = all_attrs
+            .iter()
             .filter(|a| a.name != required_attr.name)
             .filter(|a| a.required) // Only include other required attrs
             .map(|a| {
@@ -144,7 +149,8 @@ impl<'a> MutationGenerator<'a> {
         } else {
             format!(
                 " {{ {} }}",
-                attrs.iter()
+                attrs
+                    .iter()
                     .map(|(k, v)| format!("{} = {}", k, v))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -159,7 +165,11 @@ impl<'a> MutationGenerator<'a> {
             expected: Expected::Error(format!("required.*{}", required_attr.name)),
             trust_level: TrustLevel::Constructive,
             complexity: Complexity::medium(),
-            tags: vec!["spawn".to_string(), "negative".to_string(), "constraint".to_string()],
+            tags: vec![
+                "spawn".to_string(),
+                "negative".to_string(),
+                "constraint".to_string(),
+            ],
         })
     }
 
@@ -167,7 +177,10 @@ impl<'a> MutationGenerator<'a> {
     fn gen_spawn_out_of_range(&mut self, rng: &mut impl Rng) -> Option<GeneratedMutation> {
         // Find a type with range constraints (including inherited)
         let node_types = &self.schema.node_types;
-        let types_with_range: Vec<(&String, &NodeTypeInfo)> = self.schema.node_types.iter()
+        let types_with_range: Vec<(&String, &NodeTypeInfo)> = self
+            .schema
+            .node_types
+            .iter()
             .filter(|(_, info)| {
                 let all_attrs = Self::collect_all_attrs_static(info, node_types);
                 all_attrs.iter().any(|a| a.min.is_some() || a.max.is_some())
@@ -184,7 +197,8 @@ impl<'a> MutationGenerator<'a> {
         // Get all attrs including inherited
         let all_attrs = self.collect_all_attrs(type_info);
 
-        let range_attr = all_attrs.iter()
+        let range_attr = all_attrs
+            .iter()
             .find(|a| a.min.is_some() || a.max.is_some())?;
 
         // Generate an out-of-range value
@@ -209,7 +223,8 @@ impl<'a> MutationGenerator<'a> {
 
         let attrs_str = format!(
             " {{ {} }}",
-            attrs.iter()
+            attrs
+                .iter()
                 .map(|(k, v)| format!("{} = {}", k, v))
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -223,7 +238,11 @@ impl<'a> MutationGenerator<'a> {
             expected: Expected::Error(format!("range|constraint.*{}", range_attr.name)),
             trust_level: TrustLevel::Constructive,
             complexity: Complexity::medium(),
-            tags: vec!["spawn".to_string(), "negative".to_string(), "constraint".to_string()],
+            tags: vec![
+                "spawn".to_string(),
+                "negative".to_string(),
+                "constraint".to_string(),
+            ],
         })
     }
 
@@ -279,9 +298,12 @@ impl<'a> MutationGenerator<'a> {
     }
 
     fn setup_for_nodes(&self, nodes: &[&GeneratedNode]) -> Vec<String> {
-        nodes.iter()
+        nodes
+            .iter()
             .map(|n| {
-                let attrs_str = n.attrs.iter()
+                let attrs_str = n
+                    .attrs
+                    .iter()
                     .map(|(k, v)| format!("{} = {}", k, self.value_to_mew(v)))
                     .collect::<Vec<_>>()
                     .join(", ");
@@ -349,9 +371,9 @@ enum MutationType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::TestConfig;
     use crate::schema::SchemaAnalyzer;
     use crate::world::WorldGenerator;
-    use crate::config::TestConfig;
     use rand::SeedableRng;
 
     #[test]

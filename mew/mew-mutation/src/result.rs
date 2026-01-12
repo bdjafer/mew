@@ -166,9 +166,8 @@ mod tests {
         // GIVEN
         let node_ids = vec![NodeId::new(1), NodeId::new(2)];
         let edge_ids = vec![EdgeId::new(1)];
-        let result = MutationResult::Deleted(
-            DeletedEntities::nodes(node_ids).with_cascade_edges(edge_ids),
-        );
+        let result =
+            MutationResult::Deleted(DeletedEntities::nodes(node_ids).with_cascade_edges(edge_ids));
 
         // THEN
         assert_eq!(result.deleted_nodes(), 2);

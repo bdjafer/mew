@@ -62,12 +62,15 @@ impl SchemaAnalyzer {
 
                 // Single-line definition
                 if line.contains('}') {
-                    schema.node_types.insert(current_name.clone(), NodeTypeInfo {
-                        name: current_name.clone(),
-                        attrs: current_attrs.clone(),
-                        parents: current_parents.clone(),
-                        applicable_constraints: Vec::new(),
-                    });
+                    schema.node_types.insert(
+                        current_name.clone(),
+                        NodeTypeInfo {
+                            name: current_name.clone(),
+                            attrs: current_attrs.clone(),
+                            parents: current_parents.clone(),
+                            applicable_constraints: Vec::new(),
+                        },
+                    );
                     current_block = None;
                 }
                 continue;
@@ -93,15 +96,18 @@ impl SchemaAnalyzer {
 
                 // Edge without body
                 if !line.contains('{') || line.trim_end().ends_with("{}") {
-                    schema.edge_types.insert(current_name.clone(), EdgeTypeInfo {
-                        name: current_name.clone(),
-                        params: current_params.clone(),
-                        attrs: Vec::new(),
-                        acyclic: edge_modifiers.acyclic,
-                        unique: edge_modifiers.unique,
-                        symmetric: edge_modifiers.symmetric,
-                        no_self: edge_modifiers.no_self,
-                    });
+                    schema.edge_types.insert(
+                        current_name.clone(),
+                        EdgeTypeInfo {
+                            name: current_name.clone(),
+                            params: current_params.clone(),
+                            attrs: Vec::new(),
+                            acyclic: edge_modifiers.acyclic,
+                            unique: edge_modifiers.unique,
+                            symmetric: edge_modifiers.symmetric,
+                            no_self: edge_modifiers.no_self,
+                        },
+                    );
                     current_block = None;
                     in_block = false;
                 }
@@ -137,23 +143,29 @@ impl SchemaAnalyzer {
                 if let Some(ref block_type) = current_block {
                     match block_type {
                         BlockType::Node => {
-                            schema.node_types.insert(current_name.clone(), NodeTypeInfo {
-                                name: current_name.clone(),
-                                attrs: current_attrs.clone(),
-                                parents: current_parents.clone(),
-                                applicable_constraints: Vec::new(),
-                            });
+                            schema.node_types.insert(
+                                current_name.clone(),
+                                NodeTypeInfo {
+                                    name: current_name.clone(),
+                                    attrs: current_attrs.clone(),
+                                    parents: current_parents.clone(),
+                                    applicable_constraints: Vec::new(),
+                                },
+                            );
                         }
                         BlockType::Edge => {
-                            schema.edge_types.insert(current_name.clone(), EdgeTypeInfo {
-                                name: current_name.clone(),
-                                params: current_params.clone(),
-                                attrs: current_attrs.clone(),
-                                acyclic: edge_modifiers.acyclic,
-                                unique: edge_modifiers.unique,
-                                symmetric: edge_modifiers.symmetric,
-                                no_self: edge_modifiers.no_self,
-                            });
+                            schema.edge_types.insert(
+                                current_name.clone(),
+                                EdgeTypeInfo {
+                                    name: current_name.clone(),
+                                    params: current_params.clone(),
+                                    attrs: current_attrs.clone(),
+                                    acyclic: edge_modifiers.acyclic,
+                                    unique: edge_modifiers.unique,
+                                    symmetric: edge_modifiers.symmetric,
+                                    no_self: edge_modifiers.no_self,
+                                },
+                            );
                         }
                     }
                 }
@@ -173,7 +185,9 @@ impl SchemaAnalyzer {
         // Link constraints to types
         for constraint in &schema.constraints {
             if let Some(node_type) = schema.node_types.get_mut(&constraint.on_type) {
-                node_type.applicable_constraints.push(constraint.name.clone());
+                node_type
+                    .applicable_constraints
+                    .push(constraint.name.clone());
             }
         }
 
@@ -182,7 +196,7 @@ impl SchemaAnalyzer {
 
         if schema.node_types.is_empty() && schema.edge_types.is_empty() {
             return Err(TestGenError::SchemaError(
-                "No types found in ontology".to_string()
+                "No types found in ontology".to_string(),
             ));
         }
 
@@ -312,7 +326,8 @@ impl SchemaAnalyzer {
                     if values_str.starts_with('[') {
                         if let Some(end) = values_str.find(']') {
                             let inner = &values_str[1..end];
-                            let values: Vec<Value> = inner.split(',')
+                            let values: Vec<Value> = inner
+                                .split(',')
                                 .filter_map(|v| Self::parse_value(v.trim()))
                                 .collect();
                             if !values.is_empty() {
@@ -341,7 +356,9 @@ impl SchemaAnalyzer {
         let mut parents = Vec::new();
 
         // Find name (before : or {)
-        let name_end = rest.find(|c| c == ':' || c == '{' || c == ' ').unwrap_or(rest.len());
+        let name_end = rest
+            .find(|c| c == ':' || c == '{' || c == ' ')
+            .unwrap_or(rest.len());
         let name = rest[..name_end].trim().to_string();
 
         // Check for inheritance
@@ -489,7 +506,8 @@ impl SchemaAnalyzer {
                         let values_str = modifier[3..].trim();
                         if values_str.starts_with('[') && values_str.ends_with(']') {
                             let inner = &values_str[1..values_str.len() - 1];
-                            let values: Vec<Value> = inner.split(',')
+                            let values: Vec<Value> = inner
+                                .split(',')
                                 .filter_map(|v| Self::parse_value(v.trim()))
                                 .collect();
                             if !values.is_empty() {

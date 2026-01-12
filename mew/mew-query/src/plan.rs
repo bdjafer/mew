@@ -19,10 +19,7 @@ pub struct QueryPlan {
 #[derive(Debug, Clone)]
 pub enum PlanOp {
     /// Scan all nodes of a type.
-    NodeScan {
-        var: String,
-        type_id: TypeId,
-    },
+    NodeScan { var: String, type_id: TypeId },
 
     /// Scan using an attribute index.
     IndexScan {
@@ -41,10 +38,7 @@ pub enum PlanOp {
     },
 
     /// Filter rows by a condition.
-    Filter {
-        input: Box<PlanOp>,
-        condition: Expr,
-    },
+    Filter { input: Box<PlanOp>, condition: Expr },
 
     /// Project columns.
     Project {
@@ -196,7 +190,10 @@ impl<'r> QueryPlanner<'r> {
 
         for proj in projections {
             if let Some((kind, arg)) = self.get_aggregate(&proj.expr) {
-                let name = proj.alias.clone().unwrap_or_else(|| self.expr_to_name(&proj.expr));
+                let name = proj
+                    .alias
+                    .clone()
+                    .unwrap_or_else(|| self.expr_to_name(&proj.expr));
                 aggregates.push((name, kind, arg));
             }
         }
@@ -496,6 +493,9 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), QueryError::UnknownType { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            QueryError::UnknownType { .. }
+        ));
     }
 }

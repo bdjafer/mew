@@ -67,29 +67,29 @@ pub enum TokenKind {
     String(String),
 
     // Symbols
-    LParen,   // (
-    RParen,   // )
-    LBrace,   // {
-    RBrace,   // }
-    LBracket, // [
-    RBracket, // ]
-    Comma,    // ,
-    Colon,    // :
-    Dot,      // .
-    Eq,       // =
-    NotEq,    // !=
-    Lt,       // <
-    LtEq,     // <=
-    Gt,       // >
-    GtEq,     // >=
-    Plus,     // +
-    Minus,    // -
-    Star,     // *
-    Slash,    // /
-    Percent,  // %
-    Pipe,     // |
-    Hash,     // #
-    Dollar,   // $
+    LParen,     // (
+    RParen,     // )
+    LBrace,     // {
+    RBrace,     // }
+    LBracket,   // [
+    RBracket,   // ]
+    Comma,      // ,
+    Colon,      // :
+    Dot,        // .
+    Eq,         // =
+    NotEq,      // !=
+    Lt,         // <
+    LtEq,       // <=
+    Gt,         // >
+    GtEq,       // >=
+    Plus,       // +
+    Minus,      // -
+    Star,       // *
+    Slash,      // /
+    Percent,    // %
+    Pipe,       // |
+    Hash,       // #
+    Dollar,     // $
     Concat,     // ++
     Range,      // ..
     Question,   // ?
