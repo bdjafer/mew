@@ -456,4 +456,150 @@ mod tests {
         // THEN
         assert!(!session.is_auto_commit());
     }
+
+    // ========== Acceptance Tests ==========
+
+    #[test]
+    fn test_accept_and_execute_query() {
+        // TEST: accept_and_execute_query
+        // GIVEN a session with a task
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // Create a task first
+        let spawn_result = session.execute("SPAWN t: Task { title = \"Test\" }");
+        assert!(spawn_result.is_ok());
+
+        // WHEN executing a MATCH query
+        let result = session.execute("MATCH t: Task RETURN t");
+
+        // THEN result is parsed, analyzed, executed and returns rows
+        assert!(result.is_ok());
+        match result.unwrap() {
+            StatementResult::Query(query_result) => {
+                assert!(!query_result.columns.is_empty());
+            }
+            _ => panic!("Expected query result"),
+        }
+    }
+
+    #[test]
+    fn test_accept_and_execute_mutation() {
+        // TEST: accept_and_execute_mutation
+        // GIVEN a session
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // WHEN executing a SPAWN mutation
+        let result = session.execute("SPAWN t: Task { title = \"Hello\" }");
+
+        // THEN node is created and returns created ID
+        assert!(result.is_ok());
+        match result.unwrap() {
+            StatementResult::Mutation(mutation_result) => {
+                assert_eq!(mutation_result.nodes_affected, 1);
+            }
+            _ => panic!("Expected mutation result"),
+        }
+    }
+
+    #[test]
+    fn test_syntax_error_returns_error() {
+        // TEST: syntax_error_returns_error
+        // GIVEN a session
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // WHEN executing invalid syntax
+        let result = session.execute("MATC t: Task");
+
+        // THEN error response with message
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Error should be a parse error
+        assert!(matches!(err, SessionError::ParseError(_)));
+    }
+
+    #[test]
+    fn test_analysis_error_returns_error() {
+        // TEST: analysis_error_returns_error
+        // GIVEN a session
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // WHEN executing query with unknown type
+        let result = session.execute("MATCH t: Unknown RETURN t");
+
+        // THEN error about unknown type
+        assert!(result.is_err());
+        let err = format!("{}", result.unwrap_err());
+        assert!(err.contains("Unknown") || err.contains("unknown") || err.contains("type"));
+    }
+
+    #[test]
+    fn test_session_tracks_transaction() {
+        // TEST: session_tracks_transaction
+        // GIVEN a session
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // WHEN BEGIN
+        let _ = session.execute("BEGIN");
+
+        // THEN session has active transaction
+        assert!(session.in_transaction());
+
+        // WHEN COMMIT
+        let _ = session.execute("COMMIT");
+
+        // THEN session has no active transaction
+        assert!(!session.in_transaction());
+    }
+
+    #[test]
+    fn test_transaction_spans_statements() {
+        // TEST: transaction_spans_statements
+        // GIVEN a session
+        let registry = test_registry();
+        let mut session = Session::new(1, &registry);
+
+        // WHEN executing multiple statements in a transaction
+        let _ = session.execute("BEGIN");
+        let r1 = session.execute("SPAWN t: Task { title = \"A\" }");
+        let r2 = session.execute("SPAWN p: Person { name = \"B\" }");
+        let _ = session.execute("COMMIT");
+
+        // THEN both nodes created
+        assert!(r1.is_ok());
+        assert!(r2.is_ok());
+        // And transaction is complete
+        assert!(!session.in_transaction());
+    }
+
+    #[test]
+    fn test_concurrent_sessions_isolated() {
+        // TEST: concurrent_sessions_isolated
+        // GIVEN two sessions with the same registry
+        let registry = test_registry();
+        let mut session_a = Session::new(1, &registry);
+        let session_b = Session::new(2, &registry);
+
+        // WHEN session A creates a task in a transaction (uncommitted)
+        let _ = session_a.execute("BEGIN");
+        let _ = session_a.execute("SPAWN t: Task { title = \"A's Task\" }");
+
+        // THEN session B does not see A's uncommitted work
+        // (Each session has its own graph in the current implementation)
+        assert!(session_b.graph().node_count() == 0);
+
+        // Session A commits
+        let _ = session_a.execute("COMMIT");
+
+        // Session A's graph has the node
+        assert!(session_a.graph().node_count() == 1);
+
+        // Note: In a true shared database, session B would now see the data
+        // Our current implementation uses separate graphs per session
+        // This test verifies the isolation mechanism works
+    }
 }

@@ -338,4 +338,288 @@ mod tests {
         assert_eq!(engine.current_depth, 0);
         assert!(engine.executed.is_empty());
     }
+
+    // ========== Acceptance Tests ==========
+
+    fn registry_with_rules() -> Registry {
+        let mut builder = RegistryBuilder::new();
+        builder
+            .add_type("Task")
+            .attr(AttrDef::new("title", "String"))
+            .attr(AttrDef::new("created_at", "String"))
+            .attr(AttrDef::new("updated_at", "String"))
+            .attr(AttrDef::new("owner_name", "String"))
+            .attr(AttrDef::new("has_owner", "Bool"))
+            .done()
+            .unwrap();
+        builder
+            .add_type("Person")
+            .attr(AttrDef::new("name", "String"))
+            .done()
+            .unwrap();
+        builder
+            .add_edge_type("owns")
+            .param("owner", "Person")
+            .param("task", "Task")
+            .done()
+            .unwrap();
+        builder
+            .add_edge_type("default_owner")
+            .param("owner", "Person")
+            .param("task", "Task")
+            .done()
+            .unwrap();
+
+        // Rule that triggers on Task SPAWN (auto-fire)
+        builder
+            .add_rule("set_created_at", "SET t.created_at = NOW()")
+            .for_type("Task")
+            .priority(50)
+            .auto()
+            .done()
+            .unwrap();
+
+        // Rule that triggers on owns edge (auto-fire)
+        builder
+            .add_rule("set_owner_name", "SET t.owner_name = p.name")
+            .for_edge_type("owns")
+            .priority(50)
+            .auto()
+            .done()
+            .unwrap();
+
+        // Manual rule (auto: false by default)
+        builder
+            .add_rule("manual_rule", "SET t.updated_at = NOW()")
+            .for_type("Task")
+            // No .auto() call - default is false (manual rule)
+            .priority(50)
+            .done()
+            .unwrap();
+
+        builder.build().unwrap()
+    }
+
+    #[test]
+    fn test_rule_triggers_on_spawn() {
+        // GIVEN rule for Task type
+        let registry = registry_with_rules();
+        let mut graph = Graph::new();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let node = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+
+        let engine = RuleEngine::new(&registry, &graph);
+
+        // WHEN finding triggered rules for spawned node
+        let triggered = engine.find_triggered_by_node(node);
+
+        // THEN rule is found
+        assert_eq!(triggered.len(), 1);
+        assert_eq!(triggered[0].name, "set_created_at");
+    }
+
+    #[test]
+    fn test_rule_triggers_on_link() {
+        // GIVEN rule for owns edge type
+        let registry = registry_with_rules();
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let owns_type_id = registry.get_edge_type_id("owns").unwrap();
+
+        let person = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+        let task = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+        let edge = graph
+            .create_edge(owns_type_id, vec![person.into(), task.into()], attrs! {})
+            .unwrap();
+
+        let engine = RuleEngine::new(&registry, &graph);
+
+        // WHEN finding triggered rules for linked edge
+        let triggered = engine.find_triggered_by_edge(edge);
+
+        // THEN rule is found
+        assert_eq!(triggered.len(), 1);
+        assert_eq!(triggered[0].name, "set_owner_name");
+    }
+
+    #[test]
+    fn test_rules_execute_in_priority_order() {
+        // GIVEN rules with different priorities
+        let mut builder = RegistryBuilder::new();
+        builder
+            .add_type("Task")
+            .attr(AttrDef::new("title", "String"))
+            .done()
+            .unwrap();
+        builder
+            .add_rule("low_priority", "SET t.x = 1")
+            .for_type("Task")
+            .priority(10)
+            .auto()
+            .done()
+            .unwrap();
+        builder
+            .add_rule("high_priority", "SET t.y = 2")
+            .for_type("Task")
+            .priority(50)
+            .auto()
+            .done()
+            .unwrap();
+        builder
+            .add_rule("medium_priority", "SET t.z = 3")
+            .for_type("Task")
+            .priority(20)
+            .auto()
+            .done()
+            .unwrap();
+
+        let registry = builder.build().unwrap();
+        let mut graph = Graph::new();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let node = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+
+        let engine = RuleEngine::new(&registry, &graph);
+
+        // WHEN finding triggered rules
+        let triggered = engine.find_triggered_by_node(node);
+
+        // THEN rules are in priority order (highest first)
+        assert_eq!(triggered.len(), 3);
+        assert_eq!(triggered[0].name, "high_priority");
+        assert_eq!(triggered[1].name, "medium_priority");
+        assert_eq!(triggered[2].name, "low_priority");
+    }
+
+    #[test]
+    fn test_same_binding_executes_once() {
+        // GIVEN a rule
+        let registry = registry_with_rules();
+        let mut graph = Graph::new();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let node = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+
+        let mut engine = RuleEngine::new(&registry, &graph);
+
+        // WHEN firing rules multiple times for the same node
+        let stats1 = engine.fire_to_quiescence(&[node], &[]).unwrap();
+        let stats2 = engine.fire_to_quiescence(&[node], &[]).unwrap();
+
+        // THEN rule only executes once (first time) due to dedup
+        assert!(stats1.rules_triggered >= 1);
+        assert_eq!(stats2.rules_triggered, 0); // Already executed
+    }
+
+    #[test]
+    fn test_depth_limit_prevents_infinite_recursion() {
+        // GIVEN engine at max depth
+        let registry = test_registry();
+        let mut graph = Graph::new();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let node = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+
+        let mut engine = RuleEngine::new(&registry, &graph);
+        engine.current_depth = crate::MAX_DEPTH; // Simulate deep recursion
+
+        // WHEN trying to fire rules
+        let result = engine.fire_to_quiescence(&[node], &[]);
+
+        // THEN error about depth limit
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuleError::MaxDepthExceeded { .. }
+        ));
+    }
+
+    #[test]
+    fn test_action_limit_prevents_runaway() {
+        // GIVEN engine at max actions
+        let registry = test_registry();
+        let mut graph = Graph::new();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let node = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+
+        let mut engine = RuleEngine::new(&registry, &graph);
+        engine.action_count = crate::MAX_ACTIONS; // Simulate many actions
+
+        // WHEN trying to fire rules
+        let result = engine.fire_to_quiescence(&[node], &[]);
+
+        // THEN error about action limit
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            RuleError::MaxActionsExceeded { .. }
+        ));
+    }
+
+    #[test]
+    fn test_reach_quiescence() {
+        // GIVEN rules that will stop producing matches
+        let registry = registry_with_rules();
+        let mut graph = Graph::new();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let node = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+
+        let mut engine = RuleEngine::new(&registry, &graph);
+
+        // WHEN firing rules
+        let stats = engine.fire_to_quiescence(&[node], &[]).unwrap();
+
+        // THEN quiescence is reached
+        assert!(stats.quiescence_reached);
+    }
+
+    #[test]
+    fn test_manual_rule_does_not_auto_fire() {
+        // GIVEN a manual rule (auto: false)
+        let registry = registry_with_rules();
+        let mut graph = Graph::new();
+        let task_type_id = registry.get_type_id("Task").unwrap();
+        let node = graph.create_node(task_type_id, attrs! { "title" => "Test" });
+
+        let engine = RuleEngine::new(&registry, &graph);
+
+        // WHEN finding triggered rules
+        let triggered = engine.find_triggered_by_node(node);
+
+        // THEN manual rule is NOT included (only auto rules)
+        for rule in &triggered {
+            assert!(rule.auto, "Manual rule should not auto fire");
+            assert_ne!(rule.name, "manual_rule");
+        }
+    }
+
+    #[test]
+    fn test_manual_rule_fires_on_explicit_call() {
+        // GIVEN a manual rule
+        let registry = registry_with_rules();
+        let graph = Graph::new();
+        let mut engine = RuleEngine::new(&registry, &graph);
+        let bindings = Bindings::new();
+
+        // WHEN explicitly firing the rule
+        let result = engine.fire_rule_by_name("manual_rule", &bindings);
+
+        // THEN rule fires successfully
+        assert!(result.is_ok());
+        assert_eq!(engine.action_count, 1);
+    }
+
+    #[test]
+    fn test_fire_unknown_rule_fails() {
+        // GIVEN no such rule
+        let registry = test_registry();
+        let graph = Graph::new();
+        let mut engine = RuleEngine::new(&registry, &graph);
+        let bindings = Bindings::new();
+
+        // WHEN trying to fire unknown rule
+        let result = engine.fire_rule_by_name("nonexistent", &bindings);
+
+        // THEN error
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), RuleError::UnknownRule { .. }));
+    }
 }
