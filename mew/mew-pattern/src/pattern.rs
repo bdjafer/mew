@@ -10,10 +10,7 @@ use crate::{PatternError, PatternResult};
 #[derive(Debug, Clone)]
 pub enum PatternOp {
     /// Scan nodes of a type and bind to variable.
-    ScanNodes {
-        var: String,
-        type_id: TypeId,
-    },
+    ScanNodes { var: String, type_id: TypeId },
     /// Follow an edge from bound variables.
     FollowEdge {
         edge_type_id: EdgeTypeId,
@@ -26,13 +23,9 @@ pub enum PatternOp {
         target_vars: Vec<String>,
     },
     /// Filter by expression.
-    Filter {
-        condition: Expr,
-    },
+    Filter { condition: Expr },
     /// Check NOT EXISTS subpattern.
-    NotExists {
-        subpattern: CompiledPattern,
-    },
+    NotExists { subpattern: CompiledPattern },
 }
 
 /// A compiled pattern ready for matching.
@@ -243,6 +236,9 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), PatternError::UnknownType { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            PatternError::UnknownType { .. }
+        ));
     }
 }

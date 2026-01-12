@@ -78,7 +78,11 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
     }
 
     /// Check deferred constraints at commit.
-    pub fn check_deferred(&self, affected_nodes: &[NodeId], affected_edges: &[EdgeId]) -> ConstraintResult<Violations> {
+    pub fn check_deferred(
+        &self,
+        affected_nodes: &[NodeId],
+        affected_edges: &[EdgeId],
+    ) -> ConstraintResult<Violations> {
         let mut violations = Violations::new();
 
         // Check deferred constraints for affected nodes
@@ -87,7 +91,9 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
                 let constraints = self.registry.get_constraints_for_type(node.type_id);
                 for constraint in constraints {
                     if constraint.deferred {
-                        if let Some(violation) = self.check_constraint(constraint, Some(node_id), None)? {
+                        if let Some(violation) =
+                            self.check_constraint(constraint, Some(node_id), None)?
+                        {
                             violations.push(violation);
                         }
                     }
@@ -101,7 +107,9 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
                 let constraints = self.registry.get_constraints_for_edge_type(edge.type_id);
                 for constraint in constraints {
                     if constraint.deferred {
-                        if let Some(violation) = self.check_constraint(constraint, None, Some(edge_id))? {
+                        if let Some(violation) =
+                            self.check_constraint(constraint, None, Some(edge_id))?
+                        {
                             violations.push(violation);
                         }
                     }
@@ -121,7 +129,9 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
             if let Some(node) = self.graph.get_node(node_id) {
                 let constraints = self.registry.get_constraints_for_type(node.type_id);
                 for constraint in constraints {
-                    if let Some(violation) = self.check_constraint(constraint, Some(node_id), None)? {
+                    if let Some(violation) =
+                        self.check_constraint(constraint, Some(node_id), None)?
+                    {
                         violations.push(violation);
                     }
                 }
@@ -133,7 +143,9 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
             if let Some(edge) = self.graph.get_edge(edge_id) {
                 let constraints = self.registry.get_constraints_for_edge_type(edge.type_id);
                 for constraint in constraints {
-                    if let Some(violation) = self.check_constraint(constraint, None, Some(edge_id))? {
+                    if let Some(violation) =
+                        self.check_constraint(constraint, None, Some(edge_id))?
+                    {
                         violations.push(violation);
                     }
                 }
@@ -191,7 +203,8 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
         };
 
         if let Some(node) = self.graph.get_node(node_id) {
-            let has_value = node.get_attr(attr)
+            let has_value = node
+                .get_attr(attr)
                 .map(|v| !matches!(v, Value::Null))
                 .unwrap_or(false);
 
@@ -474,7 +487,10 @@ mod tests {
         let task_type_id = registry.get_type_id("Task").unwrap();
 
         // Valid task with title
-        let node = graph.create_node(task_type_id, attrs! { "title" => "Valid Task", "priority" => 5 });
+        let node = graph.create_node(
+            task_type_id,
+            attrs! { "title" => "Valid Task", "priority" => 5 },
+        );
 
         let checker = ConstraintChecker::new(&registry, &graph);
 
@@ -498,7 +514,10 @@ mod tests {
 
         // Immediate check should not show deferred constraint violations
         let immediate = checker.check_node_immediate(node).unwrap();
-        assert!(immediate.is_empty(), "Immediate check should not include deferred constraints");
+        assert!(
+            immediate.is_empty(),
+            "Immediate check should not include deferred constraints"
+        );
 
         // WHEN checking deferred constraints at commit time
         let _deferred = checker.check_deferred(&[node], &[]).unwrap();
@@ -645,7 +664,9 @@ mod tests {
         let task = g.create_node(task_type, attrs! { "title" => "Task 1" });
 
         // Create self-referential edge
-        let edge = g.create_edge(edge_type, vec![task.into(), task.into()], attrs! {}).unwrap();
+        let edge = g
+            .create_edge(edge_type, vec![task.into(), task.into()], attrs! {})
+            .unwrap();
 
         let checker = ConstraintChecker::new(&reg, &g);
         let violations = checker.check_edge_immediate(edge).unwrap();

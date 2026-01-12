@@ -87,7 +87,10 @@ impl<'r, 'g> Matcher<'r, 'g> {
                     .ok_or_else(|| crate::PatternError::type_error("expected node binding"))?;
 
                 // Find edges from this node with matching type
-                let edges: Vec<_> = self.graph.edges_from(source_id, Some(*edge_type_id)).collect();
+                let edges: Vec<_> = self
+                    .graph
+                    .edges_from(source_id, Some(*edge_type_id))
+                    .collect();
 
                 let mut matches = Vec::new();
 
@@ -141,7 +144,10 @@ impl<'r, 'g> Matcher<'r, 'g> {
 
                 // Check if such an edge exists
                 if target_ids.len() >= 2 {
-                    let edges: Vec<_> = self.graph.edges_from(target_ids[0], Some(*edge_type_id)).collect();
+                    let edges: Vec<_> = self
+                        .graph
+                        .edges_from(target_ids[0], Some(*edge_type_id))
+                        .collect();
 
                     for edge_id in edges {
                         if let Some(edge) = self.graph.get_edge(edge_id) {

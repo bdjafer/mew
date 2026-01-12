@@ -145,10 +145,7 @@ impl<'r> Evaluator<'r> {
             UnaryOp::Neg => match val {
                 Value::Int(i) => Ok(Value::Int(-i)),
                 Value::Float(f) => Ok(Value::Float(-f)),
-                _ => Err(PatternError::type_error(format!(
-                    "cannot negate {:?}",
-                    val
-                ))),
+                _ => Err(PatternError::type_error(format!("cannot negate {:?}", val))),
             },
             UnaryOp::Not => match val {
                 Value::Bool(b) => Ok(Value::Bool(!b)),
@@ -444,7 +441,12 @@ impl<'r> Evaluator<'r> {
     }
 
     /// Evaluate an expression and convert to bool.
-    pub fn eval_bool(&self, expr: &Expr, bindings: &Bindings, graph: &Graph) -> PatternResult<bool> {
+    pub fn eval_bool(
+        &self,
+        expr: &Expr,
+        bindings: &Bindings,
+        graph: &Graph,
+    ) -> PatternResult<bool> {
         let val = self.eval(expr, bindings, graph)?;
         match val {
             Value::Bool(b) => Ok(b),

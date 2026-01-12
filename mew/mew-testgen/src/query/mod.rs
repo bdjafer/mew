@@ -41,11 +41,7 @@ impl<'a> QueryGenerator<'a> {
         Ok(queries)
     }
 
-    fn generate_query(
-        &self,
-        query_type: &QueryType,
-        rng: &mut impl Rng,
-    ) -> Option<GeneratedQuery> {
+    fn generate_query(&self, query_type: &QueryType, rng: &mut impl Rng) -> Option<GeneratedQuery> {
         match query_type {
             QueryType::MatchAll => self.gen_match_all(rng),
             QueryType::MatchByAttr => self.gen_match_by_attr(rng),
@@ -99,7 +95,9 @@ impl<'a> QueryGenerator<'a> {
         let target_node = nodes[rng.gen_range(0..nodes.len())];
 
         // Pick a STATIC attribute that this node has (skip dynamic ones like now())
-        let static_attrs: Vec<&String> = target_node.attrs.keys()
+        let static_attrs: Vec<&String> = target_node
+            .attrs
+            .keys()
             .filter(|k| !target_node.is_attr_dynamic(k))
             .collect();
 
@@ -120,7 +118,8 @@ impl<'a> QueryGenerator<'a> {
         );
 
         // Count matching nodes
-        let count = self.world
+        let count = self
+            .world
             .nodes_of_type(type_name)
             .filter(|n| n.attrs.get(attr_name) == Some(attr_value))
             .count();
@@ -147,13 +146,11 @@ impl<'a> QueryGenerator<'a> {
         let attr = &type_info.attrs[rng.gen_range(0..type_info.attrs.len())];
         let var = type_name.chars().next()?.to_lowercase().to_string();
 
-        let statement = format!(
-            "MATCH {}: {} RETURN {}.{}",
-            var, type_name, var, attr.name
-        );
+        let statement = format!("MATCH {}: {} RETURN {}.{}", var, type_name, var, attr.name);
 
         // Check if any nodes have this attribute as dynamic
-        let has_dynamic = self.world
+        let has_dynamic = self
+            .world
             .nodes_of_type(type_name)
             .any(|n| n.is_attr_dynamic(&attr.name));
 
@@ -171,13 +168,14 @@ impl<'a> QueryGenerator<'a> {
         }
 
         // Build expected rows for static attributes
-        let rows: Vec<Row> = self.world
+        let rows: Vec<Row> = self
+            .world
             .nodes_of_type(type_name)
             .map(|n| {
-                let value = n.attrs.get(&attr.name)
-                    .cloned()
-                    .unwrap_or(Value::Null);
-                Row { columns: vec![value] }
+                let value = n.attrs.get(&attr.name).cloned().unwrap_or(Value::Null);
+                Row {
+                    columns: vec![value],
+                }
             })
             .collect();
 
@@ -217,17 +215,16 @@ impl<'a> QueryGenerator<'a> {
         let type_name = self.pick_populated_type(rng)?;
         let var = type_name.chars().next()?.to_lowercase().to_string();
 
-        let statement = format!(
-            "MATCH {}: {} RETURN count({})",
-            var, type_name, var
-        );
+        let statement = format!("MATCH {}: {} RETURN count({})", var, type_name, var);
 
         let count = self.world.nodes_of_type(type_name).count();
 
         Some(GeneratedQuery {
             statement,
             required_setup: self.setup_statements(),
-            expected: Expected::Rows(vec![Row { columns: vec![Value::Int(count as i64)] }]),
+            expected: Expected::Rows(vec![Row {
+                columns: vec![Value::Int(count as i64)],
+            }]),
             trust_level: TrustLevel::Constructive,
             complexity: Complexity::medium(),
             tags: vec!["match".to_string(), "aggregate".to_string()],
@@ -235,8 +232,17 @@ impl<'a> QueryGenerator<'a> {
     }
 
     fn pick_populated_type(&self, rng: &mut impl Rng) -> Option<&String> {
-        let populated: Vec<&String> = self.schema.node_types.keys()
-            .filter(|t| self.world.nodes_by_type.get(*t).map(|v| !v.is_empty()).unwrap_or(false))
+        let populated: Vec<&String> = self
+            .schema
+            .node_types
+            .keys()
+            .filter(|t| {
+                self.world
+                    .nodes_by_type
+                    .get(*t)
+                    .map(|v| !v.is_empty())
+                    .unwrap_or(false)
+            })
             .collect();
 
         if populated.is_empty() {
@@ -251,7 +257,9 @@ impl<'a> QueryGenerator<'a> {
 
         // Generate SPAWN statements for all nodes
         for node in &self.world.nodes {
-            let attrs_str = node.attrs.iter()
+            let attrs_str = node
+                .attrs
+                .iter()
                 .map(|(k, v)| format!("{} = {}", k, self.value_to_mew(v)))
                 .collect::<Vec<_>>()
                 .join(", ");
@@ -259,7 +267,10 @@ impl<'a> QueryGenerator<'a> {
             let stmt = if attrs_str.is_empty() {
                 format!("SPAWN {}: {}", node.var_name, node.type_name)
             } else {
-                format!("SPAWN {}: {} {{ {} }}", node.var_name, node.type_name, attrs_str)
+                format!(
+                    "SPAWN {}: {} {{ {} }}",
+                    node.var_name, node.type_name, attrs_str
+                )
             };
             setup.push(stmt);
         }
@@ -299,9 +310,9 @@ enum QueryType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::TestConfig;
     use crate::schema::SchemaAnalyzer;
     use crate::world::WorldGenerator;
-    use crate::config::TestConfig;
     use rand::SeedableRng;
 
     #[test]
@@ -326,7 +337,10 @@ mod tests {
         assert!(!queries.is_empty());
         for q in &queries {
             assert!(q.statement.starts_with("MATCH"));
-            assert!(matches!(q.trust_level, TrustLevel::Constructive | TrustLevel::Axiomatic));
+            assert!(matches!(
+                q.trust_level,
+                TrustLevel::Constructive | TrustLevel::Axiomatic
+            ));
         }
     }
 }

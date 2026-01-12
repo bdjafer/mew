@@ -207,10 +207,7 @@ impl FileJournal {
         };
 
         // Open for append
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        let file = OpenOptions::new().create(true).append(true).open(&path)?;
 
         Ok(Self {
             path,
@@ -278,7 +275,12 @@ impl FileJournal {
             "ABORT" => WalEntry::Abort { txn_id },
             // For other entry types, we'd need more complex parsing
             // Simplified for now - in production we'd use a proper serialization format
-            _ => return Err(JournalError::invalid_format(format!("unknown type: {}", entry_type))),
+            _ => {
+                return Err(JournalError::invalid_format(format!(
+                    "unknown type: {}",
+                    entry_type
+                )))
+            }
         };
 
         Ok(WalRecord::new(lsn, entry))

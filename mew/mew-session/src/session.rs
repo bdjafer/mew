@@ -1,13 +1,13 @@
 //! Session manager.
 
-use std::collections::HashMap;
 use mew_core::{EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{parse_stmt, MatchStmt, Stmt, TxnStmt, TargetRef};
+use mew_parser::{parse_stmt, MatchStmt, Stmt, TargetRef, TxnStmt};
 use mew_pattern::Bindings;
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
+use std::collections::HashMap;
 
 use crate::error::{SessionError, SessionResult};
 use crate::result::{MutationResult, QueryResult, StatementResult, TransactionResult};
@@ -173,8 +173,16 @@ impl<'r> Session<'r> {
             self.bindings.insert(stmt.var.clone(), node_id.into());
         }
 
-        let nodes = if result.created_node().is_some() { 1 } else { 0 };
-        let edges = if result.created_edge().is_some() { 1 } else { 0 };
+        let nodes = if result.created_node().is_some() {
+            1
+        } else {
+            0
+        };
+        let edges = if result.created_edge().is_some() {
+            1
+        } else {
+            0
+        };
         Ok(MutationResult::new(nodes, edges))
     }
 
@@ -182,13 +190,17 @@ impl<'r> Session<'r> {
     fn execute_kill(&mut self, stmt: &mew_parser::KillStmt) -> SessionResult<MutationResult> {
         // Resolve the target
         let target_id = self.resolve_target(&stmt.target)?;
-        let node_id = target_id.as_node()
+        let node_id = target_id
+            .as_node()
             .ok_or_else(|| SessionError::invalid_statement_type("KILL requires a node target"))?;
 
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_kill(stmt, node_id)?;
 
-        Ok(MutationResult::new(result.deleted_nodes(), result.deleted_edges()))
+        Ok(MutationResult::new(
+            result.deleted_nodes(),
+            result.deleted_edges(),
+        ))
     }
 
     /// Execute a LINK statement.
@@ -210,7 +222,11 @@ impl<'r> Session<'r> {
             }
         }
 
-        let edges = if result.created_edge().is_some() { 1 } else { 0 };
+        let edges = if result.created_edge().is_some() {
+            1
+        } else {
+            0
+        };
         Ok(MutationResult::new(0, edges))
     }
 
@@ -218,8 +234,9 @@ impl<'r> Session<'r> {
     fn execute_unlink(&mut self, stmt: &mew_parser::UnlinkStmt) -> SessionResult<MutationResult> {
         // Resolve the target
         let target_id = self.resolve_target(&stmt.target)?;
-        let edge_id = target_id.as_edge()
-            .ok_or_else(|| SessionError::invalid_statement_type("UNLINK requires an edge target"))?;
+        let edge_id = target_id.as_edge().ok_or_else(|| {
+            SessionError::invalid_statement_type("UNLINK requires an edge target")
+        })?;
 
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_unlink(stmt, edge_id)?;
@@ -231,7 +248,8 @@ impl<'r> Session<'r> {
     fn execute_set(&mut self, stmt: &mew_parser::SetStmt) -> SessionResult<MutationResult> {
         // Resolve the target
         let target_id = self.resolve_target(&stmt.target)?;
-        let node_id = target_id.as_node()
+        let node_id = target_id
+            .as_node()
             .ok_or_else(|| SessionError::invalid_statement_type("SET requires a node target"))?;
 
         let pattern_bindings = Bindings::new();
@@ -251,27 +269,25 @@ impl<'r> Session<'r> {
     fn resolve_target(&self, target: &mew_parser::Target) -> SessionResult<EntityId> {
         match target {
             mew_parser::Target::Var(var_name) => {
-                self.bindings.get(var_name)
-                    .copied()
-                    .ok_or_else(|| SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name)))
+                self.bindings.get(var_name).copied().ok_or_else(|| {
+                    SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
+                })
             }
-            mew_parser::Target::Id(_) | mew_parser::Target::Pattern(_) => {
-                Err(SessionError::invalid_statement_type("Only variable targets are supported"))
-            }
+            mew_parser::Target::Id(_) | mew_parser::Target::Pattern(_) => Err(
+                SessionError::invalid_statement_type("Only variable targets are supported"),
+            ),
         }
     }
 
     /// Resolve a target reference to an EntityId.
     fn resolve_target_ref(&self, target_ref: &TargetRef) -> SessionResult<EntityId> {
         match target_ref {
-            TargetRef::Var(var_name) => {
-                self.bindings.get(var_name)
-                    .copied()
-                    .ok_or_else(|| SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name)))
-            }
-            TargetRef::Id(_) | TargetRef::Pattern(_) => {
-                Err(SessionError::invalid_statement_type("Only variable targets are supported"))
-            }
+            TargetRef::Var(var_name) => self.bindings.get(var_name).copied().ok_or_else(|| {
+                SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
+            }),
+            TargetRef::Id(_) | TargetRef::Pattern(_) => Err(SessionError::invalid_statement_type(
+                "Only variable targets are supported",
+            )),
         }
     }
 

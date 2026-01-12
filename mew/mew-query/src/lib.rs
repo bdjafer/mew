@@ -16,4 +16,4 @@ mod result;
 pub use error::{QueryError, QueryResult};
 pub use executor::QueryExecutor;
 pub use plan::{QueryPlan, QueryPlanner};
-pub use result::{QueryRow, QueryResults};
+pub use result::{QueryResults, QueryRow};

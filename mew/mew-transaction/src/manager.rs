@@ -1,11 +1,11 @@
 //! Transaction manager for orchestrating ACID transactions.
 
-use std::collections::HashMap;
 use mew_constraint::ConstraintChecker;
 use mew_core::{Attributes, EdgeId, EdgeTypeId, EntityId, NodeId, TypeId, Value};
 use mew_graph::Graph;
 use mew_registry::Registry;
 use mew_rule::RuleEngine;
+use std::collections::HashMap;
 
 use crate::buffer::TransactionBuffer;
 use crate::error::{TransactionError, TransactionResult};
@@ -147,7 +147,9 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
         // Restore updated attributes
         for update in self.buffer.updates() {
             if let Some(old_value) = &update.old_value {
-                let _ = self.graph.set_node_attr(update.node_id, &update.attr_name, old_value.clone());
+                let _ =
+                    self.graph
+                        .set_node_attr(update.node_id, &update.attr_name, old_value.clone());
             }
         }
 
@@ -239,7 +241,7 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
         if self.registry.get_type(type_id).is_none() {
             return Err(TransactionError::MutationError(
                 mew_mutation::MutationError::UnknownType {
-                    name: format!("TypeId({})", type_id.0)
+                    name: format!("TypeId({})", type_id.0),
                 },
             ));
         }
@@ -248,7 +250,8 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
         let node_id = self.graph.create_node(type_id, attrs.clone());
 
         // Track for potential rollback
-        self.buffer.track_created_node(node_id, type_id, attrs.clone());
+        self.buffer
+            .track_created_node(node_id, type_id, attrs.clone());
 
         // Run immediate constraints
         self.check_immediate_constraints_node(node_id, &attrs)?;
@@ -302,20 +305,24 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
         if self.registry.get_edge_type(type_id).is_none() {
             return Err(TransactionError::MutationError(
                 mew_mutation::MutationError::UnknownEdgeType {
-                    name: format!("EdgeTypeId({})", type_id.0)
+                    name: format!("EdgeTypeId({})", type_id.0),
                 },
             ));
         }
 
         // Create the edge in the graph
-        let edge_id = self.graph
+        let edge_id = self
+            .graph
             .create_edge(type_id, targets.clone(), attrs.clone())
-            .map_err(|e| TransactionError::MutationError(
-                mew_mutation::MutationError::pattern_error(e.to_string())
-            ))?;
+            .map_err(|e| {
+                TransactionError::MutationError(mew_mutation::MutationError::pattern_error(
+                    e.to_string(),
+                ))
+            })?;
 
         // Track for potential rollback
-        self.buffer.track_created_edge(edge_id, type_id, targets, attrs);
+        self.buffer
+            .track_created_edge(edge_id, type_id, targets, attrs);
 
         // Run triggered rules
         self.run_triggered_rules(&[], &[edge_id])?;
@@ -361,7 +368,8 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
     ) -> TransactionResult<()> {
         self.ensure_active()?;
 
-        let old_value = self.graph
+        let old_value = self
+            .graph
             .get_node(node_id)
             .and_then(|n| n.get_attr(attr_name).cloned());
 
@@ -372,13 +380,17 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
         }
 
         // Track for potential rollback
-        self.buffer.update_attr(node_id, attr_name.to_string(), old_value, value.clone());
+        self.buffer
+            .update_attr(node_id, attr_name.to_string(), old_value, value.clone());
 
         // Update in graph
-        self.graph.set_node_attr(node_id, attr_name, value)
-            .map_err(|e| TransactionError::MutationError(
-                mew_mutation::MutationError::pattern_error(e.to_string())
-            ))?;
+        self.graph
+            .set_node_attr(node_id, attr_name, value)
+            .map_err(|e| {
+                TransactionError::MutationError(mew_mutation::MutationError::pattern_error(
+                    e.to_string(),
+                ))
+            })?;
 
         // Auto-commit if enabled
         if self.auto_commit {
@@ -521,7 +533,10 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TransactionError::AlreadyActive));
+        assert!(matches!(
+            result.unwrap_err(),
+            TransactionError::AlreadyActive
+        ));
     }
 
     #[test]
@@ -550,7 +565,9 @@ mod tests {
 
         // Create a node
         let type_id = registry.get_type_id("Task").unwrap();
-        let node_id = manager.create_node(type_id, attrs! { "title" => "Test" }).unwrap();
+        let node_id = manager
+            .create_node(type_id, attrs! { "title" => "Test" })
+            .unwrap();
         assert!(manager.node_exists(node_id));
 
         // WHEN
@@ -570,7 +587,9 @@ mod tests {
 
         // WHEN
         let type_id = registry.get_type_id("Task").unwrap();
-        let node_id = manager.create_node(type_id, attrs! { "title" => "Test" }).unwrap();
+        let node_id = manager
+            .create_node(type_id, attrs! { "title" => "Test" })
+            .unwrap();
 
         // THEN - node exists (applied immediately for Read Committed)
         assert!(manager.node_exists(node_id));
@@ -589,10 +608,14 @@ mod tests {
         manager.begin().unwrap();
 
         let type_id = registry.get_type_id("Task").unwrap();
-        let node_id = manager.create_node(type_id, attrs! { "title" => "Original" }).unwrap();
+        let node_id = manager
+            .create_node(type_id, attrs! { "title" => "Original" })
+            .unwrap();
 
         // WHEN - update the attribute
-        manager.update_attr(node_id, "title", Value::String("Updated".to_string())).unwrap();
+        manager
+            .update_attr(node_id, "title", Value::String("Updated".to_string()))
+            .unwrap();
 
         // THEN - read should see the update
         let value = manager.get_attr(node_id, "title");
@@ -608,12 +631,16 @@ mod tests {
         manager.begin().unwrap();
 
         let type_id = registry.get_type_id("Task").unwrap();
-        let node1 = manager.create_node(type_id, attrs! { "title" => "Task 1" }).unwrap();
+        let node1 = manager
+            .create_node(type_id, attrs! { "title" => "Task 1" })
+            .unwrap();
 
         // Create savepoint
         manager.savepoint("sp1").unwrap();
 
-        let node2 = manager.create_node(type_id, attrs! { "title" => "Task 2" }).unwrap();
+        let node2 = manager
+            .create_node(type_id, attrs! { "title" => "Task 2" })
+            .unwrap();
 
         // WHEN - rollback to savepoint
         manager.rollback_to("sp1").unwrap();
@@ -634,7 +661,9 @@ mod tests {
 
         // WHEN - create node with auto-commit
         let type_id = registry.get_type_id("Task").unwrap();
-        let node_id = manager.create_node(type_id, attrs! { "title" => "Auto" }).unwrap();
+        let node_id = manager
+            .create_node(type_id, attrs! { "title" => "Auto" })
+            .unwrap();
 
         // THEN - transaction should be inactive and node in graph
         assert!(!manager.is_active());

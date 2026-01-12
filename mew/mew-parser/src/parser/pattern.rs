@@ -57,7 +57,11 @@ impl Parser {
 
     /// Parse the body of an edge pattern after the edge type name.
     /// Handles transitive modifiers (+, *), targets, and optional alias.
-    fn parse_edge_pattern_body(&mut self, edge_type: String, start: Span) -> ParseResult<PatternElem> {
+    fn parse_edge_pattern_body(
+        &mut self,
+        edge_type: String,
+        start: Span,
+    ) -> ParseResult<PatternElem> {
         // Parse optional transitive modifier
         let transitive = if self.check(&TokenKind::Plus) {
             self.advance();

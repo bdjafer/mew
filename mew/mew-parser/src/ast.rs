@@ -79,8 +79,8 @@ pub struct EdgePattern {
 /// Transitive edge pattern modifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransitiveKind {
-    Plus,  // + (one or more hops)
-    Star,  // * (zero or more hops)
+    Plus, // + (one or more hops)
+    Star, // * (zero or more hops)
 }
 
 /// A pattern with pattern elements and an optional WHERE clause.
@@ -495,7 +495,7 @@ pub enum ReferentialAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CardinalityMax {
     Value(i64),
-    Unbounded,  // * (unlimited)
+    Unbounded, // * (unlimited)
 }
 
 /// Constraint definition.
@@ -512,7 +512,7 @@ pub struct ConstraintDef {
 /// Constraint modifiers
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConstraintModifiers {
-    pub soft: bool,        // soft vs hard (default: hard)
+    pub soft: bool, // soft vs hard (default: hard)
     pub message: Option<String>,
 }
 
@@ -522,7 +522,7 @@ pub struct ConstraintModifiers {
 pub struct RuleDef {
     pub name: String,
     pub pattern: Pattern,
-    pub auto: bool,           // true = auto (default), false = manual
+    pub auto: bool, // true = auto (default), false = manual
     pub priority: Option<i64>,
     pub production: Vec<RuleAction>,
     pub span: Span,
@@ -539,10 +539,7 @@ pub enum RuleAction {
         span: Span,
     },
     /// KILL var
-    Kill {
-        var: String,
-        span: Span,
-    },
+    Kill { var: String, span: Span },
     /// LINK edge_type(targets) AS alias { attrs }
     Link {
         edge_type: String,
@@ -552,10 +549,7 @@ pub enum RuleAction {
         span: Span,
     },
     /// UNLINK var
-    Unlink {
-        var: String,
-        span: Span,
-    },
+    Unlink { var: String, span: Span },
     /// SET var.attr = value
     Set {
         target: String,

@@ -93,13 +93,17 @@ impl<'r> Analyzer<'r> {
     /// Analyze a node pattern.
     fn analyze_node_pattern(&mut self, pattern: &NodePattern) -> AnalyzerResult<()> {
         // Resolve the type name
-        let type_id = self.registry.get_type_id(&pattern.type_name).ok_or_else(|| {
-            AnalyzerError::unknown_type(&pattern.type_name, pattern.span)
-        })?;
+        let type_id = self
+            .registry
+            .get_type_id(&pattern.type_name)
+            .ok_or_else(|| AnalyzerError::unknown_type(&pattern.type_name, pattern.span))?;
 
         // Check for duplicate variable in current scope
         if self.scope.is_defined_in_current(&pattern.var) {
-            return Err(AnalyzerError::duplicate_variable(&pattern.var, pattern.span));
+            return Err(AnalyzerError::duplicate_variable(
+                &pattern.var,
+                pattern.span,
+            ));
         }
 
         // Add variable to scope
@@ -156,9 +160,10 @@ impl<'r> Analyzer<'r> {
     /// Analyze a SPAWN statement.
     fn analyze_spawn(&mut self, stmt: &mew_parser::SpawnStmt) -> AnalyzerResult<Type> {
         // Resolve type name
-        let type_id = self.registry.get_type_id(&stmt.type_name).ok_or_else(|| {
-            AnalyzerError::unknown_type(&stmt.type_name, stmt.span)
-        })?;
+        let type_id = self
+            .registry
+            .get_type_id(&stmt.type_name)
+            .ok_or_else(|| AnalyzerError::unknown_type(&stmt.type_name, stmt.span))?;
 
         let type_def = self.registry.get_type(type_id).unwrap();
 
@@ -199,9 +204,7 @@ impl<'r> Analyzer<'r> {
         if let Some(td) = type_def {
             if !td.has_attr(&attr.name) {
                 return Err(AnalyzerError::unknown_attribute(
-                    &attr.name,
-                    type_name,
-                    attr.span,
+                    &attr.name, type_name, attr.span,
                 ));
             }
         }
@@ -299,14 +302,19 @@ impl<'r> Analyzer<'r> {
         // Analyze the FROM expression
         let from_type = self.analyze_expr(&stmt.from)?;
         if !from_type.is_ref() && from_type != Type::Any {
-            return Err(AnalyzerError::cannot_access_attribute(&from_type, stmt.span));
+            return Err(AnalyzerError::cannot_access_attribute(
+                &from_type, stmt.span,
+            ));
         }
 
         // Analyze FOLLOW clauses
         for follow in &stmt.follow {
             for edge_type_name in &follow.edge_types {
                 if self.registry.get_edge_type_id(edge_type_name).is_none() {
-                    return Err(AnalyzerError::unknown_edge_type(edge_type_name, follow.span));
+                    return Err(AnalyzerError::unknown_edge_type(
+                        edge_type_name,
+                        follow.span,
+                    ));
                 }
             }
         }
@@ -404,12 +412,7 @@ impl<'r> Analyzer<'r> {
     }
 
     /// Analyze an attribute access.
-    fn analyze_attr_access(
-        &mut self,
-        base: &Expr,
-        attr: &str,
-        span: Span,
-    ) -> AnalyzerResult<Type> {
+    fn analyze_attr_access(&mut self, base: &Expr, attr: &str, span: Span) -> AnalyzerResult<Type> {
         let base_type = self.analyze_expr(base)?;
 
         match &base_type {
@@ -510,9 +513,11 @@ impl<'r> Analyzer<'r> {
         }
 
         // Get result type
-        left_type.binary_result(op_type, &right_type).ok_or_else(|| {
-            AnalyzerError::invalid_operator(op.to_string(), &left_type, &right_type, span)
-        })
+        left_type
+            .binary_result(op_type, &right_type)
+            .ok_or_else(|| {
+                AnalyzerError::invalid_operator(op.to_string(), &left_type, &right_type, span)
+            })
     }
 
     /// Analyze a unary operation.

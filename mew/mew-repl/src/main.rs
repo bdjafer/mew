@@ -917,9 +917,7 @@ mod tests {
         let mut repl = Repl::new();
         repl.load_ontology(SIMPLE_ONTOLOGY).unwrap();
 
-        let spawn_output = repl
-            .execute("SPAWN t: Task { title = \"Hello\" }")
-            .unwrap();
+        let spawn_output = repl.execute("SPAWN t: Task { title = \"Hello\" }").unwrap();
         assert!(spawn_output.starts_with("Created t with id "));
 
         let match_output = repl.execute("MATCH t: Task RETURN t").unwrap();
@@ -936,10 +934,8 @@ mod tests {
         let begin_output = repl.execute("BEGIN").unwrap();
         assert_eq!(begin_output, "BEGIN");
 
-        repl.execute("SPAWN t: Task { title = \"Hello\" }")
-            .unwrap();
-        repl.execute("SPAWN p: Person { name = \"Ada\" }")
-            .unwrap();
+        repl.execute("SPAWN t: Task { title = \"Hello\" }").unwrap();
+        repl.execute("SPAWN p: Person { name = \"Ada\" }").unwrap();
 
         let link_output = repl.execute("LINK e: assigned(t, p)").unwrap();
         assert_eq!(link_output, "Link created");

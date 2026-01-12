@@ -29,10 +29,7 @@ pub enum WalEntry {
     },
 
     /// Delete a node.
-    KillNode {
-        txn_id: TxnId,
-        node_id: NodeId,
-    },
+    KillNode { txn_id: TxnId, node_id: NodeId },
 
     /// Create an edge.
     LinkEdge {
@@ -44,10 +41,7 @@ pub enum WalEntry {
     },
 
     /// Delete an edge.
-    UnlinkEdge {
-        txn_id: TxnId,
-        edge_id: EdgeId,
-    },
+    UnlinkEdge { txn_id: TxnId, edge_id: EdgeId },
 
     /// Set an attribute.
     SetAttr {
@@ -59,9 +53,7 @@ pub enum WalEntry {
     },
 
     /// Checkpoint marker (for log truncation).
-    Checkpoint {
-        last_committed_lsn: Lsn,
-    },
+    Checkpoint { last_committed_lsn: Lsn },
 }
 
 impl WalEntry {

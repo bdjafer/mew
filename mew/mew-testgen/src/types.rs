@@ -147,11 +147,17 @@ pub struct GeneratedValue {
 
 impl GeneratedValue {
     pub fn static_val(value: Value) -> Self {
-        Self { value, is_dynamic: false }
+        Self {
+            value,
+            is_dynamic: false,
+        }
     }
 
     pub fn dynamic(value: Value) -> Self {
-        Self { value, is_dynamic: true }
+        Self {
+            value,
+            is_dynamic: true,
+        }
     }
 }
 
@@ -314,23 +320,43 @@ impl AttrInfo {
                 GeneratedValue::static_val(Value::String(s))
             }
             "Int" => {
-                let min = self.min.as_ref()
-                    .and_then(|v| if let Value::Int(i) = v { Some(*i) } else { None })
+                let min = self
+                    .min
+                    .as_ref()
+                    .and_then(|v| {
+                        if let Value::Int(i) = v {
+                            Some(*i)
+                        } else {
+                            None
+                        }
+                    })
                     .unwrap_or(0);
-                let max = self.max.as_ref()
-                    .and_then(|v| if let Value::Int(i) = v { Some(*i) } else { None })
+                let max = self
+                    .max
+                    .as_ref()
+                    .and_then(|v| {
+                        if let Value::Int(i) = v {
+                            Some(*i)
+                        } else {
+                            None
+                        }
+                    })
                     .unwrap_or(100);
                 GeneratedValue::static_val(Value::Int(rng.gen_range(min..=max)))
             }
             "Float" => {
-                let min = self.min.as_ref()
+                let min = self
+                    .min
+                    .as_ref()
                     .and_then(|v| match v {
                         Value::Float(f) => Some(*f),
                         Value::Int(i) => Some(*i as f64),
                         _ => None,
                     })
                     .unwrap_or(0.0);
-                let max = self.max.as_ref()
+                let max = self
+                    .max
+                    .as_ref()
                     .and_then(|v| match v {
                         Value::Float(f) => Some(*f),
                         Value::Int(i) => Some(*i as f64),
@@ -409,10 +435,7 @@ impl WorldState {
     pub fn add_edge(&mut self, edge: GeneratedEdge) -> usize {
         let idx = self.edges.len();
         let key = (edge.from_idx, edge.to_idx);
-        self.edges_by_endpoints
-            .entry(key)
-            .or_default()
-            .push(idx);
+        self.edges_by_endpoints.entry(key).or_default().push(idx);
         self.edges.push(edge);
         idx
     }

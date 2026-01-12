@@ -21,7 +21,8 @@ impl TrustAuditor {
 
     fn audit_result(result: &TestResult, report: &mut TrustReport) {
         // Track by trust level
-        report.by_trust_level
+        report
+            .by_trust_level
             .entry(result.trust_level)
             .or_insert_with(Vec::new)
             .push(result.clone());
@@ -45,7 +46,9 @@ impl TrustAuditor {
                     report.violations.push(TrustViolation {
                         test_id: result.test_id.clone(),
                         level: result.trust_level,
-                        message: "Constructive test failed - expected result was built into generation".to_string(),
+                        message:
+                            "Constructive test failed - expected result was built into generation"
+                                .to_string(),
                         severity: Severity::High,
                     });
                 }
@@ -55,7 +58,8 @@ impl TrustAuditor {
                 if !result.passed {
                     report.warnings.push(TrustWarning {
                         test_id: result.test_id.clone(),
-                        message: "Predicted test failed - may indicate oracle disagreement".to_string(),
+                        message: "Predicted test failed - may indicate oracle disagreement"
+                            .to_string(),
                     });
                 }
             }
@@ -91,7 +95,11 @@ impl TrustReport {
         for (level, results) in &self.by_trust_level {
             let total = results.len();
             let passed = results.iter().filter(|r| r.passed).count();
-            let rate = if total > 0 { passed as f64 / total as f64 } else { 1.0 };
+            let rate = if total > 0 {
+                passed as f64 / total as f64
+            } else {
+                1.0
+            };
 
             match level {
                 TrustLevel::Axiomatic => self.metrics.axiomatic_pass_rate = rate,
@@ -102,11 +110,10 @@ impl TrustReport {
         }
 
         // Compute trust score (weighted average)
-        self.metrics.overall_trust_score =
-            self.metrics.axiomatic_pass_rate * 0.4 +
-            self.metrics.constructive_pass_rate * 0.35 +
-            self.metrics.predicted_pass_rate * 0.2 +
-            self.metrics.statistical_pass_rate * 0.05;
+        self.metrics.overall_trust_score = self.metrics.axiomatic_pass_rate * 0.4
+            + self.metrics.constructive_pass_rate * 0.35
+            + self.metrics.predicted_pass_rate * 0.2
+            + self.metrics.statistical_pass_rate * 0.05;
     }
 
     /// Is the implementation trustworthy based on results?
@@ -128,20 +135,38 @@ impl TrustReport {
         let mut lines = Vec::new();
 
         lines.push("=== Trust Audit Report ===".to_string());
-        lines.push(format!("Overall Trust Score: {:.1}%", self.metrics.overall_trust_score * 100.0));
+        lines.push(format!(
+            "Overall Trust Score: {:.1}%",
+            self.metrics.overall_trust_score * 100.0
+        ));
         lines.push(String::new());
 
         lines.push("Pass Rates by Trust Level:".to_string());
-        lines.push(format!("  Axiomatic:    {:.1}%", self.metrics.axiomatic_pass_rate * 100.0));
-        lines.push(format!("  Constructive: {:.1}%", self.metrics.constructive_pass_rate * 100.0));
-        lines.push(format!("  Predicted:    {:.1}%", self.metrics.predicted_pass_rate * 100.0));
-        lines.push(format!("  Statistical:  {:.1}%", self.metrics.statistical_pass_rate * 100.0));
+        lines.push(format!(
+            "  Axiomatic:    {:.1}%",
+            self.metrics.axiomatic_pass_rate * 100.0
+        ));
+        lines.push(format!(
+            "  Constructive: {:.1}%",
+            self.metrics.constructive_pass_rate * 100.0
+        ));
+        lines.push(format!(
+            "  Predicted:    {:.1}%",
+            self.metrics.predicted_pass_rate * 100.0
+        ));
+        lines.push(format!(
+            "  Statistical:  {:.1}%",
+            self.metrics.statistical_pass_rate * 100.0
+        ));
 
         if !self.violations.is_empty() {
             lines.push(String::new());
             lines.push(format!("VIOLATIONS ({}):", self.violations.len()));
             for v in &self.violations {
-                lines.push(format!("  [{:?}] {} - {}", v.severity, v.test_id, v.message));
+                lines.push(format!(
+                    "  [{:?}] {} - {}",
+                    v.severity, v.test_id, v.message
+                ));
             }
         }
 
@@ -154,7 +179,10 @@ impl TrustReport {
         }
 
         lines.push(String::new());
-        lines.push(format!("Trustworthy: {}", if self.is_trustworthy() { "YES" } else { "NO" }));
+        lines.push(format!(
+            "Trustworthy: {}",
+            if self.is_trustworthy() { "YES" } else { "NO" }
+        ));
 
         lines.join("\n")
     }
@@ -248,16 +276,14 @@ mod tests {
 
     #[test]
     fn test_audit_axiomatic_failure() {
-        let results = vec![
-            TestResult {
-                test_id: "t1".to_string(),
-                passed: false,
-                expected: Expected::Count(0),
-                actual: ActualResult::Count(1),
-                duration_us: 100,
-                trust_level: TrustLevel::Axiomatic,
-            },
-        ];
+        let results = vec![TestResult {
+            test_id: "t1".to_string(),
+            passed: false,
+            expected: Expected::Count(0),
+            actual: ActualResult::Count(1),
+            duration_us: 100,
+            trust_level: TrustLevel::Axiomatic,
+        }];
 
         let report = TrustAuditor::audit(&results);
 
