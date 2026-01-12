@@ -181,7 +181,7 @@ Test names correspond to acceptance tests in `implementation/tests/*.md`.
 
 **Done when ALL true:**
 
-1. All 158 acceptance tests pass (`cargo test --workspace`)
+1. All 158 acceptance tests pass (`./test.sh`)
 2. Terminal session in `meta-roadmap.md` section 1 runs without error
 3. REPL loads any ontology from `examples/`
 4. System recovers correctly after kill -9
