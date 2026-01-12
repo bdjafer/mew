@@ -870,3 +870,99 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SIMPLE_ONTOLOGY: &str = r#"
+        ontology Test {
+            node Task {
+                title: String
+            }
+            node Person {
+                name: String
+            }
+            edge assigned(task: Task, person: Person)
+        }
+    "#;
+
+    #[test]
+    fn loads_ontology_with_summary() {
+        let mut repl = Repl::new();
+        let output = repl.load_ontology(SIMPLE_ONTOLOGY).unwrap();
+        assert_eq!(output, "Ontology loaded: 2 types, 1 edge types");
+    }
+
+    #[test]
+    fn reports_empty_match_results() {
+        let mut repl = Repl::new();
+        repl.load_ontology(SIMPLE_ONTOLOGY).unwrap();
+
+        let output = repl.execute("MATCH t: Task RETURN t").unwrap();
+        assert_eq!(output, "(no results)");
+    }
+
+    #[test]
+    fn surfaces_parse_errors() {
+        let mut repl = Repl::new();
+        repl.load_ontology(SIMPLE_ONTOLOGY).unwrap();
+
+        let err = repl.execute("MATC t: Task").unwrap_err();
+        assert!(err.starts_with("Parse error:"));
+    }
+
+    #[test]
+    fn supports_query_and_mutation_feedback() {
+        let mut repl = Repl::new();
+        repl.load_ontology(SIMPLE_ONTOLOGY).unwrap();
+
+        let spawn_output = repl
+            .execute("SPAWN t: Task { title = \"Hello\" }")
+            .unwrap();
+        assert!(spawn_output.starts_with("Created t with id "));
+
+        let match_output = repl.execute("MATCH t: Task RETURN t").unwrap();
+        assert!(match_output.contains("t"));
+        assert!(match_output.contains("node#"));
+        assert!(match_output.contains("(1 rows)"));
+    }
+
+    #[test]
+    fn supports_mutations_links_and_transactions() {
+        let mut repl = Repl::new();
+        repl.load_ontology(SIMPLE_ONTOLOGY).unwrap();
+
+        let begin_output = repl.execute("BEGIN").unwrap();
+        assert_eq!(begin_output, "BEGIN");
+
+        repl.execute("SPAWN t: Task { title = \"Hello\" }")
+            .unwrap();
+        repl.execute("SPAWN p: Person { name = \"Ada\" }")
+            .unwrap();
+
+        let link_output = repl.execute("LINK e: assigned(t, p)").unwrap();
+        assert_eq!(link_output, "Link created");
+
+        let set_output = repl.execute("SET t { title = \"Updated\" }").unwrap();
+        assert_eq!(set_output, "Updated 1 nodes");
+
+        let unlink_output = repl.execute("UNLINK e").unwrap();
+        assert_eq!(unlink_output, "Deleted 1 edges");
+
+        let kill_output = repl.execute("KILL t").unwrap();
+        assert_eq!(kill_output, "Deleted 1 nodes, 0 edges");
+
+        let commit_output = repl.execute("COMMIT").unwrap();
+        assert_eq!(commit_output, "COMMIT");
+    }
+
+    #[test]
+    fn rejects_transaction_commands_outside_txn() {
+        let mut repl = Repl::new();
+        repl.load_ontology(SIMPLE_ONTOLOGY).unwrap();
+
+        let err = repl.execute("COMMIT").unwrap_err();
+        assert_eq!(err, "No transaction active");
+    }
+}
