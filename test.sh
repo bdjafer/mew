@@ -80,16 +80,16 @@ OPTIONS:
     -p, --package     Run tests for specific package (unit tests only)
     --level N         Filter testgen by complexity level (1-5)
     --ontology NAME   Filter testgen by ontology name
-    --execute         Execute testgen tests against MEW (not just generate)
+    --no-execute      Skip testgen execution (generate only)
     -h, --help        Show this help message
 
 EXAMPLES:
-    ./test.sh                      # Run all tests
+    ./test.sh                      # Run all tests (including testgen execution)
     ./test.sh unit                 # Unit tests only
     ./test.sh unit -p mew-graph    # Unit tests for mew-graph only
     ./test.sh integration          # Integration scenarios only
-    ./test.sh testgen --level 1    # Generate level-1 tests only
-    ./test.sh testgen --execute    # Generate and execute all tests
+    ./test.sh testgen --level 1    # Generate and execute level-1 tests
+    ./test.sh testgen --no-execute # Generate tests only (skip execution)
     ./test.sh quick                # Fast check (unit + integration)
 
 TEST TYPES:
@@ -186,6 +186,7 @@ run_integration_tests() {
 
 run_testgen() {
     local testgen_args=""
+    local do_execute=true
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -198,8 +199,8 @@ run_testgen() {
                 testgen_args="$testgen_args --ontology $2"
                 shift 2
                 ;;
-            --execute|-x)
-                testgen_args="$testgen_args --execute"
+            --no-execute)
+                do_execute=false
                 shift
                 ;;
             *)
@@ -207,6 +208,11 @@ run_testgen() {
                 ;;
         esac
     done
+
+    # Execute by default
+    if $do_execute; then
+        testgen_args="$testgen_args --execute"
+    fi
 
     print_header "Generated Tests (testgen)"
 
@@ -216,7 +222,12 @@ run_testgen() {
     cargo build -p mew-testgen --bin testgen-runner --quiet 2>/dev/null || cargo build -p mew-testgen --bin testgen-runner
     cd "$SCRIPT_DIR"
 
-    echo "Running test generation..."
+    if $do_execute; then
+        echo "Generating and executing tests..."
+    else
+        echo "Generating tests (execution skipped)..."
+    fi
+
     if ./mew/target/debug/testgen-runner \
         --ontologies-dir examples \
         --output mew/tests/reports \

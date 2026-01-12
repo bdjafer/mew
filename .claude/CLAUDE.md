@@ -94,12 +94,12 @@ Use the unified test runner `test.sh` at the project root:
 # Verbose output
 ./test.sh unit -v
 
-# Testgen for specific level or ontology
+# Testgen for specific level or ontology (executes by default)
 ./test.sh testgen --level 1
 ./test.sh testgen --ontology contacts
 
-# Execute generated tests against MEW
-./test.sh testgen --execute
+# Generate tests only (skip execution)
+./test.sh testgen --no-execute
 
 # Show help
 ./test.sh --help
