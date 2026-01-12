@@ -6,12 +6,6 @@ use mew_testgen::{TestConfig, TestGenerator, SchemaAnalyzer, WorldGenerator, Que
 use std::fs;
 use std::path::Path;
 
-fn load_ontology(level: u8, name: &str) -> String {
-    let path = format!("../ontologies/level-{}/{}", level, name);
-    fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("Failed to load ontology: {}", path))
-}
-
 // Helper to find ontology files in a level
 fn find_ontologies(level: u8) -> Vec<(String, String)> {
     let level_dir = format!("../ontologies/level-{}", level);

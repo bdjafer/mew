@@ -16,12 +16,17 @@ use crate::result::{
 pub struct MutationExecutor<'r, 'g> {
     registry: &'r Registry,
     graph: &'g mut Graph,
+    evaluator: Evaluator<'r>,
 }
 
 impl<'r, 'g> MutationExecutor<'r, 'g> {
     /// Create a new executor.
     pub fn new(registry: &'r Registry, graph: &'g mut Graph) -> Self {
-        Self { registry, graph }
+        Self {
+            registry,
+            graph,
+            evaluator: Evaluator::new(registry),
+        }
     }
 
     /// Execute a SPAWN statement.
@@ -46,12 +51,9 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         // Build attributes
         let mut attrs = mew_core::Attributes::new();
 
-        // Create evaluator with immutable graph reference
-        let evaluator = Evaluator::new(self.registry, unsafe { &*(self.graph as *const Graph) });
-
         for assign in &stmt.attrs {
             // Evaluate the value expression
-            let value = evaluator.eval(&assign.value, bindings)?;
+            let value = self.evaluator.eval(&assign.value, bindings, self.graph)?;
 
             // Validate attribute exists and type matches
             self.validate_attribute(&stmt.type_name, type_id, &assign.name, &value)?;
@@ -224,10 +226,9 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         // Build attributes
         let mut attrs = mew_core::Attributes::new();
         let bindings = Bindings::new();
-        let evaluator = Evaluator::new(self.registry, unsafe { &*(self.graph as *const Graph) });
 
         for assign in &stmt.attrs {
-            let value = evaluator.eval(&assign.value, &bindings)?;
+            let value = self.evaluator.eval(&assign.value, &bindings, self.graph)?;
             attrs.insert(assign.name.clone(), value);
         }
 
@@ -279,8 +280,6 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
     ) -> MutationResult<MutationOutput> {
         let mut updated_ids = Vec::new();
 
-        let evaluator = Evaluator::new(self.registry, unsafe { &*(self.graph as *const Graph) });
-
         for node_id in node_ids {
             let node = self
                 .graph
@@ -299,7 +298,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
 
             for assign in &stmt.assignments {
                 // Evaluate the value
-                let value = evaluator.eval(&assign.value, bindings)?;
+                let value = self.evaluator.eval(&assign.value, bindings, self.graph)?;
 
                 // Validate attribute
                 self.validate_attribute(&type_name, type_id, &assign.name, &value)?;
@@ -521,7 +520,6 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
     }
 
     fn path_exists(&self, edge_type_id: mew_core::EdgeTypeId, start: NodeId, goal: NodeId) -> bool {
-        let graph = unsafe { &*(self.graph as *const Graph) };
         let mut visited = HashSet::new();
         let mut stack = VecDeque::new();
         stack.push_back(start);
@@ -533,8 +531,8 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
             if !visited.insert(node_id) {
                 continue;
             }
-            for edge_id in graph.edges_from(node_id, Some(edge_type_id)) {
-                if let Some(edge) = graph.get_edge(edge_id) {
+            for edge_id in self.graph.edges_from(node_id, Some(edge_type_id)) {
+                if let Some(edge) = self.graph.get_edge(edge_id) {
                     if let Some(EntityId::Node(next_id)) = edge.targets.get(1) {
                         if !visited.contains(next_id) {
                             stack.push_back(*next_id);

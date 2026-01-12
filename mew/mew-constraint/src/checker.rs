@@ -2,7 +2,7 @@
 
 use mew_core::{EdgeId, NodeId, Value};
 use mew_graph::Graph;
-use mew_pattern::{Bindings, Evaluator, Matcher};
+use mew_pattern::{Evaluator, Matcher};
 use mew_registry::{ConstraintDef, Registry};
 
 use crate::error::ConstraintResult;
@@ -12,8 +12,10 @@ use crate::violation::{Violation, ViolationSeverity, Violations};
 pub struct ConstraintChecker<'r, 'g> {
     registry: &'r Registry,
     graph: &'g Graph,
+    #[allow(dead_code)]
     matcher: Matcher<'r, 'g>,
-    evaluator: Evaluator<'r, 'g>,
+    #[allow(dead_code)]
+    evaluator: Evaluator<'r>,
 }
 
 impl<'r, 'g> ConstraintChecker<'r, 'g> {
@@ -23,7 +25,7 @@ impl<'r, 'g> ConstraintChecker<'r, 'g> {
             registry,
             graph,
             matcher: Matcher::new(registry, graph),
-            evaluator: Evaluator::new(registry, graph),
+            evaluator: Evaluator::new(registry),
         }
     }
 
@@ -455,7 +457,7 @@ mod tests {
         let checker = ConstraintChecker::new(&registry, &graph);
 
         // WHEN checking immediate constraints
-        let violations = checker.check_node_immediate(node).unwrap();
+        let _violations = checker.check_node_immediate(node).unwrap();
 
         // THEN we get constraint checks (exact count depends on registered constraints)
         // The checker is invoked after mutation for immediate constraints
@@ -499,7 +501,7 @@ mod tests {
         assert!(immediate.is_empty(), "Immediate check should not include deferred constraints");
 
         // WHEN checking deferred constraints at commit time
-        let deferred = checker.check_deferred(&[node], &[]).unwrap();
+        let _deferred = checker.check_deferred(&[node], &[]).unwrap();
 
         // THEN deferred constraints are checked
         // (Our "required:owner" constraint pattern isn't fully implemented,
@@ -517,7 +519,7 @@ mod tests {
 
         // Create person without required 'name' attribute
         // The required constraint is "hard" by default
-        let node = graph.create_node(person_type_id, attrs! {});
+        let _node = graph.create_node(person_type_id, attrs! {});
 
         // Manually add a required constraint
         let mut builder = RegistryBuilder::new();

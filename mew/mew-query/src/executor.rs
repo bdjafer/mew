@@ -12,10 +12,12 @@ use crate::QueryResult;
 
 /// Query executor.
 pub struct QueryExecutor<'r, 'g> {
+    #[allow(dead_code)]
     registry: &'r Registry,
     graph: &'g Graph,
+    #[allow(dead_code)]
     matcher: Matcher<'r, 'g>,
-    evaluator: Evaluator<'r, 'g>,
+    evaluator: Evaluator<'r>,
 }
 
 impl<'r, 'g> QueryExecutor<'r, 'g> {
@@ -25,7 +27,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             registry,
             graph,
             matcher: Matcher::new(registry, graph),
-            evaluator: Evaluator::new(registry, graph),
+            evaluator: Evaluator::new(registry),
         }
     }
 
@@ -135,7 +137,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 value,
             } => {
                 // Evaluate the search value
-                let search_val = self.evaluator.eval(value, &Bindings::new())?;
+                let search_val = self.evaluator.eval(value, &Bindings::new(), self.graph)?;
 
                 let mut results = Vec::new();
 
@@ -234,7 +236,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 let mut results = Vec::new();
 
                 for (bindings, values) in input_results {
-                    let result = self.evaluator.eval_bool(condition, &bindings)?;
+                    let result = self.evaluator.eval_bool(condition, &bindings, self.graph)?;
                     if result {
                         results.push((bindings, values));
                     }
@@ -251,7 +253,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                     let mut values = Vec::new();
 
                     for (_name, expr) in projections {
-                        let val = self.evaluator.eval(expr, &bindings)?;
+                        let val = self.evaluator.eval(expr, &bindings, self.graph)?;
                         values.push(val);
                     }
 
@@ -269,14 +271,14 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                     for (expr, ascending) in order_by {
                         // Evaluate the expression for both rows
                         let a_val = if !a_values.is_empty() {
-                            self.evaluator.eval(expr, a_bindings).ok()
+                            self.evaluator.eval(expr, a_bindings, self.graph).ok()
                         } else {
-                            self.evaluator.eval(expr, a_bindings).ok()
+                            self.evaluator.eval(expr, a_bindings, self.graph).ok()
                         };
                         let b_val = if !b_values.is_empty() {
-                            self.evaluator.eval(expr, b_bindings).ok()
+                            self.evaluator.eval(expr, b_bindings, self.graph).ok()
                         } else {
-                            self.evaluator.eval(expr, b_bindings).ok()
+                            self.evaluator.eval(expr, b_bindings, self.graph).ok()
                         };
 
                         let cmp = self.compare_values(&a_val, &b_val);
@@ -330,7 +332,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                     let key: String = group_by
                         .iter()
                         .map(|e| {
-                            let v = self.evaluator.eval(e, &bindings).unwrap_or(Value::Null);
+                            let v = self.evaluator.eval(e, &bindings, self.graph).unwrap_or(Value::Null);
                             format!("{:?}", v)
                         })
                         .collect::<Vec<_>>()
@@ -443,7 +445,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             crate::plan::AggregateKind::Sum => {
                 let mut sum = 0.0f64;
                 for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings) {
+                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
                         match val {
                             Value::Int(i) => sum += i as f64,
                             Value::Float(f) => sum += f,
@@ -458,7 +460,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 let mut sum = 0.0f64;
                 let mut count = 0;
                 for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings) {
+                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
                         match val {
                             Value::Int(i) => {
                                 sum += i as f64;
@@ -482,7 +484,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             crate::plan::AggregateKind::Min => {
                 let mut min: Option<Value> = None;
                 for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings) {
+                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
                         if !matches!(val, Value::Null) {
                             min = Some(match min {
                                 None => val,
@@ -505,7 +507,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             crate::plan::AggregateKind::Max => {
                 let mut max: Option<Value> = None;
                 for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings) {
+                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
                         if !matches!(val, Value::Null) {
                             max = Some(match max {
                                 None => val,

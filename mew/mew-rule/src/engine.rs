@@ -27,6 +27,7 @@ pub struct RuleExecutionStats {
 pub struct RuleEngine<'r, 'g> {
     registry: &'r Registry,
     graph: &'g Graph,
+    #[allow(dead_code)]
     matcher: Matcher<'r, 'g>,
     /// Track executed (rule_id, bindings_hash) to prevent re-execution.
     executed: HashSet<(u32, u64)>,

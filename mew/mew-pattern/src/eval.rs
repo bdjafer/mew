@@ -7,26 +7,31 @@ use mew_parser::{BinaryOp, Expr, LiteralKind, UnaryOp};
 use mew_registry::Registry;
 
 /// Expression evaluator.
-pub struct Evaluator<'r, 'g> {
+///
+/// The evaluator is stateless - it takes the graph as a parameter to each eval call.
+/// This allows safe use from contexts with mutable graph references.
+pub struct Evaluator<'r> {
+    #[allow(dead_code)]
     registry: &'r Registry,
-    graph: &'g Graph,
 }
 
-impl<'r, 'g> Evaluator<'r, 'g> {
+impl<'r> Evaluator<'r> {
     /// Create a new evaluator.
-    pub fn new(registry: &'r Registry, graph: &'g Graph) -> Self {
-        Self { registry, graph }
+    pub fn new(registry: &'r Registry) -> Self {
+        Self { registry }
     }
 
-    /// Evaluate an expression with the given bindings.
-    pub fn eval(&self, expr: &Expr, bindings: &Bindings) -> PatternResult<Value> {
+    /// Evaluate an expression with the given bindings and graph.
+    pub fn eval(&self, expr: &Expr, bindings: &Bindings, graph: &Graph) -> PatternResult<Value> {
         match expr {
             Expr::Literal(lit) => self.eval_literal(lit),
             Expr::Var(name, _) => self.eval_var(name, bindings),
-            Expr::AttrAccess(base, attr, _) => self.eval_attr_access(base, attr, bindings),
-            Expr::BinaryOp(op, left, right, _) => self.eval_binary_op(*op, left, right, bindings),
-            Expr::UnaryOp(op, operand, _) => self.eval_unary_op(*op, operand, bindings),
-            Expr::FnCall(fc) => self.eval_fn_call(&fc.name, &fc.args, bindings),
+            Expr::AttrAccess(base, attr, _) => self.eval_attr_access(base, attr, bindings, graph),
+            Expr::BinaryOp(op, left, right, _) => {
+                self.eval_binary_op(*op, left, right, bindings, graph)
+            }
+            Expr::UnaryOp(op, operand, _) => self.eval_unary_op(*op, operand, bindings, graph),
+            Expr::FnCall(fc) => self.eval_fn_call(&fc.name, &fc.args, bindings, graph),
             Expr::IdRef(_, _) => Ok(Value::Null), // TODO: resolve ID refs
             Expr::Param(name, _) => Err(PatternError::unbound_variable(name)),
             Expr::Exists(_, _, _) | Expr::NotExists(_, _, _) => {
@@ -61,13 +66,14 @@ impl<'r, 'g> Evaluator<'r, 'g> {
         base: &Expr,
         attr: &str,
         bindings: &Bindings,
+        graph: &Graph,
     ) -> PatternResult<Value> {
-        let base_val = self.eval(base, bindings)?;
+        let base_val = self.eval(base, bindings, graph)?;
 
         match base_val {
             Value::NodeRef(node_id) => {
                 // Get the attribute from the node
-                if let Some(node) = self.graph.get_node(node_id) {
+                if let Some(node) = graph.get_node(node_id) {
                     Ok(node.get_attr(attr).cloned().unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -75,7 +81,7 @@ impl<'r, 'g> Evaluator<'r, 'g> {
             }
             Value::EdgeRef(edge_id) => {
                 // Get the attribute from the edge
-                if let Some(edge) = self.graph.get_edge(edge_id) {
+                if let Some(edge) = graph.get_edge(edge_id) {
                     Ok(edge.get_attr(attr).cloned().unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -95,9 +101,10 @@ impl<'r, 'g> Evaluator<'r, 'g> {
         left: &Expr,
         right: &Expr,
         bindings: &Bindings,
+        graph: &Graph,
     ) -> PatternResult<Value> {
-        let left_val = self.eval(left, bindings)?;
-        let right_val = self.eval(right, bindings)?;
+        let left_val = self.eval(left, bindings, graph)?;
+        let right_val = self.eval(right, bindings, graph)?;
 
         match op {
             // Arithmetic
@@ -130,8 +137,9 @@ impl<'r, 'g> Evaluator<'r, 'g> {
         op: UnaryOp,
         operand: &Expr,
         bindings: &Bindings,
+        graph: &Graph,
     ) -> PatternResult<Value> {
-        let val = self.eval(operand, bindings)?;
+        let val = self.eval(operand, bindings, graph)?;
 
         match op {
             UnaryOp::Neg => match val {
@@ -158,6 +166,7 @@ impl<'r, 'g> Evaluator<'r, 'g> {
         name: &str,
         args: &[Expr],
         bindings: &Bindings,
+        graph: &Graph,
     ) -> PatternResult<Value> {
         let name_lower = name.to_lowercase();
 
@@ -182,7 +191,7 @@ impl<'r, 'g> Evaluator<'r, 'g> {
             "coalesce" => {
                 // Return first non-null argument
                 for arg in args {
-                    let val = self.eval(arg, bindings)?;
+                    let val = self.eval(arg, bindings, graph)?;
                     if !matches!(val, Value::Null) {
                         return Ok(val);
                     }
@@ -191,7 +200,7 @@ impl<'r, 'g> Evaluator<'r, 'g> {
             }
             "upper" => {
                 if let Some(arg) = args.first() {
-                    let val = self.eval(arg, bindings)?;
+                    let val = self.eval(arg, bindings, graph)?;
                     if let Value::String(s) = val {
                         return Ok(Value::String(s.to_uppercase()));
                     }
@@ -200,7 +209,7 @@ impl<'r, 'g> Evaluator<'r, 'g> {
             }
             "lower" => {
                 if let Some(arg) = args.first() {
-                    let val = self.eval(arg, bindings)?;
+                    let val = self.eval(arg, bindings, graph)?;
                     if let Value::String(s) = val {
                         return Ok(Value::String(s.to_lowercase()));
                     }
@@ -209,7 +218,7 @@ impl<'r, 'g> Evaluator<'r, 'g> {
             }
             "abs" => {
                 if let Some(arg) = args.first() {
-                    let val = self.eval(arg, bindings)?;
+                    let val = self.eval(arg, bindings, graph)?;
                     return match val {
                         Value::Int(i) => Ok(Value::Int(i.abs())),
                         Value::Float(f) => Ok(Value::Float(f.abs())),
@@ -435,8 +444,8 @@ impl<'r, 'g> Evaluator<'r, 'g> {
     }
 
     /// Evaluate an expression and convert to bool.
-    pub fn eval_bool(&self, expr: &Expr, bindings: &Bindings) -> PatternResult<bool> {
-        let val = self.eval(expr, bindings)?;
+    pub fn eval_bool(&self, expr: &Expr, bindings: &Bindings, graph: &Graph) -> PatternResult<bool> {
+        let val = self.eval(expr, bindings, graph)?;
         match val {
             Value::Bool(b) => Ok(b),
             Value::Null => Ok(false),
@@ -469,7 +478,7 @@ mod tests {
         // GIVEN
         let registry = test_registry();
         let graph = test_graph();
-        let evaluator = Evaluator::new(&registry, &graph);
+        let evaluator = Evaluator::new(&registry);
         let bindings = Bindings::new();
 
         // x + y * 2 where x=10, y=3 => 10 + 3 * 2 = 16
@@ -495,7 +504,7 @@ mod tests {
         );
 
         // WHEN
-        let result = evaluator.eval(&expr, &bindings).unwrap();
+        let result = evaluator.eval(&expr, &bindings, &graph).unwrap();
 
         // THEN
         assert_eq!(result, Value::Int(16));
@@ -506,7 +515,7 @@ mod tests {
         // GIVEN
         let registry = test_registry();
         let graph = test_graph();
-        let evaluator = Evaluator::new(&registry, &graph);
+        let evaluator = Evaluator::new(&registry);
         let mut bindings = Bindings::new();
         bindings.insert("x", Value::Int(10));
 
@@ -535,7 +544,7 @@ mod tests {
         );
 
         // WHEN
-        let result = evaluator.eval(&expr, &bindings).unwrap();
+        let result = evaluator.eval(&expr, &bindings, &graph).unwrap();
 
         // THEN
         assert_eq!(result, Value::Bool(true));
@@ -548,7 +557,7 @@ mod tests {
         let mut graph = test_graph();
         let node_id = graph.create_node(TypeId::new(1), attrs! { "priority" => 5 });
 
-        let evaluator = Evaluator::new(&registry, &graph);
+        let evaluator = Evaluator::new(&registry);
         let mut bindings = Bindings::new();
         bindings.insert("t", Binding::Node(node_id));
 
@@ -560,7 +569,7 @@ mod tests {
         );
 
         // WHEN
-        let result = evaluator.eval(&expr, &bindings).unwrap();
+        let result = evaluator.eval(&expr, &bindings, &graph).unwrap();
 
         // THEN
         assert_eq!(result, Value::Int(5));
@@ -571,7 +580,7 @@ mod tests {
         // GIVEN
         let registry = test_registry();
         let graph = test_graph();
-        let evaluator = Evaluator::new(&registry, &graph);
+        let evaluator = Evaluator::new(&registry);
         let mut bindings = Bindings::new();
         bindings.insert("x", Value::Int(10));
 
@@ -587,7 +596,7 @@ mod tests {
         );
 
         // WHEN
-        let result = evaluator.eval(&expr, &bindings);
+        let result = evaluator.eval(&expr, &bindings, &graph);
 
         // THEN
         assert!(result.is_err());
@@ -602,7 +611,7 @@ mod tests {
         // GIVEN
         let registry = test_registry();
         let graph = test_graph();
-        let evaluator = Evaluator::new(&registry, &graph);
+        let evaluator = Evaluator::new(&registry);
         let bindings = Bindings::new();
 
         // 10 / 0
@@ -620,7 +629,7 @@ mod tests {
         );
 
         // WHEN
-        let result = evaluator.eval(&expr, &bindings);
+        let result = evaluator.eval(&expr, &bindings, &graph);
 
         // THEN
         assert!(result.is_err());
