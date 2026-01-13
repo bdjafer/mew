@@ -1,9 +1,9 @@
 //! Expression evaluation.
 
-use crate::{Bindings, PatternError, PatternResult};
+use crate::{Bindings, CompiledPattern, Matcher, PatternError, PatternResult};
 use mew_core::Value;
 use mew_graph::Graph;
-use mew_parser::{BinaryOp, Expr, LiteralKind, UnaryOp};
+use mew_parser::{BinaryOp, Expr, LiteralKind, PatternElem, UnaryOp};
 use mew_registry::Registry;
 
 /// Expression evaluator.
@@ -34,11 +34,45 @@ impl<'r> Evaluator<'r> {
             Expr::FnCall(fc) => self.eval_fn_call(&fc.name, &fc.args, bindings, graph),
             Expr::IdRef(_, _) => Ok(Value::Null), // TODO: resolve ID refs
             Expr::Param(name, _) => Err(PatternError::unbound_variable(name)),
-            Expr::Exists(_, _, _) | Expr::NotExists(_, _, _) => {
-                // EXISTS/NOT EXISTS are handled by the matcher, not the evaluator
-                Ok(Value::Bool(false))
+            Expr::Exists(pattern_elems, where_clause, _) => {
+                // Compile the subpattern and check if any matches exist
+                let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
+                Ok(Value::Bool(exists))
+            }
+            Expr::NotExists(pattern_elems, where_clause, _) => {
+                // Compile the subpattern and check if no matches exist
+                let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
+                Ok(Value::Bool(!exists))
             }
         }
+    }
+
+    /// Evaluate an EXISTS/NOT EXISTS subpattern.
+    fn eval_exists(
+        &self,
+        pattern_elems: &[PatternElem],
+        where_clause: Option<&Expr>,
+        bindings: &Bindings,
+        graph: &Graph,
+    ) -> PatternResult<bool> {
+        // Get the names of already-bound variables
+        let prebound: Vec<String> = bindings.names().map(|s| s.to_string()).collect();
+
+        // Compile the subpattern with prebound variables
+        let mut pattern =
+            CompiledPattern::compile_with_prebound(pattern_elems, self.registry, &prebound)?;
+
+        // Add where clause as filter if present
+        if let Some(where_expr) = where_clause {
+            pattern = pattern.with_filter(where_expr.clone());
+        }
+
+        // Use the matcher to find matches, starting with current bindings
+        let matcher = Matcher::new(self.registry, graph);
+        let matches = matcher.find_all_with_initial(&pattern, bindings.clone())?;
+
+        // Return true if any matches exist
+        Ok(!matches.is_empty())
     }
 
     /// Evaluate a literal.
