@@ -202,6 +202,7 @@ impl<'r> QueryPlanner<'r> {
     }
 
     /// Check if an expression is an aggregate function and return its kind and argument.
+    /// Note: min/max with 2 arguments are binary functions, not aggregates.
     fn get_aggregate(&self, expr: &Expr) -> Option<(AggregateKind, Expr)> {
         match expr {
             Expr::FnCall(fc) => {
@@ -209,8 +210,9 @@ impl<'r> QueryPlanner<'r> {
                     "count" => Some(AggregateKind::Count),
                     "sum" => Some(AggregateKind::Sum),
                     "avg" => Some(AggregateKind::Avg),
-                    "min" => Some(AggregateKind::Min),
-                    "max" => Some(AggregateKind::Max),
+                    // min/max are aggregates only with 1 arg; with 2 args they're binary functions
+                    "min" if fc.args.len() == 1 => Some(AggregateKind::Min),
+                    "max" if fc.args.len() == 1 => Some(AggregateKind::Max),
                     _ => None,
                 };
                 kind.map(|k| {

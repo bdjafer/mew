@@ -213,9 +213,49 @@ impl<'r> Evaluator<'r> {
                 // For now, just return 0 - proper aggregate handling is in Query
                 Ok(Value::Int(0))
             }
-            "sum" | "avg" | "min" | "max" => {
-                // Aggregates - placeholder for now
+            "sum" | "avg" => {
+                // Aggregates - placeholder for now (handled in Query executor)
                 Ok(Value::Float(0.0))
+            }
+            "min" => {
+                // Binary min function: min(a, b) returns the smaller value
+                if args.len() >= 2 {
+                    let a = self.eval(&args[0], bindings, graph)?;
+                    let b = self.eval(&args[1], bindings, graph)?;
+                    return match (&a, &b) {
+                        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.min(b))),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.min(*b))),
+                        (Value::Int(a), Value::Float(b)) => {
+                            Ok(Value::Float((*a as f64).min(*b)))
+                        }
+                        (Value::Float(a), Value::Int(b)) => {
+                            Ok(Value::Float(a.min(*b as f64)))
+                        }
+                        _ => Err(PatternError::type_error("MIN expects numeric arguments")),
+                    };
+                }
+                // Single arg: aggregate placeholder (handled in Query executor)
+                Ok(Value::Null)
+            }
+            "max" => {
+                // Binary max function: max(a, b) returns the larger value
+                if args.len() >= 2 {
+                    let a = self.eval(&args[0], bindings, graph)?;
+                    let b = self.eval(&args[1], bindings, graph)?;
+                    return match (&a, &b) {
+                        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.max(b))),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
+                        (Value::Int(a), Value::Float(b)) => {
+                            Ok(Value::Float((*a as f64).max(*b)))
+                        }
+                        (Value::Float(a), Value::Int(b)) => {
+                            Ok(Value::Float(a.max(*b as f64)))
+                        }
+                        _ => Err(PatternError::type_error("MAX expects numeric arguments")),
+                    };
+                }
+                // Single arg: aggregate placeholder (handled in Query executor)
+                Ok(Value::Null)
             }
             "coalesce" => {
                 // Return first non-null argument
