@@ -2,7 +2,7 @@
 
 use mew_core::Value;
 use mew_graph::Graph;
-use mew_parser::{MatchStmt, WalkStmt};
+use mew_parser::{Expr, MatchStmt, WalkStmt};
 use mew_pattern::{Bindings, Evaluator, Matcher};
 use mew_registry::Registry;
 
@@ -315,49 +315,46 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
 
                 if group_by.is_empty() && results.is_empty() {
                     // Empty input with no grouping returns single row with defaults
-                    let mut values = Vec::new();
-                    for (_, kind, _) in aggregates {
-                        values.push(match kind {
+                    let values: Vec<Value> = aggregates
+                        .iter()
+                        .map(|agg| match agg.kind {
                             crate::plan::AggregateKind::Count => Value::Int(0),
                             _ => Value::Null,
-                        });
-                    }
+                        })
+                        .collect();
                     return Ok(vec![(Bindings::new(), values)]);
                 }
 
-                // Group by keys (using string serialization since Value doesn't impl Hash)
+                // Group rows by key (using string serialization since Value doesn't impl Hash)
                 let mut groups: std::collections::HashMap<String, Vec<(Bindings, Vec<Value>)>> =
                     std::collections::HashMap::new();
 
                 for (bindings, values) in results {
-                    let key: String = group_by
-                        .iter()
-                        .map(|e| {
-                            let v = self
-                                .evaluator
-                                .eval(e, &bindings, self.graph)
-                                .unwrap_or(Value::Null);
-                            format!("{:?}", v)
-                        })
-                        .collect::<Vec<_>>()
-                        .join("|");
-
+                    let key = self.compute_group_key(group_by, &bindings);
                     groups.entry(key).or_default().push((bindings, values));
                 }
 
-                // Compute aggregates for each group
+                // Compute output for each group
                 let mut output = Vec::new();
-
-                for (_, group) in groups {
+                for group in groups.into_values() {
                     let first_bindings = group.first().map(|(b, _)| b.clone()).unwrap_or_default();
-                    let mut agg_values = Vec::new();
 
-                    for (_, kind, expr) in aggregates {
-                        let agg_val = self.compute_aggregate(*kind, &group, expr)?;
-                        agg_values.push(agg_val);
+                    // Collect group_by values then aggregate values
+                    let mut row_values: Vec<Value> = group_by
+                        .iter()
+                        .map(|expr| {
+                            self.evaluator
+                                .eval(expr, &first_bindings, self.graph)
+                                .unwrap_or(Value::Null)
+                        })
+                        .collect();
+
+                    for agg in aggregates {
+                        let val = self.compute_aggregate(agg, &group)?;
+                        row_values.push(val);
                     }
 
-                    output.push((first_bindings, agg_values));
+                    output.push((first_bindings, row_values));
                 }
 
                 Ok(output)
@@ -495,6 +492,22 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 Ok(results)
             }
 
+            PlanOp::Distinct { input } => {
+                let results = self.execute_op(input, initial_bindings)?;
+                let mut seen = std::collections::HashSet::new();
+                let mut distinct_results = Vec::new();
+
+                for (bindings, values) in results {
+                    // Use the values for deduplication (as a string for hashing)
+                    let key: Vec<String> = values.iter().map(|v| format!("{:?}", v)).collect();
+                    if seen.insert(key) {
+                        distinct_results.push((bindings, values));
+                    }
+                }
+
+                Ok(distinct_results)
+            }
+
             PlanOp::Empty => {
                 if let Some(initial) = initial_bindings {
                     Ok(vec![(initial.clone(), Vec::new())])
@@ -531,35 +544,84 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
         }
     }
 
+    /// Compute a group key from expressions (for GROUP BY).
+    fn compute_group_key(&self, group_by: &[Expr], bindings: &Bindings) -> String {
+        group_by
+            .iter()
+            .map(|e| {
+                let v = self
+                    .evaluator
+                    .eval(e, bindings, self.graph)
+                    .unwrap_or(Value::Null);
+                format!("{:?}", v)
+            })
+            .collect::<Vec<_>>()
+            .join("|")
+    }
+
     /// Compute an aggregate over a group.
     fn compute_aggregate(
         &self,
-        kind: crate::plan::AggregateKind,
+        agg: &crate::plan::AggregateSpec,
         group: &[(Bindings, Vec<Value>)],
-        expr: &mew_parser::Expr,
     ) -> QueryResult<Value> {
-        match kind {
-            crate::plan::AggregateKind::Count => Ok(Value::Int(group.len() as i64)),
+        use crate::plan::AggregateKind;
 
-            crate::plan::AggregateKind::Sum => {
-                let mut sum = 0.0f64;
+        match agg.kind {
+            AggregateKind::Count => {
+                if agg.distinct {
+                    // Count distinct values
+                    let mut seen = std::collections::HashSet::new();
+                    for (bindings, _) in group {
+                        if let Ok(val) = self.evaluator.eval(&agg.expr, bindings, self.graph) {
+                            seen.insert(format!("{:?}", val));
+                        }
+                    }
+                    Ok(Value::Int(seen.len() as i64))
+                } else {
+                    Ok(Value::Int(group.len() as i64))
+                }
+            }
+
+            AggregateKind::Sum => {
+                let mut int_sum = 0i64;
+                let mut float_sum = 0.0f64;
+                let mut has_float = false;
+
                 for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
+                    if let Ok(val) = self.evaluator.eval(&agg.expr, bindings, self.graph) {
                         match val {
-                            Value::Int(i) => sum += i as f64,
-                            Value::Float(f) => sum += f,
+                            Value::Int(i) => {
+                                if has_float {
+                                    float_sum += i as f64;
+                                } else {
+                                    int_sum += i;
+                                }
+                            }
+                            Value::Float(f) => {
+                                if !has_float {
+                                    float_sum = int_sum as f64;
+                                    has_float = true;
+                                }
+                                float_sum += f;
+                            }
                             _ => {}
                         }
                     }
                 }
-                Ok(Value::Float(sum))
+
+                if has_float {
+                    Ok(Value::Float(float_sum))
+                } else {
+                    Ok(Value::Int(int_sum))
+                }
             }
 
-            crate::plan::AggregateKind::Avg => {
+            AggregateKind::Avg => {
                 let mut sum = 0.0f64;
                 let mut count = 0;
                 for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
+                    if let Ok(val) = self.evaluator.eval(&agg.expr, bindings, self.graph) {
                         match val {
                             Value::Int(i) => {
                                 sum += i as f64;
@@ -580,52 +642,41 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 }
             }
 
-            crate::plan::AggregateKind::Min => {
-                let mut min: Option<Value> = None;
-                for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
-                        if !matches!(val, Value::Null) {
-                            min = Some(match min {
-                                None => val,
-                                Some(m) => {
-                                    if self.compare_values_inner(&val, &m)
-                                        == std::cmp::Ordering::Less
-                                    {
-                                        val
-                                    } else {
-                                        m
-                                    }
-                                }
-                            });
-                        }
-                    }
-                }
-                Ok(min.unwrap_or(Value::Null))
+            AggregateKind::Min => {
+                self.compute_min_max(group, &agg.expr, std::cmp::Ordering::Less)
             }
 
-            crate::plan::AggregateKind::Max => {
-                let mut max: Option<Value> = None;
-                for (bindings, _) in group {
-                    if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
-                        if !matches!(val, Value::Null) {
-                            max = Some(match max {
-                                None => val,
-                                Some(m) => {
-                                    if self.compare_values_inner(&val, &m)
-                                        == std::cmp::Ordering::Greater
-                                    {
-                                        val
-                                    } else {
-                                        m
-                                    }
-                                }
-                            });
-                        }
-                    }
-                }
-                Ok(max.unwrap_or(Value::Null))
+            AggregateKind::Max => {
+                self.compute_min_max(group, &agg.expr, std::cmp::Ordering::Greater)
             }
         }
+    }
+
+    /// Shared logic for MIN and MAX aggregates.
+    fn compute_min_max(
+        &self,
+        group: &[(Bindings, Vec<Value>)],
+        expr: &Expr,
+        target_order: std::cmp::Ordering,
+    ) -> QueryResult<Value> {
+        let mut result: Option<Value> = None;
+        for (bindings, _) in group {
+            if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
+                if !matches!(val, Value::Null) {
+                    result = Some(match result {
+                        None => val,
+                        Some(current) => {
+                            if self.compare_values_inner(&val, &current) == target_order {
+                                val
+                            } else {
+                                current
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        Ok(result.unwrap_or(Value::Null))
     }
 }
 

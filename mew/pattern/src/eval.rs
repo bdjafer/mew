@@ -1,9 +1,9 @@
 //! Expression evaluation.
 
-use crate::{Bindings, PatternError, PatternResult};
+use crate::{Bindings, CompiledPattern, Matcher, PatternError, PatternResult};
 use mew_core::Value;
 use mew_graph::Graph;
-use mew_parser::{BinaryOp, Expr, LiteralKind, UnaryOp};
+use mew_parser::{BinaryOp, Expr, LiteralKind, PatternElem, UnaryOp};
 use mew_registry::Registry;
 
 /// Expression evaluator.
@@ -34,11 +34,43 @@ impl<'r> Evaluator<'r> {
             Expr::FnCall(fc) => self.eval_fn_call(&fc.name, &fc.args, bindings, graph),
             Expr::IdRef(_, _) => Ok(Value::Null), // TODO: resolve ID refs
             Expr::Param(name, _) => Err(PatternError::unbound_variable(name)),
-            Expr::Exists(_, _, _) | Expr::NotExists(_, _, _) => {
-                // EXISTS/NOT EXISTS are handled by the matcher, not the evaluator
-                Ok(Value::Bool(false))
+            Expr::Exists(pattern_elems, where_clause, _) => {
+                // Compile the subpattern and check if any matches exist
+                let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
+                Ok(Value::Bool(exists))
+            }
+            Expr::NotExists(pattern_elems, where_clause, _) => {
+                // Compile the subpattern and check if no matches exist
+                let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
+                Ok(Value::Bool(!exists))
             }
         }
+    }
+
+    /// Evaluate an EXISTS/NOT EXISTS subpattern.
+    /// Uses short-circuit evaluation for better performance.
+    fn eval_exists(
+        &self,
+        pattern_elems: &[PatternElem],
+        where_clause: Option<&Expr>,
+        bindings: &Bindings,
+        graph: &Graph,
+    ) -> PatternResult<bool> {
+        // Get the names of already-bound variables
+        let prebound: Vec<String> = bindings.names().map(|s| s.to_string()).collect();
+
+        // Compile the subpattern with prebound variables
+        let mut pattern =
+            CompiledPattern::compile_with_prebound(pattern_elems, self.registry, &prebound)?;
+
+        // Add where clause as filter if present
+        if let Some(where_expr) = where_clause {
+            pattern = pattern.with_filter(where_expr.clone());
+        }
+
+        // Use short-circuit exists check instead of finding all matches
+        let matcher = Matcher::new(self.registry, graph);
+        matcher.exists(&pattern, bindings.clone())
     }
 
     /// Evaluate a literal.
@@ -181,9 +213,23 @@ impl<'r> Evaluator<'r> {
                 // For now, just return 0 - proper aggregate handling is in Query
                 Ok(Value::Int(0))
             }
-            "sum" | "avg" | "min" | "max" => {
-                // Aggregates - placeholder for now
+            "sum" | "avg" => {
+                // Aggregates - placeholder for now (handled in Query executor)
                 Ok(Value::Float(0.0))
+            }
+            "min" => {
+                // Binary min: min(a, b) returns smaller value
+                if args.len() >= 2 {
+                    return self.binary_numeric_compare(&args[0], &args[1], bindings, graph, |a, b| a < b);
+                }
+                Ok(Value::Null) // Aggregate placeholder
+            }
+            "max" => {
+                // Binary max: max(a, b) returns larger value
+                if args.len() >= 2 {
+                    return self.binary_numeric_compare(&args[0], &args[1], bindings, graph, |a, b| a > b);
+                }
+                Ok(Value::Null) // Aggregate placeholder
             }
             "coalesce" => {
                 // Return first non-null argument
@@ -224,6 +270,153 @@ impl<'r> Evaluator<'r> {
                 }
                 Err(PatternError::type_error("ABS expects one argument"))
             }
+            "is_null" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return Ok(Value::Bool(matches!(val, Value::Null)));
+                }
+                Err(PatternError::type_error("IS_NULL expects one argument"))
+            }
+            "is_not_null" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return Ok(Value::Bool(!matches!(val, Value::Null)));
+                }
+                Err(PatternError::type_error("IS_NOT_NULL expects one argument"))
+            }
+            "length" | "len" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::String(s) => Ok(Value::Int(s.len() as i64)),
+                        Value::Null => Ok(Value::Null),
+                        _ => Err(PatternError::type_error("LENGTH expects a string argument")),
+                    };
+                }
+                Err(PatternError::type_error("LENGTH expects one argument"))
+            }
+            "concat" => {
+                let mut result = String::new();
+                for arg in args {
+                    let val = self.eval(arg, bindings, graph)?;
+                    match val {
+                        Value::String(s) => result.push_str(&s),
+                        Value::Int(i) => result.push_str(&i.to_string()),
+                        Value::Float(f) => result.push_str(&f.to_string()),
+                        Value::Bool(b) => result.push_str(&b.to_string()),
+                        Value::Null => {}
+                        _ => return Err(PatternError::type_error("CONCAT expects string or primitive arguments")),
+                    }
+                }
+                Ok(Value::String(result))
+            }
+            "substring" | "substr" => {
+                // substring(string, start, length)
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let start = self.eval(&args[1], bindings, graph)?;
+
+                    if let (Value::String(s), Value::Int(start)) = (s, start) {
+                        let start_idx = start.max(0) as usize;
+
+                        let result = if args.len() >= 3 {
+                            let length = self.eval(&args[2], bindings, graph)?;
+                            if let Value::Int(len) = length {
+                                s.chars().skip(start_idx).take(len.max(0) as usize).collect()
+                            } else {
+                                s.chars().skip(start_idx).collect()
+                            }
+                        } else {
+                            s.chars().skip(start_idx).collect()
+                        };
+                        return Ok(Value::String(result));
+                    }
+                }
+                Err(PatternError::type_error("SUBSTRING expects (string, start[, length])"))
+            }
+            "trim" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::String(s) = val {
+                        return Ok(Value::String(s.trim().to_string()));
+                    }
+                }
+                Err(PatternError::type_error("TRIM expects a string argument"))
+            }
+            "starts_with" => {
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let prefix = self.eval(&args[1], bindings, graph)?;
+                    if let (Value::String(s), Value::String(prefix)) = (s, prefix) {
+                        return Ok(Value::Bool(s.starts_with(&prefix)));
+                    }
+                }
+                Err(PatternError::type_error("STARTS_WITH expects (string, prefix)"))
+            }
+            "ends_with" => {
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let suffix = self.eval(&args[1], bindings, graph)?;
+                    if let (Value::String(s), Value::String(suffix)) = (s, suffix) {
+                        return Ok(Value::Bool(s.ends_with(&suffix)));
+                    }
+                }
+                Err(PatternError::type_error("ENDS_WITH expects (string, suffix)"))
+            }
+            "contains" => {
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let pattern = self.eval(&args[1], bindings, graph)?;
+                    if let (Value::String(s), Value::String(pattern)) = (s, pattern) {
+                        return Ok(Value::Bool(s.contains(&pattern)));
+                    }
+                }
+                Err(PatternError::type_error("CONTAINS expects (string, pattern)"))
+            }
+            "replace" => {
+                if args.len() >= 3 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let from = self.eval(&args[1], bindings, graph)?;
+                    let to = self.eval(&args[2], bindings, graph)?;
+                    if let (Value::String(s), Value::String(from), Value::String(to)) = (s, from, to) {
+                        return Ok(Value::String(s.replace(&from, &to)));
+                    }
+                }
+                Err(PatternError::type_error("REPLACE expects (string, from, to)"))
+            }
+            "floor" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::Int(i) => Ok(Value::Int(i)),
+                        Value::Float(f) => Ok(Value::Float(f.floor())),
+                        _ => Err(PatternError::type_error("FLOOR expects a numeric argument")),
+                    };
+                }
+                Err(PatternError::type_error("FLOOR expects one argument"))
+            }
+            "ceil" | "ceiling" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::Int(i) => Ok(Value::Int(i)),
+                        Value::Float(f) => Ok(Value::Float(f.ceil())),
+                        _ => Err(PatternError::type_error("CEIL expects a numeric argument")),
+                    };
+                }
+                Err(PatternError::type_error("CEIL expects one argument"))
+            }
+            "round" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::Int(i) => Ok(Value::Int(i)),
+                        Value::Float(f) => Ok(Value::Float(f.round())),
+                        _ => Err(PatternError::type_error("ROUND expects a numeric argument")),
+                    };
+                }
+                Err(PatternError::type_error("ROUND expects one argument"))
+            }
             _ => Err(PatternError::invalid_operation(format!(
                 "unknown function '{}'",
                 name
@@ -232,6 +425,41 @@ impl<'r> Evaluator<'r> {
     }
 
     // ========== Arithmetic helpers ==========
+
+    /// Compare two numeric values and return the one matching the predicate.
+    /// Used for binary min/max functions.
+    fn binary_numeric_compare<F>(
+        &self,
+        left_expr: &Expr,
+        right_expr: &Expr,
+        bindings: &Bindings,
+        graph: &Graph,
+        prefer_left: F,
+    ) -> PatternResult<Value>
+    where
+        F: Fn(f64, f64) -> bool,
+    {
+        let a = self.eval(left_expr, bindings, graph)?;
+        let b = self.eval(right_expr, bindings, graph)?;
+
+        match (&a, &b) {
+            (Value::Int(av), Value::Int(bv)) => {
+                Ok(Value::Int(if prefer_left(*av as f64, *bv as f64) { *av } else { *bv }))
+            }
+            (Value::Float(av), Value::Float(bv)) => {
+                Ok(Value::Float(if prefer_left(*av, *bv) { *av } else { *bv }))
+            }
+            (Value::Int(av), Value::Float(bv)) => {
+                let af = *av as f64;
+                Ok(Value::Float(if prefer_left(af, *bv) { af } else { *bv }))
+            }
+            (Value::Float(av), Value::Int(bv)) => {
+                let bf = *bv as f64;
+                Ok(Value::Float(if prefer_left(*av, bf) { *av } else { bf }))
+            }
+            _ => Err(PatternError::type_error("MIN/MAX expects numeric arguments")),
+        }
+    }
 
     fn eval_add(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {

@@ -29,6 +29,10 @@ pub enum SessionError {
     #[error("compilation error: {0}")]
     CompileError(#[from] mew_compiler::CompileError),
 
+    /// Pattern error.
+    #[error("pattern error: {0}")]
+    PatternError(#[from] mew_pattern::PatternError),
+
     /// Session not found.
     #[error("session not found: {id}")]
     SessionNotFound { id: u64 },

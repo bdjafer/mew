@@ -16,8 +16,8 @@ use crate::block::{
     should_continue_parse,
 };
 use crate::executor::{
-    execute_inspect, execute_kill, execute_link, execute_match, execute_set, execute_spawn,
-    execute_txn, execute_unlink, execute_walk,
+    execute_inspect, execute_kill, execute_link, execute_match, execute_match_mutate, execute_set,
+    execute_spawn, execute_txn, execute_unlink, execute_walk,
 };
 use crate::format::print_help;
 
@@ -152,6 +152,12 @@ impl Repl {
             Stmt::Inspect(ref inspect_stmt) => {
                 execute_inspect(&self.registry, &self.graph, inspect_stmt)
             }
+            Stmt::MatchMutate(ref match_mutate_stmt) => execute_match_mutate(
+                &self.registry,
+                &mut self.graph,
+                &mut self.bindings,
+                match_mutate_stmt,
+            ),
         }
     }
 

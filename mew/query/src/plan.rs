@@ -63,7 +63,7 @@ pub enum PlanOp {
     Aggregate {
         input: Box<PlanOp>,
         group_by: Vec<Expr>,
-        aggregates: Vec<(String, AggregateKind, Expr)>,
+        aggregates: Vec<AggregateSpec>,
     },
 
     /// Cartesian product of two inputs.
@@ -82,6 +82,9 @@ pub enum PlanOp {
         direction: WalkDirection,
     },
 
+    /// Remove duplicate rows.
+    Distinct { input: Box<PlanOp> },
+
     /// Empty result (for patterns that can't match).
     Empty,
 }
@@ -94,6 +97,19 @@ pub enum AggregateKind {
     Avg,
     Min,
     Max,
+}
+
+/// Specification for an aggregate computation.
+#[derive(Debug, Clone)]
+pub struct AggregateSpec {
+    /// Output column name.
+    pub name: String,
+    /// Type of aggregate function.
+    pub kind: AggregateKind,
+    /// Expression to aggregate over.
+    pub expr: Expr,
+    /// Whether to only consider distinct values (e.g., COUNT(DISTINCT x)).
+    pub distinct: bool,
 }
 
 /// Walk direction.
@@ -134,9 +150,18 @@ impl<'r> QueryPlanner<'r> {
 
         // Add aggregate operator if needed (before ORDER BY)
         if has_aggregates {
+            // Extract non-aggregate expressions as implicit GROUP BY
+            let group_by: Vec<Expr> = stmt
+                .return_clause
+                .projections
+                .iter()
+                .filter(|p| self.get_aggregate(&p.expr).is_none())
+                .map(|p| p.expr.clone())
+                .collect();
+
             plan = PlanOp::Aggregate {
                 input: Box::new(plan),
-                group_by: Vec::new(), // TODO: Support GROUP BY clause
+                group_by,
                 aggregates,
             };
         }
@@ -178,6 +203,13 @@ impl<'r> QueryPlanner<'r> {
             };
         }
 
+        // Add DISTINCT if requested
+        if stmt.return_clause.distinct {
+            plan = PlanOp::Distinct {
+                input: Box::new(plan),
+            };
+        }
+
         Ok(QueryPlan {
             root: plan,
             columns,
@@ -185,32 +217,37 @@ impl<'r> QueryPlanner<'r> {
     }
 
     /// Extract aggregate functions from projections.
-    fn extract_aggregates(&self, projections: &[Projection]) -> Vec<(String, AggregateKind, Expr)> {
-        let mut aggregates = Vec::new();
-
-        for proj in projections {
-            if let Some((kind, arg)) = self.get_aggregate(&proj.expr) {
-                let name = proj
-                    .alias
-                    .clone()
-                    .unwrap_or_else(|| self.expr_to_name(&proj.expr));
-                aggregates.push((name, kind, arg));
-            }
-        }
-
-        aggregates
+    fn extract_aggregates(&self, projections: &[Projection]) -> Vec<AggregateSpec> {
+        projections
+            .iter()
+            .filter_map(|proj| {
+                self.get_aggregate(&proj.expr).map(|(kind, expr, distinct)| {
+                    AggregateSpec {
+                        name: proj
+                            .alias
+                            .clone()
+                            .unwrap_or_else(|| self.expr_to_name(&proj.expr)),
+                        kind,
+                        expr,
+                        distinct,
+                    }
+                })
+            })
+            .collect()
     }
 
-    /// Check if an expression is an aggregate function and return its kind and argument.
-    fn get_aggregate(&self, expr: &Expr) -> Option<(AggregateKind, Expr)> {
+    /// Check if an expression is an aggregate function and return its kind, argument, and distinct flag.
+    /// Note: min/max with 2 arguments are binary functions, not aggregates.
+    fn get_aggregate(&self, expr: &Expr) -> Option<(AggregateKind, Expr, bool)> {
         match expr {
             Expr::FnCall(fc) => {
                 let kind = match fc.name.to_lowercase().as_str() {
                     "count" => Some(AggregateKind::Count),
                     "sum" => Some(AggregateKind::Sum),
                     "avg" => Some(AggregateKind::Avg),
-                    "min" => Some(AggregateKind::Min),
-                    "max" => Some(AggregateKind::Max),
+                    // min/max are aggregates only with 1 arg; with 2 args they're binary functions
+                    "min" if fc.args.len() == 1 => Some(AggregateKind::Min),
+                    "max" if fc.args.len() == 1 => Some(AggregateKind::Max),
                     _ => None,
                 };
                 kind.map(|k| {
@@ -221,7 +258,7 @@ impl<'r> QueryPlanner<'r> {
                             span: fc.span,
                         })
                     });
-                    (k, arg)
+                    (k, arg, fc.distinct)
                 })
             }
             _ => None,

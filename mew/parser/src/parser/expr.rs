@@ -278,6 +278,13 @@ impl Parser {
                 // Check for function call
                 if self.check(&TokenKind::LParen) {
                     self.advance();
+
+                    // Check for DISTINCT modifier (e.g., count(DISTINCT x))
+                    let distinct = self.check(&TokenKind::Distinct);
+                    if distinct {
+                        self.advance();
+                    }
+
                     let mut args = Vec::new();
                     if !self.check(&TokenKind::RParen) {
                         args.push(self.parse_expr()?);
@@ -288,7 +295,12 @@ impl Parser {
                     }
                     self.expect(&TokenKind::RParen)?;
                     let span = self.span_from(token.span);
-                    Ok(Expr::FnCall(FnCall { name, args, span }))
+                    Ok(Expr::FnCall(FnCall {
+                        name,
+                        args,
+                        distinct,
+                        span,
+                    }))
                 } else {
                     Ok(Expr::Var(name, token.span))
                 }

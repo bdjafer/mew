@@ -3,7 +3,7 @@
 use mew_core::{EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchStmt, Stmt, TargetRef, TxnStmt, WalkStmt};
+use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, TxnStmt, WalkStmt};
 use mew_pattern::Bindings;
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -150,6 +150,11 @@ impl<'r> Session<'r> {
                 Ok(StatementResult::Query(result))
             }
 
+            Stmt::MatchMutate(match_mutate_stmt) => {
+                let result = self.execute_match_mutate(match_mutate_stmt)?;
+                Ok(StatementResult::Mutation(result))
+            }
+
             Stmt::Spawn(spawn_stmt) => {
                 let result = self.execute_spawn(spawn_stmt)?;
                 Ok(StatementResult::Mutation(result))
@@ -208,6 +213,152 @@ impl<'r> Session<'r> {
         }
 
         Ok(QueryResult::new(columns, types, rows))
+    }
+
+    /// Execute a MATCH...mutation compound statement.
+    /// This runs the MATCH to get bindings, then executes mutations for each binding row.
+    fn execute_match_mutate(&mut self, stmt: &MatchMutateStmt) -> SessionResult<MutationResult> {
+        use mew_pattern::{CompiledPattern, Matcher};
+
+        // Compile the pattern
+        let mut pattern = CompiledPattern::compile(&stmt.pattern, self.registry)?;
+
+        // Add WHERE clause as filter if present
+        if let Some(ref where_expr) = stmt.where_clause {
+            pattern = pattern.with_filter(where_expr.clone());
+        }
+
+        // Execute the pattern match to get all bindings
+        let matcher = Matcher::new(self.registry, &self.graph);
+        let bindings_list = matcher.find_all(&pattern)?;
+
+        let mut total_nodes = 0usize;
+        let mut total_edges = 0usize;
+
+        // For each set of bindings from the match, execute the mutations
+        for pattern_bindings in bindings_list {
+            // Convert pattern bindings to a HashMap for variable lookup
+            let mut local_bindings: HashMap<String, EntityId> = HashMap::new();
+
+            // Copy existing session bindings
+            for (k, v) in &self.bindings {
+                local_bindings.insert(k.clone(), *v);
+            }
+
+            // Add bindings from pattern match
+            for (var, binding) in pattern_bindings.iter() {
+                if let Some(node_id) = binding.as_node() {
+                    local_bindings.insert(var.to_string(), node_id.into());
+                } else if let Some(edge_id) = binding.as_edge() {
+                    local_bindings.insert(var.to_string(), edge_id.into());
+                }
+            }
+
+            // Execute each mutation with the current bindings
+            for mutation in &stmt.mutations {
+                match mutation {
+                    MutationAction::Link(link_stmt) => {
+                        let mut targets = Vec::new();
+                        for target_ref in &link_stmt.targets {
+                            let entity_id =
+                                self.resolve_target_ref_with_bindings(target_ref, &local_bindings)?;
+                            targets.push(entity_id);
+                        }
+
+                        let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+                        let result = executor.execute_link(link_stmt, targets)?;
+
+                        // Store edge binding if variable present
+                        if let Some(ref var) = link_stmt.var {
+                            if let Some(edge_id) = result.created_edge() {
+                                local_bindings.insert(var.clone(), edge_id.into());
+                            }
+                        }
+
+                        if result.created_edge().is_some() {
+                            total_edges += 1;
+                        }
+                    }
+                    MutationAction::Set(set_stmt) => {
+                        let target_id =
+                            self.resolve_target_with_bindings(&set_stmt.target, &local_bindings)?;
+                        let node_id = target_id.as_node().ok_or_else(|| {
+                            SessionError::invalid_statement_type("SET requires a node target")
+                        })?;
+
+                        let pb = Bindings::new();
+                        let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+                        let result = executor.execute_set(set_stmt, vec![node_id], &pb)?;
+
+                        use mew_mutation::MutationOutput;
+                        if let MutationOutput::Updated(ref u) = result {
+                            total_nodes += u.node_ids.len();
+                        }
+                    }
+                    MutationAction::Kill(kill_stmt) => {
+                        let target_id =
+                            self.resolve_target_with_bindings(&kill_stmt.target, &local_bindings)?;
+                        let node_id = target_id.as_node().ok_or_else(|| {
+                            SessionError::invalid_statement_type("KILL requires a node target")
+                        })?;
+
+                        let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+                        let result = executor.execute_kill(kill_stmt, node_id)?;
+
+                        total_nodes += result.deleted_nodes();
+                        total_edges += result.deleted_edges();
+                    }
+                    MutationAction::Unlink(unlink_stmt) => {
+                        let target_id = self
+                            .resolve_target_with_bindings(&unlink_stmt.target, &local_bindings)?;
+                        let edge_id = target_id.as_edge().ok_or_else(|| {
+                            SessionError::invalid_statement_type("UNLINK requires an edge target")
+                        })?;
+
+                        let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+                        let result = executor.execute_unlink(unlink_stmt, edge_id)?;
+
+                        total_edges += result.deleted_edges();
+                    }
+                }
+            }
+        }
+
+        Ok(MutationResult::new(total_nodes, total_edges))
+    }
+
+    /// Resolve a target using provided bindings.
+    fn resolve_target_with_bindings(
+        &self,
+        target: &mew_parser::Target,
+        bindings: &HashMap<String, EntityId>,
+    ) -> SessionResult<EntityId> {
+        match target {
+            mew_parser::Target::Var(var_name) => {
+                bindings.get(var_name).copied().ok_or_else(|| {
+                    SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
+                })
+            }
+            _ => Err(SessionError::invalid_statement_type(
+                "Only variable targets are supported in compound statements",
+            )),
+        }
+    }
+
+    /// Resolve a target reference using provided bindings.
+    fn resolve_target_ref_with_bindings(
+        &self,
+        target_ref: &TargetRef,
+        bindings: &HashMap<String, EntityId>,
+    ) -> SessionResult<EntityId> {
+        match target_ref {
+            TargetRef::Var(var_name) => bindings.get(var_name).copied().ok_or_else(|| {
+                SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
+            }),
+            _ => Err(SessionError::invalid_statement_type(
+                "Only variable targets are supported in compound statements",
+            )),
+        }
     }
 
     /// Execute a WALK statement.

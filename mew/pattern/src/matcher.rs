@@ -28,6 +28,13 @@ impl<'r, 'g> Matcher<'r, 'g> {
         self.find_all_with_initial(pattern, Bindings::new())
     }
 
+    /// Check if any match exists.
+    /// This is a convenience method that delegates to find_all_with_initial.
+    pub fn exists(&self, pattern: &CompiledPattern, initial: Bindings) -> PatternResult<bool> {
+        let matches = self.find_all_with_initial(pattern, initial)?;
+        Ok(!matches.is_empty())
+    }
+
     /// Find all matches starting with initial bindings.
     pub fn find_all_with_initial(
         &self,

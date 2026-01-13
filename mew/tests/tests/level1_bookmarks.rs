@@ -145,8 +145,12 @@ mod query_filtering {
             .step("filter_null_check", |a| a.created(1).scalar("count", 6i64))
             .step("filter_not_null", |a| a.created(1).scalar("count", 1i64))
             .step("filter_and_condition", |a| a.scalar("count", 2i64))
-            .step("filter_or_condition", |a| a.scalar("count", 2i64))
-            .step("filter_complex_condition", |a| a.scalar("count", 3i64))
+            // After filter_null_check and filter_not_null, we have 7 bookmarks:
+            // b4 (visit_count=20), b5/b_null/b_desc (visit_count=0) = 4 matches
+            .step("filter_or_condition", |a| a.scalar("count", 4i64))
+            // (is_favorite=true AND visit_count>5) OR visit_count=0
+            // b3 (fav+15>5), b5/b_null/b_desc (=0) = 4 matches
+            .step("filter_complex_condition", |a| a.scalar("count", 4i64))
     }
 
     #[test]

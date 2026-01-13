@@ -48,8 +48,19 @@ impl CompiledPattern {
 
     /// Compile a pattern from AST elements.
     pub fn compile(elements: &[PatternElem], registry: &Registry) -> PatternResult<Self> {
+        Self::compile_with_prebound(elements, registry, &[])
+    }
+
+    /// Compile a pattern from AST elements with pre-bound variables.
+    /// Used for EXISTS subpatterns where outer pattern variables are already bound.
+    pub fn compile_with_prebound(
+        elements: &[PatternElem],
+        registry: &Registry,
+        prebound: &[String],
+    ) -> PatternResult<Self> {
         let mut ops = Vec::new();
-        let mut bound_vars = Vec::new();
+        let mut bound_vars: Vec<String> = prebound.to_vec();
+        let mut new_vars: Vec<String> = Vec::new();
 
         for elem in elements {
             match elem {
@@ -57,12 +68,14 @@ impl CompiledPattern {
                     let op = compile_node_pattern(node, registry)?;
                     ops.push(op);
                     bound_vars.push(node.var.clone());
+                    new_vars.push(node.var.clone());
                 }
                 PatternElem::Edge(edge) => {
                     let op = compile_edge_pattern(edge, registry, &bound_vars)?;
                     ops.push(op);
                     if let Some(alias) = &edge.alias {
                         bound_vars.push(alias.clone());
+                        new_vars.push(alias.clone());
                     }
                 }
             }
@@ -70,7 +83,7 @@ impl CompiledPattern {
 
         Ok(Self {
             ops,
-            output_vars: bound_vars,
+            output_vars: new_vars,
         })
     }
 
