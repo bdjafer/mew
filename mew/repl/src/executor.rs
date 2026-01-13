@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use mew_core::EntityId;
+use mew_core::{messages, EntityId};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
 use mew_parser::{InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Target, TargetRef, TxnStmt, WalkStmt};
@@ -206,7 +206,7 @@ pub fn execute_kill(
     let target_id = resolve_target(&stmt.target, bindings)?;
     let node_id = target_id
         .as_node()
-        .ok_or_else(|| "KILL requires a node target".to_string())?;
+        .ok_or_else(|| messages::ERR_KILL_REQUIRES_NODE.to_string())?;
 
     let mut executor = MutationExecutor::new(registry, graph);
     let result = executor
@@ -255,7 +255,7 @@ pub fn execute_unlink(
     let target_id = resolve_target(&stmt.target, bindings)?;
     let edge_id = target_id
         .as_edge()
-        .ok_or_else(|| "UNLINK requires an edge target".to_string())?;
+        .ok_or_else(|| messages::ERR_UNLINK_REQUIRES_EDGE.to_string())?;
 
     let mut executor = MutationExecutor::new(registry, graph);
     let result = executor
@@ -276,7 +276,7 @@ pub fn execute_set(
     let target_id = resolve_target(&stmt.target, bindings)?;
     let node_id = target_id
         .as_node()
-        .ok_or_else(|| "SET requires a node target".to_string())?;
+        .ok_or_else(|| messages::ERR_SET_REQUIRES_NODE.to_string())?;
 
     let pattern_bindings = to_pattern_bindings(bindings);
     let mut executor = MutationExecutor::new(registry, graph);
@@ -285,7 +285,7 @@ pub fn execute_set(
         .map_err(|e| format!("Set error: {}", e))?;
 
     let updated = match result {
-        mew_mutation::MutationOutput::Updated(ref updated) => updated.node_ids.len(),
+        mew_mutation::MutationOutcome::Updated(ref updated) => updated.node_ids.len(),
         _ => 0,
     };
     Ok(format!("Updated {} nodes", updated))
@@ -329,7 +329,7 @@ pub fn resolve_target(
             .copied()
             .ok_or_else(|| format!("Unknown variable: {}", name)),
         Target::Id(_) | Target::Pattern(_) | Target::EdgePattern { .. } => {
-            Err("Only variable targets are supported in direct REPL execution".to_string())
+            Err(messages::ERR_ONLY_VAR_TARGETS.to_string())
         }
     }
 }
@@ -345,7 +345,7 @@ pub fn resolve_target_ref(
             .copied()
             .ok_or_else(|| format!("Unknown variable: {}", name)),
         TargetRef::Id(_) | TargetRef::Pattern(_) => {
-            Err("Only variable targets are supported".to_string())
+            Err(messages::ERR_ONLY_VAR_TARGETS.to_string())
         }
     }
 }
@@ -446,7 +446,7 @@ pub fn execute_match_mutate(
                     let target_id = resolve_target(&set_stmt.target, &local_bindings)?;
                     let node_id = target_id
                         .as_node()
-                        .ok_or_else(|| "SET requires a node target".to_string())?;
+                        .ok_or_else(|| messages::ERR_SET_REQUIRES_NODE.to_string())?;
 
                     let pb = Bindings::new();
                     let mut executor = MutationExecutor::new(registry, graph);
@@ -454,8 +454,8 @@ pub fn execute_match_mutate(
                         .execute_set(set_stmt, vec![node_id], &pb)
                         .map_err(|e| format!("Set error: {}", e))?;
 
-                    use mew_mutation::MutationOutput;
-                    if let MutationOutput::Updated(ref u) = result {
+                    use mew_mutation::MutationOutcome;
+                    if let MutationOutcome::Updated(ref u) = result {
                         total_nodes += u.node_ids.len();
                     }
                 }
@@ -463,7 +463,7 @@ pub fn execute_match_mutate(
                     let target_id = resolve_target(&kill_stmt.target, &local_bindings)?;
                     let node_id = target_id
                         .as_node()
-                        .ok_or_else(|| "KILL requires a node target".to_string())?;
+                        .ok_or_else(|| messages::ERR_KILL_REQUIRES_NODE.to_string())?;
 
                     let mut executor = MutationExecutor::new(registry, graph);
                     let result = executor
@@ -477,7 +477,7 @@ pub fn execute_match_mutate(
                     let target_id = resolve_target(&unlink_stmt.target, &local_bindings)?;
                     let edge_id = target_id
                         .as_edge()
-                        .ok_or_else(|| "UNLINK requires an edge target".to_string())?;
+                        .ok_or_else(|| messages::ERR_UNLINK_REQUIRES_EDGE.to_string())?;
 
                     let mut executor = MutationExecutor::new(registry, graph);
                     let result = executor

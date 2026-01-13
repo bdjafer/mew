@@ -6,10 +6,12 @@
 //! - Value types (the Value enum with all scalar and reference types)
 //! - Entity structures (Node, Edge)
 //! - Common error types
+//! - Shared error messages
 
 mod entity;
 mod error;
 mod id;
+pub mod messages;
 mod value;
 
 pub use entity::*;

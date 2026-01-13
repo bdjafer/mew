@@ -5,14 +5,14 @@ use mew_graph::Graph;
 use mew_parser::UnlinkStmt;
 
 use crate::error::{MutationError, MutationResult};
-use crate::result::{DeletedEntities, MutationResult as MutationOutput};
+use crate::result::{DeletedEntities, MutationOutcome};
 
 /// Execute an UNLINK statement to delete an edge.
 pub fn execute_unlink(
     graph: &mut Graph,
     _stmt: &UnlinkStmt,
     target_id: EdgeId,
-) -> MutationResult<MutationOutput> {
+) -> MutationResult<MutationOutcome> {
     // Check edge exists
     if graph.get_edge(target_id).is_none() {
         return Err(MutationError::EdgeNotFound(target_id));
@@ -32,7 +32,7 @@ pub fn execute_unlink(
     let _ = graph.delete_edge(target_id);
     deleted_edges.push(target_id);
 
-    Ok(MutationOutput::Deleted(
+    Ok(MutationOutcome::Deleted(
         DeletedEntities::edge(target_id).with_cascade_edges(deleted_edges),
     ))
 }

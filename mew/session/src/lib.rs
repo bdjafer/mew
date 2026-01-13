@@ -14,5 +14,5 @@ mod result;
 mod session;
 
 pub use error::{SessionError, SessionResult};
-pub use result::{MutationResult, QueryResult, StatementResult, TransactionResult};
+pub use result::{MutationSummary, QueryResult, StatementResult, TransactionResult};
 pub use session::{Session, SessionId, SessionManager};

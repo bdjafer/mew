@@ -8,7 +8,7 @@ use mew_registry::Registry;
 use std::collections::{HashSet, VecDeque};
 
 use crate::error::{MutationError, MutationResult};
-use crate::result::{CreatedEntity, MutationResult as MutationOutput};
+use crate::result::{CreatedEntity, MutationOutcome};
 
 /// Execute a LINK statement to create an edge.
 pub fn execute_link(
@@ -17,7 +17,7 @@ pub fn execute_link(
     evaluator: &Evaluator,
     stmt: &LinkStmt,
     target_ids: Vec<EntityId>,
-) -> MutationResult<MutationOutput> {
+) -> MutationResult<MutationOutcome> {
     // Look up the edge type
     let edge_type_id = registry
         .get_edge_type_id(&stmt.edge_type)
@@ -80,7 +80,7 @@ pub fn execute_link(
         .create_edge(edge_type_id, target_ids, attrs)
         .map_err(|e| MutationError::pattern_error(e.to_string()))?;
 
-    Ok(MutationOutput::Created(CreatedEntity::edge(edge_id)))
+    Ok(MutationOutcome::Created(CreatedEntity::edge(edge_id)))
 }
 
 /// Ensure creating this edge wouldn't create a cycle (for acyclic edge types).

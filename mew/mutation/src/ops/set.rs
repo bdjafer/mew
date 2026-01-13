@@ -7,7 +7,7 @@ use mew_pattern::{Bindings, Evaluator};
 use mew_registry::Registry;
 
 use crate::error::{MutationError, MutationResult};
-use crate::result::{MutationResult as MutationOutput, UpdatedEntities};
+use crate::result::{MutationOutcome, UpdatedEntities};
 use crate::validation;
 
 /// Execute a SET statement to update node attributes.
@@ -18,7 +18,7 @@ pub fn execute_set(
     stmt: &SetStmt,
     node_ids: Vec<NodeId>,
     bindings: &Bindings,
-) -> MutationResult<MutationOutput> {
+) -> MutationResult<MutationOutcome> {
     let mut updated_ids = Vec::new();
 
     for node_id in node_ids {
@@ -55,5 +55,5 @@ pub fn execute_set(
         updated_ids.push(node_id);
     }
 
-    Ok(MutationOutput::Updated(UpdatedEntities::nodes(updated_ids)))
+    Ok(MutationOutcome::Updated(UpdatedEntities::nodes(updated_ids)))
 }

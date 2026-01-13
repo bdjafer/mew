@@ -3,9 +3,9 @@
 use mew_core::{EdgeId, NodeId, Value};
 use std::collections::HashMap;
 
-/// Result of a mutation operation.
+/// Outcome of a mutation operation.
 #[derive(Debug, Clone)]
-pub enum MutationResult {
+pub enum MutationOutcome {
     /// Created a node.
     Created(CreatedEntity),
     /// Deleted entities.
@@ -16,11 +16,11 @@ pub enum MutationResult {
     Empty,
 }
 
-impl MutationResult {
+impl MutationOutcome {
     /// Get created node ID if this is a Created result.
     pub fn created_node(&self) -> Option<NodeId> {
         match self {
-            MutationResult::Created(e) => e.node_id,
+            MutationOutcome::Created(e) => e.node_id,
             _ => None,
         }
     }
@@ -28,7 +28,7 @@ impl MutationResult {
     /// Get created edge ID if this is a Created result.
     pub fn created_edge(&self) -> Option<EdgeId> {
         match self {
-            MutationResult::Created(e) => e.edge_id,
+            MutationOutcome::Created(e) => e.edge_id,
             _ => None,
         }
     }
@@ -36,7 +36,7 @@ impl MutationResult {
     /// Get deleted node count.
     pub fn deleted_nodes(&self) -> usize {
         match self {
-            MutationResult::Deleted(d) => d.node_ids.len(),
+            MutationOutcome::Deleted(d) => d.node_ids.len(),
             _ => 0,
         }
     }
@@ -44,7 +44,7 @@ impl MutationResult {
     /// Get deleted edge count.
     pub fn deleted_edges(&self) -> usize {
         match self {
-            MutationResult::Deleted(d) => d.edge_ids.len(),
+            MutationOutcome::Deleted(d) => d.edge_ids.len(),
             _ => 0,
         }
     }
@@ -154,7 +154,7 @@ mod tests {
     fn test_created_entity_node() {
         // GIVEN
         let node_id = NodeId::new(1);
-        let result = MutationResult::Created(CreatedEntity::node(node_id));
+        let result = MutationOutcome::Created(CreatedEntity::node(node_id));
 
         // THEN
         assert_eq!(result.created_node(), Some(node_id));
@@ -167,7 +167,7 @@ mod tests {
         let node_ids = vec![NodeId::new(1), NodeId::new(2)];
         let edge_ids = vec![EdgeId::new(1)];
         let result =
-            MutationResult::Deleted(DeletedEntities::nodes(node_ids).with_cascade_edges(edge_ids));
+            MutationOutcome::Deleted(DeletedEntities::nodes(node_ids).with_cascade_edges(edge_ids));
 
         // THEN
         assert_eq!(result.deleted_nodes(), 2);

@@ -7,7 +7,7 @@ use mew_registry::{EdgeTypeDef, OnKillAction, Registry};
 use std::collections::{HashSet, VecDeque};
 
 use crate::error::{MutationError, MutationResult};
-use crate::result::{DeletedEntities, MutationResult as MutationOutput};
+use crate::result::{DeletedEntities, MutationOutcome};
 
 /// Execute a KILL statement to delete a node and handle cascades.
 pub fn execute_kill(
@@ -15,7 +15,7 @@ pub fn execute_kill(
     graph: &mut Graph,
     stmt: &KillStmt,
     target_id: NodeId,
-) -> MutationResult<MutationOutput> {
+) -> MutationResult<MutationOutcome> {
     // Check node exists
     if graph.get_node(target_id).is_none() {
         return Err(MutationError::NodeNotFound(target_id));
@@ -59,7 +59,7 @@ pub fn execute_kill(
         deleted_nodes.insert(node_id);
     }
 
-    Ok(MutationOutput::Deleted(
+    Ok(MutationOutcome::Deleted(
         DeletedEntities::nodes(deleted_nodes.into_iter().collect())
             .with_cascade_edges(deleted_edges.into_iter().collect()),
     ))

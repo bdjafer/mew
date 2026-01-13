@@ -15,7 +15,7 @@ use mew_registry::Registry;
 
 use crate::error::MutationResult;
 use crate::ops;
-use crate::result::MutationResult as MutationOutput;
+use crate::result::MutationOutcome;
 
 /// Mutation executor.
 pub struct MutationExecutor<'r, 'g> {
@@ -39,7 +39,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         &mut self,
         stmt: &SpawnStmt,
         bindings: &Bindings,
-    ) -> MutationResult<MutationOutput> {
+    ) -> MutationResult<MutationOutcome> {
         ops::execute_spawn(self.registry, self.graph, &self.evaluator, stmt, bindings)
     }
 
@@ -48,7 +48,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         &mut self,
         stmt: &KillStmt,
         target_id: NodeId,
-    ) -> MutationResult<MutationOutput> {
+    ) -> MutationResult<MutationOutcome> {
         ops::execute_kill(self.registry, self.graph, stmt, target_id)
     }
 
@@ -57,7 +57,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         &mut self,
         stmt: &LinkStmt,
         target_ids: Vec<EntityId>,
-    ) -> MutationResult<MutationOutput> {
+    ) -> MutationResult<MutationOutcome> {
         ops::execute_link(self.registry, self.graph, &self.evaluator, stmt, target_ids)
     }
 
@@ -66,7 +66,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         &mut self,
         stmt: &UnlinkStmt,
         target_id: EdgeId,
-    ) -> MutationResult<MutationOutput> {
+    ) -> MutationResult<MutationOutcome> {
         ops::execute_unlink(self.graph, stmt, target_id)
     }
 
@@ -76,7 +76,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         stmt: &SetStmt,
         node_ids: Vec<NodeId>,
         bindings: &Bindings,
-    ) -> MutationResult<MutationOutput> {
+    ) -> MutationResult<MutationOutcome> {
         ops::execute_set(
             self.registry,
             self.graph,
