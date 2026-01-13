@@ -6,7 +6,7 @@ use mew_core::{messages, EntityId};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
 use mew_parser::{InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Target, TargetRef, TxnStmt, WalkStmt};
-use mew_pattern::{Binding, Bindings};
+use mew_pattern::{target, Binding, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
 
@@ -319,19 +319,15 @@ pub fn execute_txn(in_transaction: &mut bool, stmt: &TxnStmt) -> Result<String, 
 }
 
 /// Resolve a target to an entity ID.
+///
+/// Note: REPL only supports variable targets, not edge patterns.
+/// For edge pattern support, use session which has registry/graph access.
 pub fn resolve_target(
-    target: &Target,
+    t: &Target,
     bindings: &HashMap<String, EntityId>,
 ) -> Result<EntityId, String> {
-    match target {
-        Target::Var(name) => bindings
-            .get(name)
-            .copied()
-            .ok_or_else(|| format!("Unknown variable: {}", name)),
-        Target::Id(_) | Target::Pattern(_) | Target::EdgePattern { .. } => {
-            Err(messages::ERR_ONLY_VAR_TARGETS.to_string())
-        }
-    }
+    target::resolve_var_target(t, bindings)
+        .map_err(|e| e.to_string())
 }
 
 /// Resolve a target reference to an entity ID.
@@ -339,15 +335,8 @@ pub fn resolve_target_ref(
     target_ref: &TargetRef,
     bindings: &HashMap<String, EntityId>,
 ) -> Result<EntityId, String> {
-    match target_ref {
-        TargetRef::Var(name) => bindings
-            .get(name)
-            .copied()
-            .ok_or_else(|| format!("Unknown variable: {}", name)),
-        TargetRef::Id(_) | TargetRef::Pattern(_) => {
-            Err(messages::ERR_ONLY_VAR_TARGETS.to_string())
-        }
-    }
+    target::resolve_target_ref(target_ref, bindings)
+        .map_err(|e| e.to_string())
 }
 
 /// Convert REPL bindings to pattern bindings.

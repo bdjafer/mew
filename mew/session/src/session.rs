@@ -4,7 +4,7 @@ use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
 use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, TxnStmt, WalkStmt};
-use mew_pattern::Bindings;
+use mew_pattern::{target, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
 use std::collections::HashMap;
@@ -330,19 +330,10 @@ impl<'r> Session<'r> {
     /// Resolve a target using provided bindings.
     fn resolve_target_with_bindings(
         &self,
-        target: &mew_parser::Target,
+        t: &mew_parser::Target,
         bindings: &HashMap<String, EntityId>,
     ) -> SessionResult<EntityId> {
-        match target {
-            mew_parser::Target::Var(var_name) => {
-                bindings.get(var_name).copied().ok_or_else(|| {
-                    SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
-                })
-            }
-            _ => Err(SessionError::invalid_statement_type(
-                messages::ERR_ONLY_VAR_TARGETS_COMPOUND,
-            )),
-        }
+        Ok(target::resolve_target(t, bindings, self.registry, &self.graph)?)
     }
 
     /// Resolve a target reference using provided bindings.
@@ -351,14 +342,7 @@ impl<'r> Session<'r> {
         target_ref: &TargetRef,
         bindings: &HashMap<String, EntityId>,
     ) -> SessionResult<EntityId> {
-        match target_ref {
-            TargetRef::Var(var_name) => bindings.get(var_name).copied().ok_or_else(|| {
-                SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
-            }),
-            _ => Err(SessionError::invalid_statement_type(
-                messages::ERR_ONLY_VAR_TARGETS_COMPOUND,
-            )),
-        }
+        Ok(target::resolve_target_ref(target_ref, bindings)?)
     }
 
     /// Execute a WALK statement.
@@ -574,84 +558,13 @@ impl<'r> Session<'r> {
     }
 
     /// Resolve a target to an EntityId.
-    fn resolve_target(&self, target: &mew_parser::Target) -> SessionResult<EntityId> {
-        match target {
-            mew_parser::Target::Var(var_name) => {
-                self.bindings.get(var_name).copied().ok_or_else(|| {
-                    SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
-                })
-            }
-            mew_parser::Target::Id(_) | mew_parser::Target::Pattern(_) => Err(
-                SessionError::invalid_statement_type(messages::ERR_ONLY_VAR_TARGETS),
-            ),
-            mew_parser::Target::EdgePattern { edge_type, targets } => {
-                // Resolve target variables to node IDs
-                let mut target_ids = Vec::new();
-                for target_var in targets {
-                    let id = self.bindings.get(target_var).copied().ok_or_else(|| {
-                        SessionError::invalid_statement_type(format!(
-                            "Unknown variable in edge pattern: {}",
-                            target_var
-                        ))
-                    })?;
-                    target_ids.push(id);
-                }
-
-                // Find edge type ID
-                let edge_type_id = self.registry.get_edge_type_id(edge_type).ok_or_else(|| {
-                    SessionError::invalid_statement_type(format!(
-                        "Unknown edge type: {}",
-                        edge_type
-                    ))
-                })?;
-
-                // Find edge between the nodes
-                if target_ids.len() < 2 {
-                    return Err(SessionError::invalid_statement_type(
-                        messages::ERR_EDGE_PATTERN_MIN_TARGETS,
-                    ));
-                }
-
-                let source_node_id = target_ids[0]
-                    .as_node()
-                    .ok_or_else(|| SessionError::invalid_statement_type(messages::ERR_SOURCE_MUST_BE_NODE))?;
-                let target_node_id = target_ids[1]
-                    .as_node()
-                    .ok_or_else(|| SessionError::invalid_statement_type(messages::ERR_TARGET_MUST_BE_NODE))?;
-
-                // Search for matching edge
-                for edge_id in self.graph.edges_from(source_node_id, None) {
-                    if let Some(edge) = self.graph.get_edge(edge_id) {
-                        if edge.type_id == edge_type_id {
-                            let targets = &edge.targets;
-                            if targets.len() >= 2
-                                && targets[0].as_node() == Some(source_node_id)
-                                && targets[1].as_node() == Some(target_node_id)
-                            {
-                                return Ok(edge_id.into());
-                            }
-                        }
-                    }
-                }
-
-                Err(SessionError::invalid_statement_type(format!(
-                    "No edge of type '{}' found between specified nodes",
-                    edge_type
-                )))
-            }
-        }
+    fn resolve_target(&self, t: &mew_parser::Target) -> SessionResult<EntityId> {
+        Ok(target::resolve_target(t, &self.bindings, self.registry, &self.graph)?)
     }
 
     /// Resolve a target reference to an EntityId.
     fn resolve_target_ref(&self, target_ref: &TargetRef) -> SessionResult<EntityId> {
-        match target_ref {
-            TargetRef::Var(var_name) => self.bindings.get(var_name).copied().ok_or_else(|| {
-                SessionError::invalid_statement_type(format!("Unknown variable: {}", var_name))
-            }),
-            TargetRef::Id(_) | TargetRef::Pattern(_) => Err(SessionError::invalid_statement_type(
-                messages::ERR_ONLY_VAR_TARGETS,
-            )),
-        }
+        Ok(target::resolve_target_ref(target_ref, &self.bindings)?)
     }
 
     /// Execute a transaction statement.
