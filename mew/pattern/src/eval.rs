@@ -48,6 +48,7 @@ impl<'r> Evaluator<'r> {
     }
 
     /// Evaluate an EXISTS/NOT EXISTS subpattern.
+    /// Uses short-circuit evaluation for better performance.
     fn eval_exists(
         &self,
         pattern_elems: &[PatternElem],
@@ -67,12 +68,9 @@ impl<'r> Evaluator<'r> {
             pattern = pattern.with_filter(where_expr.clone());
         }
 
-        // Use the matcher to find matches, starting with current bindings
+        // Use short-circuit exists check instead of finding all matches
         let matcher = Matcher::new(self.registry, graph);
-        let matches = matcher.find_all_with_initial(&pattern, bindings.clone())?;
-
-        // Return true if any matches exist
-        Ok(!matches.is_empty())
+        matcher.exists(&pattern, bindings.clone())
     }
 
     /// Evaluate a literal.
