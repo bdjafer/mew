@@ -542,17 +542,38 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
             crate::plan::AggregateKind::Count => Ok(Value::Int(group.len() as i64)),
 
             crate::plan::AggregateKind::Sum => {
-                let mut sum = 0.0f64;
+                let mut int_sum = 0i64;
+                let mut float_sum = 0.0f64;
+                let mut has_float = false;
+
                 for (bindings, _) in group {
                     if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
                         match val {
-                            Value::Int(i) => sum += i as f64,
-                            Value::Float(f) => sum += f,
+                            Value::Int(i) => {
+                                if has_float {
+                                    float_sum += i as f64;
+                                } else {
+                                    int_sum += i;
+                                }
+                            }
+                            Value::Float(f) => {
+                                if !has_float {
+                                    // Convert accumulated int sum to float
+                                    float_sum = int_sum as f64;
+                                    has_float = true;
+                                }
+                                float_sum += f;
+                            }
                             _ => {}
                         }
                     }
                 }
-                Ok(Value::Float(sum))
+
+                if has_float {
+                    Ok(Value::Float(float_sum))
+                } else {
+                    Ok(Value::Int(int_sum))
+                }
             }
 
             crate::plan::AggregateKind::Avg => {
