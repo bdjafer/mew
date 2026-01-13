@@ -63,7 +63,7 @@ pub enum PlanOp {
     Aggregate {
         input: Box<PlanOp>,
         group_by: Vec<Expr>,
-        aggregates: Vec<(String, AggregateKind, Expr, bool)>, // (name, kind, expr, distinct)
+        aggregates: Vec<AggregateSpec>,
     },
 
     /// Cartesian product of two inputs.
@@ -97,6 +97,19 @@ pub enum AggregateKind {
     Avg,
     Min,
     Max,
+}
+
+/// Specification for an aggregate computation.
+#[derive(Debug, Clone)]
+pub struct AggregateSpec {
+    /// Output column name.
+    pub name: String,
+    /// Type of aggregate function.
+    pub kind: AggregateKind,
+    /// Expression to aggregate over.
+    pub expr: Expr,
+    /// Whether to only consider distinct values (e.g., COUNT(DISTINCT x)).
+    pub distinct: bool,
 }
 
 /// Walk direction.
@@ -204,23 +217,23 @@ impl<'r> QueryPlanner<'r> {
     }
 
     /// Extract aggregate functions from projections.
-    fn extract_aggregates(
-        &self,
-        projections: &[Projection],
-    ) -> Vec<(String, AggregateKind, Expr, bool)> {
-        let mut aggregates = Vec::new();
-
-        for proj in projections {
-            if let Some((kind, arg, distinct)) = self.get_aggregate(&proj.expr) {
-                let name = proj
-                    .alias
-                    .clone()
-                    .unwrap_or_else(|| self.expr_to_name(&proj.expr));
-                aggregates.push((name, kind, arg, distinct));
-            }
-        }
-
-        aggregates
+    fn extract_aggregates(&self, projections: &[Projection]) -> Vec<AggregateSpec> {
+        projections
+            .iter()
+            .filter_map(|proj| {
+                self.get_aggregate(&proj.expr).map(|(kind, expr, distinct)| {
+                    AggregateSpec {
+                        name: proj
+                            .alias
+                            .clone()
+                            .unwrap_or_else(|| self.expr_to_name(&proj.expr)),
+                        kind,
+                        expr,
+                        distinct,
+                    }
+                })
+            })
+            .collect()
     }
 
     /// Check if an expression is an aggregate function and return its kind, argument, and distinct flag.

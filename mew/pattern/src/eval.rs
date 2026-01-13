@@ -218,44 +218,18 @@ impl<'r> Evaluator<'r> {
                 Ok(Value::Float(0.0))
             }
             "min" => {
-                // Binary min function: min(a, b) returns the smaller value
+                // Binary min: min(a, b) returns smaller value
                 if args.len() >= 2 {
-                    let a = self.eval(&args[0], bindings, graph)?;
-                    let b = self.eval(&args[1], bindings, graph)?;
-                    return match (&a, &b) {
-                        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.min(b))),
-                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.min(*b))),
-                        (Value::Int(a), Value::Float(b)) => {
-                            Ok(Value::Float((*a as f64).min(*b)))
-                        }
-                        (Value::Float(a), Value::Int(b)) => {
-                            Ok(Value::Float(a.min(*b as f64)))
-                        }
-                        _ => Err(PatternError::type_error("MIN expects numeric arguments")),
-                    };
+                    return self.binary_numeric_compare(&args[0], &args[1], bindings, graph, |a, b| a < b);
                 }
-                // Single arg: aggregate placeholder (handled in Query executor)
-                Ok(Value::Null)
+                Ok(Value::Null) // Aggregate placeholder
             }
             "max" => {
-                // Binary max function: max(a, b) returns the larger value
+                // Binary max: max(a, b) returns larger value
                 if args.len() >= 2 {
-                    let a = self.eval(&args[0], bindings, graph)?;
-                    let b = self.eval(&args[1], bindings, graph)?;
-                    return match (&a, &b) {
-                        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.max(b))),
-                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
-                        (Value::Int(a), Value::Float(b)) => {
-                            Ok(Value::Float((*a as f64).max(*b)))
-                        }
-                        (Value::Float(a), Value::Int(b)) => {
-                            Ok(Value::Float(a.max(*b as f64)))
-                        }
-                        _ => Err(PatternError::type_error("MAX expects numeric arguments")),
-                    };
+                    return self.binary_numeric_compare(&args[0], &args[1], bindings, graph, |a, b| a > b);
                 }
-                // Single arg: aggregate placeholder (handled in Query executor)
-                Ok(Value::Null)
+                Ok(Value::Null) // Aggregate placeholder
             }
             "coalesce" => {
                 // Return first non-null argument
@@ -452,6 +426,41 @@ impl<'r> Evaluator<'r> {
     }
 
     // ========== Arithmetic helpers ==========
+
+    /// Compare two numeric values and return the one matching the predicate.
+    /// Used for binary min/max functions.
+    fn binary_numeric_compare<F>(
+        &self,
+        left_expr: &Expr,
+        right_expr: &Expr,
+        bindings: &Bindings,
+        graph: &Graph,
+        prefer_left: F,
+    ) -> PatternResult<Value>
+    where
+        F: Fn(f64, f64) -> bool,
+    {
+        let a = self.eval(left_expr, bindings, graph)?;
+        let b = self.eval(right_expr, bindings, graph)?;
+
+        match (&a, &b) {
+            (Value::Int(av), Value::Int(bv)) => {
+                Ok(Value::Int(if prefer_left(*av as f64, *bv as f64) { *av } else { *bv }))
+            }
+            (Value::Float(av), Value::Float(bv)) => {
+                Ok(Value::Float(if prefer_left(*av, *bv) { *av } else { *bv }))
+            }
+            (Value::Int(av), Value::Float(bv)) => {
+                let af = *av as f64;
+                Ok(Value::Float(if prefer_left(af, *bv) { af } else { *bv }))
+            }
+            (Value::Float(av), Value::Int(bv)) => {
+                let bf = *bv as f64;
+                Ok(Value::Float(if prefer_left(*av, bf) { *av } else { bf }))
+            }
+            _ => Err(PatternError::type_error("MIN/MAX expects numeric arguments")),
+        }
+    }
 
     fn eval_add(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
