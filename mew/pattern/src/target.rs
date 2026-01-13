@@ -45,7 +45,7 @@ pub enum TargetError {
     },
 
     /// No edge found matching the pattern.
-    #[error("No edge of type '{edge_type}' found between specified nodes")]
+    #[error("Edge not found: no edge of type '{edge_type}' between specified nodes")]
     EdgeNotFound { edge_type: String },
 }
 
@@ -232,7 +232,7 @@ mod tests {
 
         // THEN
         assert!(result.is_err());
-        assert!(matches!(result, Err(TargetError::UnknownVariable(_))));
+        assert!(matches!(result, Err(TargetError::UnknownVariable { .. })));
     }
 
     #[test]

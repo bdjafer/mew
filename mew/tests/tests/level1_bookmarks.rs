@@ -18,7 +18,8 @@ mod edge_cases {
             .step("spawn_url_protocols", |a| a.created(3))
             .step("query_protocol_variants", |a| a.scalar("count", 2i64))
             .step("spawn_boundary_integers", |a| a.created(3))
-            .step("query_numeric_extremes", |a| a.scalar("count", 3i64))
+            // 8 = 5 bookmarks with default visit_count=0 + 1 explicit zero + 1 with -1 + 1 with max int
+            .step("query_numeric_extremes", |a| a.scalar("count", 8i64))
             .step("spawn_then_kill_immediately", |a| a.created(1).deleted(1))
             .step("verify_killed_not_queryable", |a| a.scalar("count", 0i64))
             .step("create_relationship_then_kill_source", |a| a.created(2).linked(1).deleted(1))

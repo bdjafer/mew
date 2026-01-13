@@ -39,8 +39,8 @@ pub fn execute_set(
             // Evaluate the value
             let value = evaluator.eval(&assign.value, bindings, graph)?;
 
-            // Validate attribute
-            validation::validate_attribute(registry, &type_name, type_id, &assign.name, &value)?;
+            // Validate attribute (is_update=true since we're modifying an existing node)
+            validation::validate_attribute(registry, &type_name, type_id, &assign.name, &value, true)?;
 
             new_attrs.push((assign.name.clone(), value));
         }
