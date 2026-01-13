@@ -163,12 +163,17 @@ pub struct KillStmt {
     pub span: Span,
 }
 
-/// Target for KILL/SET operations.
+/// Target for KILL/SET/UNLINK operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Target {
     Var(String),
     Id(String),
     Pattern(Box<MatchStmt>),
+    /// Edge pattern: edge_type(targets) - used for UNLINK
+    EdgePattern {
+        edge_type: String,
+        targets: Vec<String>,
+    },
 }
 
 // ==================== LINK ====================
@@ -466,6 +471,10 @@ pub enum AttrModifier {
     InValues(Vec<Expr>),
     /// match: "regex" - regex pattern for validation
     Match(String),
+    /// length: N..M - string length constraint
+    Length { min: i64, max: i64 },
+    /// format: email, url, uuid, etc. - built-in format validation
+    Format(String),
 }
 
 /// Edge type definition.

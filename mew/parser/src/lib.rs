@@ -13,4 +13,4 @@ mod parser;
 
 pub use ast::*;
 pub use error::*;
-pub use parser::{parse_ontology, parse_stmt, Parser};
+pub use parser::{parse_ontology, parse_stmt, parse_stmts, Parser};

@@ -160,6 +160,11 @@ pub fn parse_stmt(input: &str) -> ParseResult<Stmt> {
     Parser::new(input)?.parse_stmt()
 }
 
+/// Parse multiple statements from source text.
+pub fn parse_stmts(input: &str) -> ParseResult<Vec<Stmt>> {
+    Parser::new(input)?.parse_stmts()
+}
+
 /// Parse a MATCH statement from source text.
 #[allow(dead_code)]
 pub fn parse_match(input: &str) -> ParseResult<MatchStmt> {

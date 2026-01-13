@@ -3,7 +3,7 @@
 use mew_core::{EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{parse_stmt, InspectStmt, MatchStmt, Stmt, TargetRef, TxnStmt, WalkStmt};
+use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchStmt, Stmt, TargetRef, TxnStmt, WalkStmt};
 use mew_pattern::Bindings;
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -97,6 +97,49 @@ impl<'r> Session<'r> {
         let stmt = parse_stmt(input)?;
 
         self.execute_statement(&stmt)
+    }
+
+    /// Execute multiple statements from a string.
+    /// Returns aggregated mutation results (sums created/deleted nodes and edges).
+    pub fn execute_all(&mut self, input: &str) -> SessionResult<StatementResult> {
+        let stmts = parse_stmts(input)?;
+
+        if stmts.is_empty() {
+            return Ok(StatementResult::Mutation(MutationResult::new(0, 0)));
+        }
+
+        // If there's only one statement, just execute it normally
+        if stmts.len() == 1 {
+            return self.execute_statement(&stmts[0]);
+        }
+
+        // Execute all statements and aggregate results
+        let mut total_nodes = 0usize;
+        let mut total_edges = 0usize;
+        let mut last_result = None;
+
+        for stmt in &stmts {
+            let result = self.execute_statement(stmt)?;
+            match &result {
+                StatementResult::Mutation(m) => {
+                    total_nodes += m.nodes_affected;
+                    total_edges += m.edges_affected;
+                }
+                _ => {}
+            }
+            last_result = Some(result);
+        }
+
+        // Return aggregated mutation result if any mutations happened
+        if total_nodes > 0 || total_edges > 0 {
+            Ok(StatementResult::Mutation(MutationResult::new(
+                total_nodes,
+                total_edges,
+            )))
+        } else {
+            // Otherwise return the last statement's result
+            Ok(last_result.unwrap_or(StatementResult::Mutation(MutationResult::new(0, 0))))
+        }
     }
 
     /// Execute a parsed statement.
@@ -390,6 +433,61 @@ impl<'r> Session<'r> {
             mew_parser::Target::Id(_) | mew_parser::Target::Pattern(_) => Err(
                 SessionError::invalid_statement_type("Only variable targets are supported"),
             ),
+            mew_parser::Target::EdgePattern { edge_type, targets } => {
+                // Resolve target variables to node IDs
+                let mut target_ids = Vec::new();
+                for target_var in targets {
+                    let id = self.bindings.get(target_var).copied().ok_or_else(|| {
+                        SessionError::invalid_statement_type(format!(
+                            "Unknown variable in edge pattern: {}",
+                            target_var
+                        ))
+                    })?;
+                    target_ids.push(id);
+                }
+
+                // Find edge type ID
+                let edge_type_id = self.registry.get_edge_type_id(edge_type).ok_or_else(|| {
+                    SessionError::invalid_statement_type(format!(
+                        "Unknown edge type: {}",
+                        edge_type
+                    ))
+                })?;
+
+                // Find edge between the nodes
+                if target_ids.len() < 2 {
+                    return Err(SessionError::invalid_statement_type(
+                        "Edge pattern requires at least 2 targets",
+                    ));
+                }
+
+                let source_node_id = target_ids[0]
+                    .as_node()
+                    .ok_or_else(|| SessionError::invalid_statement_type("Source must be a node"))?;
+                let target_node_id = target_ids[1]
+                    .as_node()
+                    .ok_or_else(|| SessionError::invalid_statement_type("Target must be a node"))?;
+
+                // Search for matching edge
+                for edge_id in self.graph.edges_from(source_node_id, None) {
+                    if let Some(edge) = self.graph.get_edge(edge_id) {
+                        if edge.type_id == edge_type_id {
+                            let targets = &edge.targets;
+                            if targets.len() >= 2
+                                && targets[0].as_node() == Some(source_node_id)
+                                && targets[1].as_node() == Some(target_node_id)
+                            {
+                                return Ok(edge_id.into());
+                            }
+                        }
+                    }
+                }
+
+                Err(SessionError::invalid_statement_type(format!(
+                    "No edge of type '{}' found between specified nodes",
+                    edge_type
+                )))
+            }
         }
     }
 
