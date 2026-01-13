@@ -11,6 +11,7 @@ mew-parser.workspace = true
 mew-pattern.workspace = true
 mew-analyzer.workspace = true
 mew-compiler.workspace = true
+mew-constraint.workspace = true
 mew-mutation.workspace = true
 mew-query.workspace = true
 mew-transaction.workspace = true
