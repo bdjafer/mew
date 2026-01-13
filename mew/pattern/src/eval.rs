@@ -416,7 +416,7 @@ impl<'r> Evaluator<'r> {
                     let val = self.eval(arg, bindings, graph)?;
                     return match val {
                         Value::Int(i) => Ok(Value::Int(i)),
-                        Value::Float(f) => Ok(Value::Int(f.floor() as i64)),
+                        Value::Float(f) => Ok(Value::Float(f.floor())),
                         _ => Err(PatternError::type_error("FLOOR expects a numeric argument")),
                     };
                 }
@@ -427,7 +427,7 @@ impl<'r> Evaluator<'r> {
                     let val = self.eval(arg, bindings, graph)?;
                     return match val {
                         Value::Int(i) => Ok(Value::Int(i)),
-                        Value::Float(f) => Ok(Value::Int(f.ceil() as i64)),
+                        Value::Float(f) => Ok(Value::Float(f.ceil())),
                         _ => Err(PatternError::type_error("CEIL expects a numeric argument")),
                     };
                 }
@@ -438,7 +438,7 @@ impl<'r> Evaluator<'r> {
                     let val = self.eval(arg, bindings, graph)?;
                     return match val {
                         Value::Int(i) => Ok(Value::Int(i)),
-                        Value::Float(f) => Ok(Value::Int(f.round() as i64)),
+                        Value::Float(f) => Ok(Value::Float(f.round())),
                         _ => Err(PatternError::type_error("ROUND expects a numeric argument")),
                     };
                 }
