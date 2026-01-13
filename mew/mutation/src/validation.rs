@@ -6,15 +6,22 @@ use mew_registry::Registry;
 use crate::error::{MutationError, MutationResult};
 
 /// Validate an attribute assignment against the registry.
+/// Use `is_update` = true for SET operations (currently unused but kept for future extensions).
 pub fn validate_attribute(
     registry: &Registry,
     type_name: &str,
     type_id: TypeId,
     attr_name: &str,
     value: &Value,
+    _is_update: bool,
 ) -> MutationResult<()> {
     // Use get_type_attr to check inherited attributes
     if let Some(attr_def) = registry.get_type_attr(type_id, attr_name) {
+        // Check if trying to set a required attribute to null
+        if attr_def.required && matches!(value, Value::Null) {
+            return Err(MutationError::required_null_violation(type_name, attr_name));
+        }
+
         // Check type compatibility
         let expected_type = &attr_def.type_name;
         let actual_type = value_type_name(value);

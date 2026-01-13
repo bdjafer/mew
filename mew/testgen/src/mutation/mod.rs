@@ -173,17 +173,56 @@ impl<'a> MutationGenerator<'a> {
         })
     }
 
+    /// Check if a type (or type alias) resolves to a numeric type (Int or Float).
+    /// Uses a visited set to prevent infinite loops on circular type aliases.
+    fn is_numeric_type(&self, type_name: &str) -> bool {
+        Self::is_numeric_type_impl(type_name, &self.schema.type_aliases, &mut std::collections::HashSet::new())
+    }
+
+    /// Static version for use in closures where self is not available.
+    fn is_numeric_type_static(
+        type_name: &str,
+        type_aliases: &std::collections::HashMap<String, crate::types::TypeAliasInfo>,
+    ) -> bool {
+        Self::is_numeric_type_impl(type_name, type_aliases, &mut std::collections::HashSet::new())
+    }
+
+    /// Core implementation with cycle detection.
+    fn is_numeric_type_impl(
+        type_name: &str,
+        type_aliases: &std::collections::HashMap<String, crate::types::TypeAliasInfo>,
+        visited: &mut std::collections::HashSet<String>,
+    ) -> bool {
+        if matches!(type_name, "Int" | "Float") {
+            return true;
+        }
+        // Guard against circular aliases
+        if !visited.insert(type_name.to_string()) {
+            return false;
+        }
+        if let Some(alias) = type_aliases.get(type_name) {
+            return Self::is_numeric_type_impl(&alias.base_type, type_aliases, visited);
+        }
+        false
+    }
+
     /// SPAWN with out-of-range value - should fail
     fn gen_spawn_out_of_range(&mut self, rng: &mut impl Rng) -> Option<GeneratedMutation> {
-        // Find a type with range constraints (including inherited)
+        // Find a type with range constraints on numeric attributes (including inherited)
         let node_types = &self.schema.node_types;
+        let type_aliases = &self.schema.type_aliases;
         let types_with_range: Vec<(&String, &NodeTypeInfo)> = self
             .schema
             .node_types
             .iter()
             .filter(|(_, info)| {
                 let all_attrs = Self::collect_all_attrs_static(info, node_types);
-                all_attrs.iter().any(|a| a.min.is_some() || a.max.is_some())
+                // Only consider Int/Float attributes with range constraints
+                // String attributes with length constraints should not use Int out-of-range
+                all_attrs.iter().any(|a| {
+                    let is_numeric = Self::is_numeric_type_static(&a.type_name, type_aliases);
+                    is_numeric && (a.min.is_some() || a.max.is_some())
+                })
             })
             .collect();
 
@@ -197,9 +236,13 @@ impl<'a> MutationGenerator<'a> {
         // Get all attrs including inherited
         let all_attrs = self.collect_all_attrs(type_info);
 
+        // Find a numeric attribute with range constraints
         let range_attr = all_attrs
             .iter()
-            .find(|a| a.min.is_some() || a.max.is_some())?;
+            .find(|a| {
+                let is_numeric = self.is_numeric_type(&a.type_name);
+                is_numeric && (a.min.is_some() || a.max.is_some())
+            })?;
 
         // Generate an out-of-range value
         let out_of_range = if let Some(Value::Int(max)) = &range_attr.max {
