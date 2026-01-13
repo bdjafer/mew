@@ -57,23 +57,72 @@ impl QueryResult {
 }
 
 /// Summary of a mutation execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MutationSummary {
-    /// Number of nodes affected.
-    pub nodes_affected: usize,
-    /// Number of edges affected.
-    pub edges_affected: usize,
+    /// Number of nodes created.
+    pub nodes_created: usize,
+    /// Number of nodes modified.
+    pub nodes_modified: usize,
+    /// Number of nodes deleted.
+    pub nodes_deleted: usize,
+    /// Number of edges created.
+    pub edges_created: usize,
+    /// Number of edges deleted.
+    pub edges_deleted: usize,
     /// Any returned values.
     pub returned: Vec<Value>,
 }
 
 impl MutationSummary {
-    /// Create a new mutation summary.
+    /// Create a new mutation summary (legacy compat: nodes/edges affected).
     pub fn new(nodes_affected: usize, edges_affected: usize) -> Self {
         Self {
-            nodes_affected,
-            edges_affected,
+            nodes_created: nodes_affected,
+            nodes_modified: 0,
+            nodes_deleted: 0,
+            edges_created: edges_affected,
+            edges_deleted: 0,
             returned: Vec::new(),
+        }
+    }
+
+    /// Create a summary for node creation.
+    pub fn created_nodes(count: usize) -> Self {
+        Self {
+            nodes_created: count,
+            ..Default::default()
+        }
+    }
+
+    /// Create a summary for node modification.
+    pub fn modified_nodes(count: usize) -> Self {
+        Self {
+            nodes_modified: count,
+            ..Default::default()
+        }
+    }
+
+    /// Create a summary for node deletion.
+    pub fn deleted_nodes(count: usize) -> Self {
+        Self {
+            nodes_deleted: count,
+            ..Default::default()
+        }
+    }
+
+    /// Create a summary for edge creation.
+    pub fn created_edges(count: usize) -> Self {
+        Self {
+            edges_created: count,
+            ..Default::default()
+        }
+    }
+
+    /// Create a summary for edge deletion.
+    pub fn deleted_edges(count: usize) -> Self {
+        Self {
+            edges_deleted: count,
+            ..Default::default()
         }
     }
 
@@ -83,9 +132,28 @@ impl MutationSummary {
         self
     }
 
+    /// Total nodes affected.
+    pub fn nodes_affected(&self) -> usize {
+        self.nodes_created + self.nodes_modified + self.nodes_deleted
+    }
+
+    /// Total edges affected.
+    pub fn edges_affected(&self) -> usize {
+        self.edges_created + self.edges_deleted
+    }
+
     /// Get total affected count.
     pub fn total_affected(&self) -> usize {
-        self.nodes_affected + self.edges_affected
+        self.nodes_affected() + self.edges_affected()
+    }
+
+    /// Merge another summary into this one.
+    pub fn merge(&mut self, other: &MutationSummary) {
+        self.nodes_created += other.nodes_created;
+        self.nodes_modified += other.nodes_modified;
+        self.nodes_deleted += other.nodes_deleted;
+        self.edges_created += other.edges_created;
+        self.edges_deleted += other.edges_deleted;
     }
 }
 
