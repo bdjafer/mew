@@ -506,6 +506,8 @@ fn expr_to_value(expr: &mew_parser::Expr) -> Option<Value> {
             mew_parser::LiteralKind::Int(i) => Some(Value::Int(*i)),
             mew_parser::LiteralKind::Float(f) => Some(Value::Float(*f)),
             mew_parser::LiteralKind::String(s) => Some(Value::String(s.clone())),
+            mew_parser::LiteralKind::Duration(ms) => Some(Value::Duration(*ms)),
+            mew_parser::LiteralKind::Timestamp(ms) => Some(Value::Timestamp(*ms)),
         },
         _ => None,
     }

@@ -81,6 +81,8 @@ impl<'r> Evaluator<'r> {
             LiteralKind::Int(i) => Value::Int(*i),
             LiteralKind::Float(f) => Value::Float(*f),
             LiteralKind::String(s) => Value::String(s.clone()),
+            LiteralKind::Duration(ms) => Value::Duration(*ms),
+            LiteralKind::Timestamp(ms) => Value::Timestamp(*ms),
         })
     }
 
@@ -577,6 +579,8 @@ impl<'r> Evaluator<'r> {
             (Value::Int(a), Value::Float(b)) => (*a as f64) < *b,
             (Value::Float(a), Value::Int(b)) => *a < (*b as f64),
             (Value::String(a), Value::String(b)) => a < b,
+            (Value::Timestamp(a), Value::Timestamp(b)) => a < b,
+            (Value::Duration(a), Value::Duration(b)) => a < b,
             _ => {
                 return Err(PatternError::type_error(format!(
                     "cannot compare {:?} < {:?}",
@@ -593,6 +597,8 @@ impl<'r> Evaluator<'r> {
             (Value::Int(a), Value::Float(b)) => (*a as f64) <= *b,
             (Value::Float(a), Value::Int(b)) => *a <= (*b as f64),
             (Value::String(a), Value::String(b)) => a <= b,
+            (Value::Timestamp(a), Value::Timestamp(b)) => a <= b,
+            (Value::Duration(a), Value::Duration(b)) => a <= b,
             _ => {
                 return Err(PatternError::type_error(format!(
                     "cannot compare {:?} <= {:?}",
@@ -609,6 +615,8 @@ impl<'r> Evaluator<'r> {
             (Value::Int(a), Value::Float(b)) => (*a as f64) > *b,
             (Value::Float(a), Value::Int(b)) => *a > (*b as f64),
             (Value::String(a), Value::String(b)) => a > b,
+            (Value::Timestamp(a), Value::Timestamp(b)) => a > b,
+            (Value::Duration(a), Value::Duration(b)) => a > b,
             _ => {
                 return Err(PatternError::type_error(format!(
                     "cannot compare {:?} > {:?}",
@@ -625,6 +633,8 @@ impl<'r> Evaluator<'r> {
             (Value::Int(a), Value::Float(b)) => (*a as f64) >= *b,
             (Value::Float(a), Value::Int(b)) => *a >= (*b as f64),
             (Value::String(a), Value::String(b)) => a >= b,
+            (Value::Timestamp(a), Value::Timestamp(b)) => a >= b,
+            (Value::Duration(a), Value::Duration(b)) => a >= b,
             _ => {
                 return Err(PatternError::type_error(format!(
                     "cannot compare {:?} >= {:?}",

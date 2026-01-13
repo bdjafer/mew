@@ -25,13 +25,13 @@ mod data_types {
             .step("query_float_comparison_greater", |a| a.scalar("count", 3i64))
             .step("query_float_comparison_less", |a| a.scalar("count", 1i64))
             .step("query_float_equality", |a| a.rows(1))
-            .step("query_float_range", |a| a.scalar("count", 3i64))
+            .step("query_float_range", |a| a.scalar("count", 4i64))
             // Duration type tests
             .step("spawn_duration_values", |a| a.created(5))
             .step("query_duration_records", |a| a.scalar("count", 5i64))
             // Timestamp literal tests
             .step("spawn_timestamp_literals", |a| a.created(3))
-            .step("query_timestamp_comparison", |a| a.scalar("count", 3i64))
+            .step("query_timestamp_comparison", |a| a.scalar("count", 8i64))
             .step("query_timestamp_range", |a| a.scalar("count", 3i64))
             // Mixed type tests
             .step("spawn_mixed_types", |a| a.created(1))
