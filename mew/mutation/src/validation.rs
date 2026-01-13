@@ -132,6 +132,10 @@ pub fn types_compatible(expected: &str, actual: &str) -> bool {
     if expected == "Float" && actual == "Int" {
         return true;
     }
+    // Int can be used where Duration/Timestamp are expected (they are Int-based types)
+    if (expected == "Duration" || expected == "Timestamp") && actual == "Int" {
+        return true;
+    }
     false
 }
 
