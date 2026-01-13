@@ -877,4 +877,278 @@ edge _ontology_declares_auth(
 
 ---
 
+Let me think through what observation authorization should look like if we're matching reality.
+
+## The Core Intuition
+
+In the physical world:
+- I can only see what I have access to
+- I don't get an "access denied" error when looking at a locked room — I simply don't see inside
+- My view of the world is naturally filtered by my access
+- Counting things means counting what I can perceive
+
+This suggests: **Observation authorization is filtering, not gating.**
+
+The query runs. Results are filtered to what the actor can see. No errors for "unauthorized" rows — they simply don't appear in results.
+
+---
+
+## Draft: Observation Authorization Specification
+
+### 1. Filtering Semantics
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                  OBSERVATION AUTHORIZATION MODEL                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Observation authorization is FILTERING, not GATING.               │
+│                                                                      │
+│   User query:                                                       │
+│     MATCH t: Task WHERE t.priority > 5 RETURN t                     │
+│                                                                      │
+│   Authorization policy:                                             │
+│     ON MATCH(t: Task)                                               │
+│     ALLOW IF EXISTS(p: Project, belongs_to(t, p),                   │
+│                     member_of(current_actor(), p))                  │
+│                                                                      │
+│   Effective execution:                                              │
+│     MATCH t: Task, p: Project,                                      │
+│           belongs_to(t, p),                                         │
+│           member_of(current_actor(), p)   ← injected                │
+│     WHERE t.priority > 5                                            │
+│     RETURN t                                                        │
+│                                                                      │
+│   Result: Only tasks the actor can see, filtered by priority > 5   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Authorization predicates **compose into the query**, not wrap it.
+
+### 2. Three Levels of Observation Authorization
+
+| Level | Question | Enforcement | Example |
+|-------|----------|-------------|---------|
+| **Type-level** | Can actor query this type at all? | Pre-query gate | "Guests cannot query AuditLogs" |
+| **Instance-level** | Which instances can actor see? | Query predicate injection | "Users see tasks in their projects" |
+| **Attribute-level** | Which attributes are visible? | Result projection | "Users see task.title but not task.internal_score" |
+
+### 3. Syntax Distinction
+
+```
+-- Type-level: condition does NOT reference the bound variable
+authorization no_audit_for_guests:
+  ON MATCH(_: AuditLog)
+  ALLOW IF has_role(current_actor(), r) WHERE r.name != "guest"
+
+-- Instance-level: condition REFERENCES the bound variable  
+authorization project_member_sees_tasks:
+  ON MATCH(t: Task)
+  ALLOW IF EXISTS(p: Project, belongs_to(t, p), member_of(current_actor(), p))
+
+-- Attribute-level: new syntax for attribute projection
+authorization hide_internal_score:
+  ON MATCH(t: Task).internal_score
+  DENY IF NOT has_role(current_actor(), "analyst")
+```
+
+Type-level policies gate. Instance-level policies filter. Attribute-level policies project.
+
+### 4. Policy Composition for Filtering
+
+When multiple instance-level policies apply:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    POLICY COMPOSITION                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ALLOW policies: OR composition (any match permits visibility)     │
+│   DENY policies: Override (explicit exclusion, checked after ALLOW) │
+│                                                                      │
+│   Resolution for instance X:                                        │
+│     1. Evaluate all ALLOW policies for X                            │
+│     2. If any ALLOW matches → candidate visible                     │
+│     3. Evaluate all DENY policies for X                             │
+│     4. If any DENY matches → exclude                                │
+│     5. Otherwise → visible                                          │
+│                                                                      │
+│   Example:                                                          │
+│     ALLOW IF owns(current_actor(), t)           -- own tasks        │
+│     ALLOW IF assigned_to(t, current_actor())    -- assigned tasks   │
+│     DENY IF t.confidential = true               -- but not if confidential │
+│              AND NOT has_clearance(current_actor())                 │
+│                                                                      │
+│   Actor sees tasks they own OR are assigned to,                     │
+│   EXCEPT confidential tasks without clearance.                      │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 5. Edge Visibility
+
+Edges require their own authorization, not derivation from nodes:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      EDGE VISIBILITY                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Question: If I can see node A but not node B, can I see edge(A,B)?│
+│                                                                      │
+│   Default: Edge visible only if ALL targets visible                 │
+│            (prevents information leakage about hidden nodes)        │
+│                                                                      │
+│   Override: Explicit edge authorization can relax this              │
+│                                                                      │
+│   authorization see_public_connections:                             │
+│     ON MATCH(e: follows)                                            │
+│     ALLOW IF follows(current_actor(), source(e))                    │
+│     -- Can see who your followees follow, even if you can't see     │
+│     -- those people's profiles directly                             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 6. Aggregate Semantics
+
+Aggregates operate on the **filtered** result set:
+
+```
+User query:
+  MATCH t: Task RETURN COUNT(t)
+
+With authorization filtering to 3 of 10 total tasks:
+  Result: 3
+
+NOT 10. NOT "access denied". The actor's world contains 3 tasks.
+```
+
+This is the only coherent semantics — aggregates reflect what you can see.
+
+### 7. Query Planning Integration
+
+Authorization predicates inject at planning time, not as post-filters:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                 QUERY PLANNING WITH AUTHORIZATION                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   User query:  MATCH t: Task WHERE t.priority > 5                   │
+│                                                                      │
+│   Auth policy: ALLOW IF EXISTS(belongs_to(t, p),                    │
+│                               member_of(current_actor(), p))        │
+│                                                                      │
+│   Naive (post-filter):                                              │
+│     1. Fetch all Tasks where priority > 5                           │
+│     2. For each, check authorization                                │
+│     3. Filter out unauthorized                                      │
+│     → Wasteful: fetches rows just to discard them                   │
+│                                                                      │
+│   Optimized (predicate injection):                                  │
+│     1. Rewrite query to include auth joins                          │
+│     2. Plan combined query with indexes                             │
+│     3. Execute once, results are already filtered                   │
+│                                                                      │
+│   Effective plan:                                                   │
+│     IndexScan(member_of, actor=current_actor) → project_ids        │
+│     IndexScan(belongs_to, project IN project_ids) → task_ids       │
+│     IndexScan(Task, id IN task_ids, priority > 5)                   │
+│                                                                      │
+│   Authorization becomes part of the access path, not a filter.     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 8. The Existence Problem
+
+Subtle case: Can the actor know something exists even if they can't see its content?
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                  EXISTENCE VS CONTENT VISIBILITY                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Scenario: Private tasks exist. User queries COUNT(Task).          │
+│                                                                      │
+│   Option A: COUNT returns only visible tasks                        │
+│             User doesn't know private tasks exist                   │
+│             → Information hiding (default)                          │
+│                                                                      │
+│   Option B: COUNT returns total, content hidden                     │
+│             User knows "there are 10 tasks, I can see 3"            │
+│             → Existence exposed, content protected                  │
+│                                                                      │
+│   MEW default: Option A (full filtering)                            │
+│                                                                      │
+│   Explicit override possible:                                       │
+│     authorization existence_visible:                                │
+│       ON MATCH(t: Task).existence    ← special attribute            │
+│       ALLOW IF true                                                 │
+│                                                                      │
+│     MATCH t: Task RETURN COUNT(t)         → 3 (only visible)       │
+│     MATCH t: Task RETURN COUNT_EXISTS(t)  → 10 (existence-visible) │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 9. WALK and Transitive Authorization
+
+Path traversal has authorization at each hop:
+
+```
+WALK FROM #start FOLLOW follows [depth: 3] RETURN PATH
+
+At each hop:
+  1. Can actor see the edge being traversed?
+  2. Can actor see the target node?
+  
+If either fails, that branch terminates (not error — just no further traversal).
+
+Result: The subgraph reachable within actor's visibility.
+```
+
+### 10. Implementation Phases
+
+| Phase | Scope | Complexity |
+|-------|-------|------------|
+| **v2.0** | Type-level gating | Low — pre-query check |
+| **v2.0** | Instance-level filtering (simple) | Medium — predicate injection |
+| **v2.1** | Edge visibility rules | Medium — default + override |
+| **v2.1** | Attribute-level projection | Medium — result transformation |
+| **v2.2** | Optimized query planning | High — planner integration |
+| **v2.x** | Existence vs content distinction | Low — new aggregate variant |
+
+---
+
+## Open Question
+
+One thing I'm uncertain about: **silent filtering vs. explicit indication**.
+
+Should the actor know their view is filtered?
+
+```
+Option A: Silent filtering
+  Query returns 3 tasks. Actor doesn't know there are 7 more.
+  
+Option B: Filtered indication  
+  Query returns 3 tasks + metadata: { filtered: true, visible_count: 3 }
+  Actor knows their view is partial.
+
+Option C: Count indication
+  Query returns 3 tasks + metadata: { total_count: 10, visible_count: 3 }
+  Actor knows exactly how much is hidden.
+```
+
+Reality analogy: When I look at a building, I don't see a sign saying "7 rooms hidden from you." I just see what I see.
+
+But for debugging/UX, some indication might be valuable. Perhaps a session mode or query modifier?
+
+```
+MATCH t: Task RETURN t WITH VISIBILITY_INFO
+-- Returns results + { total: 10, visible: 3, filtered: true }
+```
+
 *End of MEW Authorization System Specification*
