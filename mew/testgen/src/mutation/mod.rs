@@ -173,29 +173,35 @@ impl<'a> MutationGenerator<'a> {
         })
     }
 
-    /// Check if a type (or type alias) resolves to a numeric type (Int or Float)
+    /// Check if a type (or type alias) resolves to a numeric type (Int or Float).
+    /// Uses a visited set to prevent infinite loops on circular type aliases.
     fn is_numeric_type(&self, type_name: &str) -> bool {
-        // Check if it's a built-in numeric type
-        if matches!(type_name, "Int" | "Float") {
-            return true;
-        }
-        // Check if it's a type alias that resolves to a numeric type
-        if let Some(alias) = self.schema.type_aliases.get(type_name) {
-            return self.is_numeric_type(&alias.base_type);
-        }
-        false
+        Self::is_numeric_type_impl(type_name, &self.schema.type_aliases, &mut std::collections::HashSet::new())
     }
 
-    /// Static version of is_numeric_type for use in closures
+    /// Static version for use in closures where self is not available.
     fn is_numeric_type_static(
         type_name: &str,
         type_aliases: &std::collections::HashMap<String, crate::types::TypeAliasInfo>,
     ) -> bool {
+        Self::is_numeric_type_impl(type_name, type_aliases, &mut std::collections::HashSet::new())
+    }
+
+    /// Core implementation with cycle detection.
+    fn is_numeric_type_impl(
+        type_name: &str,
+        type_aliases: &std::collections::HashMap<String, crate::types::TypeAliasInfo>,
+        visited: &mut std::collections::HashSet<String>,
+    ) -> bool {
         if matches!(type_name, "Int" | "Float") {
             return true;
         }
+        // Guard against circular aliases
+        if !visited.insert(type_name.to_string()) {
+            return false;
+        }
         if let Some(alias) = type_aliases.get(type_name) {
-            return Self::is_numeric_type_static(&alias.base_type, type_aliases);
+            return Self::is_numeric_type_impl(&alias.base_type, type_aliases, visited);
         }
         false
     }

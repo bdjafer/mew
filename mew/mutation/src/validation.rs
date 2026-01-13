@@ -24,7 +24,7 @@ pub fn validate_attribute(
 
         // Check if trying to set a required attribute to null
         if attr_def.required && matches!(value, Value::Null) {
-            return Err(MutationError::missing_required(type_name, attr_name));
+            return Err(MutationError::required_null_violation(type_name, attr_name));
         }
 
         // Check type compatibility

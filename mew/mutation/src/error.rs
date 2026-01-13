@@ -21,6 +21,9 @@ pub enum MutationError {
     #[error("Missing required attribute: {attr} on type {type_name}")]
     MissingRequired { type_name: String, attr: String },
 
+    #[error("Cannot set required attribute to null: {attr} on type {type_name}")]
+    RequiredNullViolation { type_name: String, attr: String },
+
     #[error("Invalid attribute type: expected {expected}, got {actual} for {attr}")]
     InvalidAttrType {
         attr: String,
@@ -89,6 +92,13 @@ impl MutationError {
 
     pub fn missing_required(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
         Self::MissingRequired {
+            type_name: type_name.into(),
+            attr: attr.into(),
+        }
+    }
+
+    pub fn required_null_violation(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
+        Self::RequiredNullViolation {
             type_name: type_name.into(),
             attr: attr.into(),
         }
