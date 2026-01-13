@@ -404,6 +404,8 @@ pub enum BinaryOp {
     Or,
     // String
     Concat,
+    // Null coalescing
+    NullCoalesce,
 }
 
 impl fmt::Display for BinaryOp {
@@ -423,6 +425,7 @@ impl fmt::Display for BinaryOp {
             BinaryOp::And => write!(f, "AND"),
             BinaryOp::Or => write!(f, "OR"),
             BinaryOp::Concat => write!(f, "++"),
+            BinaryOp::NullCoalesce => write!(f, "??"),
         }
     }
 }

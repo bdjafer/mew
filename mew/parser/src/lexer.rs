@@ -95,9 +95,10 @@ pub enum TokenKind {
     Dollar,     // $
     Concat,     // ++
     Range,      // ..
-    Question,   // ?
-    Arrow,      // =>
-    RightArrow, // ->
+    Question,      // ?
+    NullCoalesce,  // ??
+    Arrow,         // =>
+    RightArrow,    // ->
 
     // End of file
     Eof,
@@ -191,6 +192,7 @@ impl TokenKind {
             TokenKind::Concat => "++",
             TokenKind::Range => "..",
             TokenKind::Question => "?",
+            TokenKind::NullCoalesce => "??",
             TokenKind::Arrow => "=>",
             TokenKind::RightArrow => "->",
             TokenKind::Eof => "end of input",
@@ -445,7 +447,14 @@ impl<'a> Lexer<'a> {
             '|' => TokenKind::Pipe,
             '#' => TokenKind::Hash,
             '$' => TokenKind::Dollar,
-            '?' => TokenKind::Question,
+            '?' => {
+                if self.peek_char() == Some('?') {
+                    self.next_char();
+                    TokenKind::NullCoalesce
+                } else {
+                    TokenKind::Question
+                }
+            }
             '@' => self.scan_timestamp(start, start_line, start_col)?,
             '"' => self.scan_string(start, start_line, start_col)?,
             '_' | 'a'..='z' | 'A'..='Z' => {

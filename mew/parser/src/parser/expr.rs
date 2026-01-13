@@ -21,14 +21,28 @@ impl Parser {
     }
 
     fn parse_or(&mut self) -> ParseResult<Expr> {
-        let mut left = self.parse_and()?;
+        let mut left = self.parse_null_coalesce()?;
 
         while self.check(&TokenKind::Or) {
             let start = left.span();
             self.advance();
-            let right = self.parse_and()?;
+            let right = self.parse_null_coalesce()?;
             let span = self.span_from(start);
             left = Expr::BinaryOp(BinaryOp::Or, Box::new(left), Box::new(right), span);
+        }
+
+        Ok(left)
+    }
+
+    fn parse_null_coalesce(&mut self) -> ParseResult<Expr> {
+        let mut left = self.parse_and()?;
+
+        while self.check(&TokenKind::NullCoalesce) {
+            let start = left.span();
+            self.advance();
+            let right = self.parse_and()?;
+            let span = self.span_from(start);
+            left = Expr::BinaryOp(BinaryOp::NullCoalesce, Box::new(left), Box::new(right), span);
         }
 
         Ok(left)

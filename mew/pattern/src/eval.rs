@@ -162,6 +162,15 @@ impl<'r> Evaluator<'r> {
 
             // String
             BinaryOp::Concat => self.eval_concat(&left_val, &right_val),
+
+            // Null coalescing: return left if not null, otherwise right
+            BinaryOp::NullCoalesce => {
+                if matches!(left_val, Value::Null) {
+                    Ok(right_val)
+                } else {
+                    Ok(left_val)
+                }
+            }
         }
     }
 
@@ -531,6 +540,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_add(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
@@ -549,6 +560,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_sub(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 - b)),
@@ -568,6 +581,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_mul(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 * b)),
@@ -581,6 +596,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_div(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => {
                 if *b == 0 {
                     Err(PatternError::DivisionByZero)
@@ -618,6 +635,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_mod(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => {
                 if *b == 0 {
                     Err(PatternError::DivisionByZero)
