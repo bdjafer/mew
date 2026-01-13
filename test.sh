@@ -111,31 +111,35 @@ EOF
 }
 
 run_cargo_tests() {
-    local name=$1
-    local cmd=$2
-    local result_var=$3
-    local verbose=$4
-    
+    local name=$1 cmd=$2 result_var=$3 verbose=$4
     print_header "$name"
     cd mew
 
     if [ -n "$verbose" ]; then
         $cmd -- $verbose 2>&1 && eval "$result_var=pass" || eval "$result_var=fail"
     else
-        local output
-        output=$($cmd 2>&1) && local exit_code=0 || local exit_code=$?
-        local total=$(echo "$output" | grep -E "^test result:" | awk '{sum+=$4} END {print sum}')
+        local output exit_code=0
+        output=$($cmd 2>&1) || exit_code=$?
+        local passed=$(echo "$output" | grep -oE '[0-9]+ passed' | awk '{sum+=$1} END {print sum+0}')
+        local failed=$(echo "$output" | grep -oE '[0-9]+ failed' | awk '{sum+=$1} END {print sum+0}')
+        local total=$((passed + failed))
         
         if [ $exit_code -eq 0 ]; then
             echo -e "${GREEN}✓${NC} All tests passed ($total tests)"
             eval "$result_var=pass"
         else
-            echo -e "${RED}✗${NC} Some tests failed"
-            echo "$output" | grep -E "(FAILED|failures:|error\[)"
+            echo -e "${RED}✗${NC} $passed/$total passed ($failed failed)"
+            # Extract test name + first error line, limit to 50
+            echo "$output" | awk '
+                /^---- .* stdout ----$/ { if(test && err) print "  " test ": " err; test=$2; err=""; next }
+                test && !err && /called.*unwrap.*Err|AssertionFailed|assertion failed|left:/ { 
+                    gsub(/^[[:space:]]+/, ""); err=substr($0,1,100); if(length($0)>100) err=err"..." 
+                }
+                END { if(test && err) print "  " test ": " err }
+            ' | head -50
             eval "$result_var=fail"
         fi
     fi
-
     cd "$SCRIPT_DIR"
 }
 
@@ -164,7 +168,7 @@ run_integration_tests() {
         esac
     done
     
-    run_cargo_tests "Integration Tests (Scenarios)" "cargo test -p mew-tests" INTEGRATION_RESULT "$verbose"
+    run_cargo_tests "Integration Tests (Scenarios)" "cargo test -p mew-tests --no-fail-fast" INTEGRATION_RESULT "$verbose"
 }
 
 run_testgen() {

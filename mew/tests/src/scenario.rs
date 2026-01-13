@@ -193,7 +193,6 @@ mod tests {
     fn test_scenario_builder() {
         let scenario = Scenario::new("test")
             .ontology("level-1/bookmarks/ontology.mew")
-            .seed("level-1/bookmarks/seeds/empty.mew")
             .step("spawn", |a| a.created(1))
             .step("query", |a| a.rows(1));
 

@@ -1,0 +1,166 @@
+-- ===========================================================================
+-- SCENARIO: Deep Inheritance Chain
+-- DESCRIPTION: Tests 4-level inheritance: Person → Employee → Manager → Executive
+-- FOCUS: Deep type hierarchy (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- POLYMORPHIC QUERIES ACROSS HIERARCHY
+-- ---------------------------------------------------------------------------
+
+--# test_query_all_persons
+MATCH (p:Person)
+RETURN p.first_name, p.last_name, p.email
+ORDER BY p.first_name
+
+--# test_query_all_employees
+MATCH (e:Employee)
+RETURN e.first_name, e.employee_id
+ORDER BY e.employee_id
+
+--# test_query_only_managers
+MATCH (m:Manager)
+RETURN m.first_name, m.management_level
+ORDER BY m.management_level
+
+--# test_query_only_executives
+MATCH (e:Executive)
+RETURN e.first_name, e.title
+
+-- ---------------------------------------------------------------------------
+-- INHERITED ATTRIBUTES ACROSS LEVELS
+-- ---------------------------------------------------------------------------
+
+--# test_executive_has_person_attributes
+MATCH (e:Executive)
+WHERE e.first_name = "Diana"
+RETURN e.first_name, e.last_name, e.email
+
+--# test_executive_has_employee_attributes
+MATCH (e:Executive)
+WHERE e.first_name = "Diana"
+RETURN e.employee_id, e.salary
+
+--# test_executive_has_manager_attributes
+MATCH (e:Executive)
+WHERE e.first_name = "Diana"
+RETURN e.management_level, e.budget_authority
+
+--# test_executive_has_executive_attributes
+MATCH (e:Executive)
+WHERE e.first_name = "Diana"
+RETURN e.title
+
+-- ---------------------------------------------------------------------------
+-- FILTERING BY LEVEL-SPECIFIC ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_filter_employees_by_salary
+MATCH (e:Employee)
+WHERE e.salary > 100000.0
+RETURN e.first_name, e.salary
+ORDER BY e.salary DESC
+
+--# test_filter_managers_by_management_level
+MATCH (m:Manager)
+WHERE m.management_level >= 3
+RETURN m.first_name, m.management_level
+
+--# test_filter_person_with_manager_attribute
+MATCH (p:Person)
+WHERE p.management_level IS NOT NULL
+RETURN p.first_name, p.management_level
+ORDER BY p.management_level
+
+-- ---------------------------------------------------------------------------
+-- SPAWN AT DIFFERENT LEVELS
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_employee
+SPAWN new_employee: Employee {
+  first_name = "Frank",
+  last_name = "Miller",
+  email = "frank@company.com",
+  employee_id = "EMP000005",
+  hire_date = now(),
+  salary = 95000.0
+}
+
+--# test_spawn_manager
+SPAWN new_manager: Manager {
+  first_name = "Grace",
+  last_name = "Hopper",
+  email = "grace@company.com",
+  employee_id = "EMP000006",
+  hire_date = now(),
+  salary = 140000.0,
+  management_level = 3,
+  budget_authority = 750000.0
+}
+
+--# test_spawn_executive
+SPAWN new_executive: Executive {
+  first_name = "Henry",
+  last_name = "Ford",
+  email = "henry@company.com",
+  employee_id = "EMP000007",
+  hire_date = now(),
+  salary = 300000.0,
+  management_level = 6,
+  budget_authority = 5000000.0,
+  title = "CTO"
+}
+
+-- ---------------------------------------------------------------------------
+-- QUERY NEW ENTITIES AT DIFFERENT LEVELS
+-- ---------------------------------------------------------------------------
+
+--# test_new_employee_queryable_as_person
+MATCH (p:Person)
+WHERE p.email = "frank@company.com"
+RETURN p.first_name
+
+--# test_new_manager_queryable_as_employee
+MATCH (e:Employee)
+WHERE e.email = "grace@company.com"
+RETURN e.first_name, e.salary
+
+--# test_new_executive_queryable_as_manager
+MATCH (m:Manager)
+WHERE m.email = "henry@company.com"
+RETURN m.first_name, m.management_level
+
+--# test_count_persons_includes_all
+MATCH (p:Person)
+RETURN COUNT(p) AS total
+
+--# test_count_employees_includes_subtypes
+MATCH (e:Employee)
+RETURN COUNT(e) AS total
+
+--# test_count_managers_includes_executives
+MATCH (m:Manager)
+RETURN COUNT(m) AS total
+
+-- ---------------------------------------------------------------------------
+-- MUTATION ACROSS LEVELS
+-- ---------------------------------------------------------------------------
+
+--# test_update_person_attribute_on_executive
+MATCH (e:Executive)
+WHERE e.first_name = "Diana"
+SET e.email = "diana.ross@company.com"
+
+--# test_verify_person_attribute_updated
+MATCH (p:Person)
+WHERE p.first_name = "Diana"
+RETURN p.email
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_new_entities
+MATCH (p:Person)
+WHERE p.employee_id IN ["EMP000005", "EMP000006", "EMP000007"]
+KILL p

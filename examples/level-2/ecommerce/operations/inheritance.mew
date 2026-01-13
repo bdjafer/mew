@@ -1,0 +1,93 @@
+-- ===========================================================================
+-- SCENARIO: Inheritance and Polymorphism
+-- DESCRIPTION: Tests type inheritance, polymorphic queries, type-specific access
+-- FOCUS: Level-2 inheritance semantics (unique to this ontology)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- POLYMORPHIC QUERIES: Querying base type should return all subtypes
+-- ---------------------------------------------------------------------------
+
+--# test_query_all_products
+MATCH (p:Product)
+RETURN p.sku, p.name, p.price
+ORDER BY p.sku
+
+-- ---------------------------------------------------------------------------
+-- TYPE-SPECIFIC QUERIES: Query only specific subtype
+-- ---------------------------------------------------------------------------
+
+--# test_query_physical_products_only
+MATCH (p:PhysicalProduct)
+RETURN p.sku, p.name, p.weight_kg
+ORDER BY p.sku
+
+--# test_query_digital_products_only
+MATCH (d:DigitalProduct)
+RETURN d.sku, d.name, d.file_size_mb
+
+-- ---------------------------------------------------------------------------
+-- INHERITED ATTRIBUTES: Base attributes accessible from subtypes
+-- ---------------------------------------------------------------------------
+
+--# test_inherited_attributes_on_subtypes
+MATCH (p:PhysicalProduct)
+WHERE p.price > 200.0
+RETURN p.sku, p.name, p.price, p.weight_kg
+ORDER BY p.price DESC
+
+-- ---------------------------------------------------------------------------
+-- SPAWN WITH TYPE HIERARCHY: Can spawn subtypes
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_physical_product
+SPAWN tablet: PhysicalProduct {
+  sku = "COMP-0002",
+  name = "Tablet",
+  price = 499.99,
+  status = "active",
+  weight_kg = 0.5
+}
+
+--# test_verify_spawned_subtype_queryable_as_base
+MATCH (p:Product)
+WHERE p.sku = "COMP-0002"
+RETURN p.name, p.price
+
+--# test_verify_spawned_subtype_queryable_as_subtype
+MATCH (p:PhysicalProduct)
+WHERE p.sku = "COMP-0002"
+RETURN p.name, p.weight_kg
+
+-- ---------------------------------------------------------------------------
+-- MUTATION ON INHERITED ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_set_inherited_attribute_via_subtype
+MATCH (p:PhysicalProduct)
+WHERE p.sku = "COMP-0002"
+SET p.price = 449.99
+
+--# test_verify_inherited_attribute_updated
+MATCH (p:Product)
+WHERE p.sku = "COMP-0002"
+RETURN p.price
+
+-- ---------------------------------------------------------------------------
+-- TYPE FILTERING WITH WHERE
+-- ---------------------------------------------------------------------------
+
+--# test_where_clause_on_subtype_attribute
+MATCH (p:Product)
+WHERE p.weight_kg IS NOT NULL AND p.weight_kg < 1.0
+RETURN p.sku, p.name, p.weight_kg
+ORDER BY p.weight_kg
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_tablet
+MATCH (p:Product)
+WHERE p.sku = "COMP-0002"
+KILL p

@@ -1,0 +1,213 @@
+-- ===========================================================================
+-- SCENARIO: Transitive Patterns
+-- DESCRIPTION: Tests transitive closure (+) and reflexive transitive (*) patterns
+-- FOCUS: Transitive patterns (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create a chain of blocking tasks
+-- ---------------------------------------------------------------------------
+
+--# test_setup_trans_task_a
+SPAWN trans_a: Task {
+  title = "Task A",
+  status = "done",
+  priority = 5
+}
+--@ expect:ok
+
+--# test_setup_trans_task_b
+SPAWN trans_b: Task {
+  title = "Task B",
+  status = "in_progress",
+  priority = 5
+}
+--@ expect:ok
+
+--# test_setup_trans_task_c
+SPAWN trans_c: Task {
+  title = "Task C",
+  status = "todo",
+  priority = 4
+}
+--@ expect:ok
+
+--# test_setup_trans_task_d
+SPAWN trans_d: Task {
+  title = "Task D",
+  status = "todo",
+  priority = 3
+}
+--@ expect:ok
+
+--# test_setup_trans_task_e
+SPAWN trans_e: Task {
+  title = "Task E",
+  status = "todo",
+  priority = 2
+}
+--@ expect:ok
+
+--# test_setup_chain_links
+MATCH (a:Task), (b:Task), (c:Task), (d:Task), (e:Task)
+WHERE a.title = "Task A" AND b.title = "Task B" AND c.title = "Task C" AND d.title = "Task D" AND e.title = "Task E"
+LINK blocks(a, b)
+LINK blocks(b, c)
+LINK blocks(c, d)
+LINK blocks(d, e)
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- TRANSITIVE CLOSURE (+): One or more hops
+-- ---------------------------------------------------------------------------
+
+--# test_transitive_one_hop
+MATCH (a:Task)-[:blocks+]->(blocked:Task)
+WHERE a.title = "Task A"
+RETURN blocked.title
+ORDER BY blocked.title
+--@ expect:rows = 4
+--@ expect:has_row { title = "Task B" }
+--@ expect:has_row { title = "Task C" }
+--@ expect:has_row { title = "Task D" }
+--@ expect:has_row { title = "Task E" }
+
+--# test_transitive_from_middle
+MATCH (c:Task)-[:blocks+]->(blocked:Task)
+WHERE c.title = "Task C"
+RETURN blocked.title
+ORDER BY blocked.title
+--@ expect:rows = 2
+--@ expect:has_row { title = "Task D" }
+--@ expect:has_row { title = "Task E" }
+
+--# test_transitive_reverse_find_all_blockers
+MATCH (blocker:Task)-[:blocks+]->(e:Task)
+WHERE e.title = "Task E"
+RETURN blocker.title
+ORDER BY blocker.title
+--@ expect:rows = 4
+--@ expect:has_row { title = "Task A" }
+--@ expect:has_row { title = "Task B" }
+--@ expect:has_row { title = "Task C" }
+--@ expect:has_row { title = "Task D" }
+
+-- ---------------------------------------------------------------------------
+-- REFLEXIVE TRANSITIVE CLOSURE (*): Zero or more hops
+-- ---------------------------------------------------------------------------
+
+--# test_reflexive_transitive_includes_self
+MATCH (a:Task)-[:blocks*]->(blocked:Task)
+WHERE a.title = "Task A"
+RETURN blocked.title
+ORDER BY blocked.title
+--@ expect:rows = 5
+--@ expect:has_row { title = "Task A" }
+--@ expect:has_row { title = "Task B" }
+--@ expect:has_row { title = "Task C" }
+--@ expect:has_row { title = "Task D" }
+--@ expect:has_row { title = "Task E" }
+
+--# test_reflexive_from_leaf
+MATCH (e:Task)-[:blocks*]->(blocked:Task)
+WHERE e.title = "Task E"
+RETURN blocked.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Task E" }
+
+-- ---------------------------------------------------------------------------
+-- TRANSITIVE WITH FILTERS
+-- ---------------------------------------------------------------------------
+
+--# test_transitive_with_status_filter
+MATCH (a:Task)-[:blocks+]->(blocked:Task)
+WHERE a.title = "Task A" AND blocked.status = "todo"
+RETURN blocked.title
+ORDER BY blocked.title
+--@ expect:rows = 3
+--@ expect:has_row { title = "Task C" }
+--@ expect:has_row { title = "Task D" }
+--@ expect:has_row { title = "Task E" }
+
+--# test_transitive_with_priority_filter
+MATCH (blocker:Task)-[:blocks+]->(t:Task)
+WHERE t.title = "Task E" AND blocker.status = "done"
+RETURN blocker.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Task A" }
+
+-- ---------------------------------------------------------------------------
+-- TRANSITIVE COUNT AND AGGREGATIONS
+-- ---------------------------------------------------------------------------
+
+--# test_count_all_blocked_tasks
+MATCH (a:Task)-[:blocks+]->(blocked:Task)
+WHERE a.title = "Task A"
+RETURN COUNT(blocked) AS blocked_count
+--@ expect:rows = 1
+--@ expect:has_row { blocked_count = 4 }
+
+--# test_count_blockers_per_task
+MATCH (blocker:Task)-[:blocks+]->(t:Task)
+RETURN t.title, COUNT(blocker) AS blocker_count
+ORDER BY blocker_count DESC
+--@ expect:rows >= 4
+
+-- ---------------------------------------------------------------------------
+-- BRANCHING TRANSITIVE PATTERNS
+-- ---------------------------------------------------------------------------
+
+--# test_setup_branch_task
+SPAWN branch_task: Task {
+  title = "Branch Task",
+  status = "todo",
+  priority = 3
+}
+--@ expect:ok
+
+--# test_setup_branch_link
+MATCH (c:Task), (branch:Task)
+WHERE c.title = "Task C" AND branch.title = "Branch Task"
+LINK blocks(c, branch)
+--@ expect:ok
+
+--# test_transitive_with_branch
+MATCH (a:Task)-[:blocks+]->(blocked:Task)
+WHERE a.title = "Task A"
+RETURN blocked.title
+ORDER BY blocked.title
+--@ expect:rows = 5
+--@ expect:has_row { title = "Branch Task" }
+
+-- ---------------------------------------------------------------------------
+-- COMPLEX TRANSITIVE QUERIES
+-- ---------------------------------------------------------------------------
+
+--# test_find_longest_blocking_chain
+MATCH (start:Task)-[:blocks+]->(end:Task)
+WHERE NOT EXISTS {
+  MATCH (start)<-[:blocks]-(:Task)
+} AND NOT EXISTS {
+  MATCH (end)-[:blocks]->(:Task)
+}
+RETURN start.title, end.title
+--@ expect:rows >= 1
+
+--# test_tasks_with_no_transitive_blockers
+MATCH (t:Task)
+WHERE NOT EXISTS {
+  MATCH (:Task)-[:blocks+]->(t)
+}
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows >= 1
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_transitive_tasks
+MATCH (t:Task)
+WHERE t.title IN ["Task A", "Task B", "Task C", "Task D", "Task E", "Branch Task"]
+KILL t
+--@ expect:ok

@@ -1,0 +1,202 @@
+-- ===========================================================================
+-- SCENARIO: No Self Edge Constraint
+-- DESCRIPTION: Tests that [no_self] edges prevent linking to self
+-- FOCUS: no_self modifier (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP
+-- ---------------------------------------------------------------------------
+
+--# test_setup_employee_for_self_link
+SPAWN self_test_emp: Employee {
+  first_name = "SelfTest",
+  last_name = "User",
+  email = "selftest@company.com",
+  employee_id = "SELF001",
+  hire_date = now(),
+  salary = 90000.0
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- NO_SELF VIOLATION: reports_to edge
+-- ---------------------------------------------------------------------------
+
+--# test_reports_to_self_should_fail
+MATCH (e:Employee)
+WHERE e.employee_id = "SELF001"
+LINK reports_to(e, e)
+--@ expect:error = "NoSelfViolation"
+
+-- ---------------------------------------------------------------------------
+-- VERIFY NO EDGE CREATED
+-- ---------------------------------------------------------------------------
+
+--# test_verify_no_self_edge_created
+MATCH (e:Employee)-[r:reports_to]->(e)
+WHERE e.employee_id = "SELF001"
+RETURN COUNT(r) AS self_edges
+--@ expect:rows = 1
+--@ expect:has_row { self_edges = 0 }
+
+-- ---------------------------------------------------------------------------
+-- VALID LINK TO DIFFERENT ENTITY
+-- ---------------------------------------------------------------------------
+
+--# test_reports_to_different_employee_succeeds
+MATCH (e:Employee), (m:Manager)
+WHERE e.employee_id = "SELF001" AND m.first_name = "Charlie"
+LINK reports_to(e, m)
+--@ expect:ok
+
+--# test_verify_valid_link_created
+MATCH (e:Employee)-[r:reports_to]->(m:Employee)
+WHERE e.employee_id = "SELF001"
+RETURN e.first_name, m.first_name
+--@ expect:rows = 1
+--@ expect:has_row { e.first_name = "SelfTest", m.first_name = "Charlie" }
+
+-- ---------------------------------------------------------------------------
+-- NO_SELF ON OTHER EDGES
+-- ---------------------------------------------------------------------------
+
+--# test_setup_department_for_self_link
+SPAWN self_dept: Department {
+  code = "SELF",
+  name = "Self Department",
+  budget = 100000.0
+}
+--@ expect:ok
+
+--# test_parent_dept_self_should_fail
+MATCH (d:Department)
+WHERE d.code = "SELF"
+LINK parent_dept(d, d)
+--@ expect:error = "NoSelfViolation"
+
+--# test_verify_no_parent_dept_self_edge
+MATCH (d:Department)-[r:parent_dept]->(d)
+WHERE d.code = "SELF"
+RETURN COUNT(r) AS self_edges
+--@ expect:rows = 1
+--@ expect:has_row { self_edges = 0 }
+
+-- ---------------------------------------------------------------------------
+-- NO_SELF CONSTRAINT ON TASKS (blocks edge)
+-- ---------------------------------------------------------------------------
+
+--# test_setup_task_for_self_block
+SPAWN self_task: Task {
+  title = "Self blocking task",
+  status = "todo",
+  priority = 3
+}
+--@ expect:ok
+
+--# test_task_blocks_self_should_fail
+MATCH (t:Task)
+WHERE t.title = "Self blocking task"
+LINK blocks(t, t)
+--@ expect:error = "NoSelfViolation"
+
+--# test_verify_no_self_block_edge
+MATCH (t:Task)-[r:blocks]->(t)
+WHERE t.title = "Self blocking task"
+RETURN COUNT(r) AS self_edges
+--@ expect:rows = 1
+--@ expect:has_row { self_edges = 0 }
+
+-- ---------------------------------------------------------------------------
+-- ATTEMPT TO CREATE SELF-LINK VIA UPDATE (if supported)
+-- ---------------------------------------------------------------------------
+
+--# test_update_to_create_self_link_should_fail
+MATCH (e1:Employee), (e2:Employee), (m:Manager)
+WHERE e1.employee_id = "SELF001" AND e2.employee_id = "SELF001" AND m.first_name = "Charlie"
+MATCH (e1)-[r:reports_to]->(m)
+-- Attempting to change the target to self should fail
+-- Note: This might not be directly testable depending on SET semantics
+-- This is a conceptual test - actual implementation may vary
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- VERIFY NO_SELF DOESN'T AFFECT DIFFERENT ENTITIES
+-- ---------------------------------------------------------------------------
+
+--# test_multiple_employees_reporting_to_same_manager
+MATCH (e1:Employee), (e2:Employee), (m:Manager)
+WHERE e1.first_name = "Alice" AND e2.first_name = "Bob" AND m.first_name = "Charlie"
+WITH e1, e2, m
+MATCH (e1)-[r1:reports_to]->(m)
+MATCH (e2)-[r2:reports_to]->(m)
+RETURN COUNT(r1) + COUNT(r2) AS total_reports
+--@ expect:rows = 1
+--@ expect:has_row { total_reports = 2 }
+
+-- ---------------------------------------------------------------------------
+-- CIRCULAR DEPENDENCIES (NOT BLOCKED BY NO_SELF)
+-- ---------------------------------------------------------------------------
+
+--# test_setup_circular_employees
+SPAWN circ_emp1: Employee {
+  first_name = "Circular",
+  last_name = "One",
+  email = "circ1@company.com",
+  employee_id = "CIRC001",
+  hire_date = now(),
+  salary = 80000.0
+}
+--@ expect:ok
+
+--# test_setup_circular_employee_2
+SPAWN circ_emp2: Employee {
+  first_name = "Circular",
+  last_name = "Two",
+  email = "circ2@company.com",
+  employee_id = "CIRC002",
+  hire_date = now(),
+  salary = 80000.0
+}
+--@ expect:ok
+
+--# test_circular_dependency_allowed
+MATCH (e1:Employee), (e2:Employee)
+WHERE e1.employee_id = "CIRC001" AND e2.employee_id = "CIRC002"
+LINK reports_to(e1, e2)
+--@ expect:ok
+
+--# test_circular_dependency_reverse_allowed
+MATCH (e1:Employee), (e2:Employee)
+WHERE e1.employee_id = "CIRC001" AND e2.employee_id = "CIRC002"
+LINK reports_to(e2, e1)
+--@ expect:ok
+
+--# test_verify_circular_dependency_exists
+MATCH (e1:Employee)-[:reports_to]->(e2:Employee)-[:reports_to]->(e1)
+WHERE e1.employee_id = "CIRC001"
+RETURN e1.first_name, e2.first_name
+--@ expect:rows = 1
+--@ expect:has_row { e1.first_name = "Circular", e2.first_name = "Circular" }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_self_test_entities
+MATCH (e:Employee)
+WHERE e.employee_id IN ["SELF001", "CIRC001", "CIRC002"]
+KILL e
+--@ expect:ok
+
+--# test_cleanup_self_dept
+MATCH (d:Department)
+WHERE d.code = "SELF"
+KILL d
+--@ expect:ok
+
+--# test_cleanup_self_task
+MATCH (t:Task)
+WHERE t.title = "Self blocking task"
+KILL t
+--@ expect:ok

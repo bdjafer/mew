@@ -23,6 +23,13 @@ pub struct Assertion {
     pub value_min: Option<i64>,
     pub value_max: Option<i64>,
 
+    // Query assertions - scalar (column name + value)
+    pub scalar_column: Option<String>,
+    pub scalar_value: Option<Value>,
+
+    // Query assertions - columns
+    pub columns: Option<Vec<String>>,
+
     // Query assertions - rows
     pub rows: Option<usize>,
     pub rows_min: Option<usize>,
@@ -30,6 +37,7 @@ pub struct Assertion {
     pub empty: Option<bool>,
     pub contains: Vec<Row>,
     pub exactly: Option<Vec<Row>>,
+    pub returns: Option<Vec<Row>>,
     pub ordered: bool,
     pub first: Option<Row>,
     pub last: Option<Row>,
@@ -37,9 +45,6 @@ pub struct Assertion {
     // Error assertions
     pub error: Option<String>,
     pub error_pattern: Option<String>,
-
-    // Capture (for future use with variables)
-    pub capture: Option<String>,
 
     // Custom assertion function
     #[allow(clippy::type_complexity)]
@@ -55,8 +60,12 @@ impl std::fmt::Debug for Assertion {
             .field("deleted", &self.deleted)
             .field("linked", &self.linked)
             .field("value", &self.value)
+            .field("scalar_column", &self.scalar_column)
+            .field("columns", &self.columns)
             .field("rows", &self.rows)
             .field("empty", &self.empty)
+            .field("returns", &self.returns)
+            .field("ordered", &self.ordered)
             .field("error", &self.error)
             .field("custom", &self.custom.as_ref().map(|_| "<fn>"))
             .finish()
@@ -199,7 +208,77 @@ impl Assertion {
     }
 
     fn verify_query(&self, step: &str, result: &QueryResult) -> ExampleResult<()> {
-        // Check single value
+        // Check columns first (if specified)
+        if let Some(ref expected_columns) = self.columns {
+            if result.columns.len() != expected_columns.len() {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "column count mismatch:\n  expected: {:?}\n  actual:   {:?}",
+                        expected_columns, result.columns
+                    ),
+                ));
+            }
+            for (i, expected_col) in expected_columns.iter().enumerate() {
+                if result.columns.get(i) != Some(expected_col) {
+                    return Err(ExampleError::assertion_failed(
+                        step,
+                        format!(
+                            "column mismatch at index {}:\n  expected: {:?}\n  actual:   {:?}",
+                            i, expected_columns, result.columns
+                        ),
+                    ));
+                }
+            }
+        }
+
+        // Check scalar (column name + value for single-row, single-column result)
+        if let Some(ref expected_column) = self.scalar_column {
+            if result.rows.len() != 1 {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "scalar() expects 1 row, got {}\n  columns: {:?}",
+                        result.rows.len(),
+                        result.columns
+                    ),
+                ));
+            }
+            if result.columns.len() != 1 {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "scalar() expects 1 column, got {:?}",
+                        result.columns
+                    ),
+                ));
+            }
+            if result.columns[0] != *expected_column {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "scalar() column mismatch:\n  expected: \"{}\"\n  actual:   \"{}\"",
+                        expected_column, result.columns[0]
+                    ),
+                ));
+            }
+            if let Some(ref expected_value) = self.scalar_value {
+                let actual = &result.rows[0][0];
+                if !values_equal(actual, expected_value) {
+                    return Err(ExampleError::assertion_failed(
+                        step,
+                        format!(
+                            "scalar() value mismatch for column \"{}\":\n  expected: {}\n  actual:   {}",
+                            expected_column,
+                            format_value(expected_value),
+                            format_value(actual)
+                        ),
+                    ));
+                }
+            }
+        }
+
+        // Check single value (legacy - no column verification)
         if let Some(ref expected_value) = self.value {
             if result.rows.len() != 1 || result.rows[0].len() != 1 {
                 return Err(ExampleError::assertion_failed(
@@ -215,7 +294,11 @@ impl Assertion {
             if !values_equal(actual, expected_value) {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected value {:?}, got {:?}", expected_value, actual),
+                    format!(
+                        "value mismatch:\n  expected: {}\n  actual:   {}",
+                        format_value(expected_value),
+                        format_value(actual)
+                    ),
                 ));
             }
         }
@@ -297,17 +380,86 @@ impl Assertion {
             }
         }
 
-        // Check contains
+        // Check contains (deprecated - loose matching)
         for expected_row in &self.contains {
             if !result_contains_row(result, expected_row) {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected result to contain row {:?}", expected_row),
+                    format!(
+                        "expected result to contain row:\n  expected: {}\n  columns:  {:?}\n  actual rows: {}",
+                        format_row(expected_row),
+                        result.columns,
+                        result.rows.len()
+                    ),
                 ));
             }
         }
 
-        // Check exactly (with multiplicity)
+        // Check returns (strict row matching with ordered support)
+        if let Some(ref expected_rows) = self.returns {
+            if result.rows.len() != expected_rows.len() {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "returns() row count mismatch:\n  expected: {} rows\n  actual:   {} rows\n  columns:  {:?}",
+                        expected_rows.len(),
+                        result.rows.len(),
+                        result.columns
+                    ),
+                ));
+            }
+
+            if self.ordered {
+                // Ordered comparison - rows must match in sequence
+                for (i, expected_row) in expected_rows.iter().enumerate() {
+                    if !row_matches(&result.columns, &result.rows[i], expected_row) {
+                        return Err(ExampleError::assertion_failed(
+                            step,
+                            format!(
+                                "returns().ordered() row mismatch at index {}:\n  expected: {}\n  actual:   {}\n  columns:  {:?}",
+                                i,
+                                format_row(expected_row),
+                                format_row_values(&result.columns, &result.rows[i]),
+                                result.columns
+                            ),
+                        ));
+                    }
+                }
+            } else {
+                // Unordered comparison - multiset matching
+                let mut remaining_rows: Vec<(usize, &[Value])> = result
+                    .rows
+                    .iter()
+                    .enumerate()
+                    .map(|(i, r)| (i, r.as_slice()))
+                    .collect();
+
+                for (expected_idx, expected_row) in expected_rows.iter().enumerate() {
+                    let pos = remaining_rows
+                        .iter()
+                        .position(|(_, row)| row_matches(&result.columns, row, expected_row));
+                    match pos {
+                        Some(idx) => {
+                            remaining_rows.remove(idx);
+                        }
+                        None => {
+                            return Err(ExampleError::assertion_failed(
+                                step,
+                                format!(
+                                    "returns() missing expected row at index {}:\n  expected: {}\n  columns:  {:?}\n  remaining actual rows: {}",
+                                    expected_idx,
+                                    format_row(expected_row),
+                                    result.columns,
+                                    remaining_rows.len()
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check exactly (legacy - same as returns but kept for compatibility)
         if let Some(ref expected_rows) = self.exactly {
             if result.rows.len() != expected_rows.len() {
                 return Err(ExampleError::assertion_failed(
@@ -319,19 +471,45 @@ impl Assertion {
                     ),
                 ));
             }
-            // Use multiset comparison: match and remove each expected row from actual
-            let mut remaining_rows: Vec<&[Value]> = result.rows.iter().map(|r| r.as_slice()).collect();
-            for expected_row in expected_rows {
-                let pos = remaining_rows.iter().position(|row| row_matches(&result.columns, row, expected_row));
-                match pos {
-                    Some(idx) => {
-                        remaining_rows.remove(idx);
-                    }
-                    None => {
+
+            if self.ordered {
+                // Ordered comparison
+                for (i, expected_row) in expected_rows.iter().enumerate() {
+                    if !row_matches(&result.columns, &result.rows[i], expected_row) {
                         return Err(ExampleError::assertion_failed(
                             step,
-                            format!("expected result to contain row {:?}", expected_row),
+                            format!(
+                                "exactly().ordered() row mismatch at index {}:\n  expected: {}\n  actual:   {}\n  columns:  {:?}",
+                                i,
+                                format_row(expected_row),
+                                format_row_values(&result.columns, &result.rows[i]),
+                                result.columns
+                            ),
                         ));
+                    }
+                }
+            } else {
+                // Multiset comparison
+                let mut remaining_rows: Vec<&[Value]> =
+                    result.rows.iter().map(|r| r.as_slice()).collect();
+                for expected_row in expected_rows {
+                    let pos = remaining_rows
+                        .iter()
+                        .position(|row| row_matches(&result.columns, row, expected_row));
+                    match pos {
+                        Some(idx) => {
+                            remaining_rows.remove(idx);
+                        }
+                        None => {
+                            return Err(ExampleError::assertion_failed(
+                                step,
+                                format!(
+                                    "expected result to contain row:\n  expected: {}\n  columns:  {:?}",
+                                    format_row(expected_row),
+                                    result.columns
+                                ),
+                            ));
+                        }
                     }
                 }
             }
@@ -349,8 +527,10 @@ impl Assertion {
                 return Err(ExampleError::assertion_failed(
                     step,
                     format!(
-                        "first row {:?} does not match expected {:?}",
-                        result.rows[0], expected_first
+                        "first() row mismatch:\n  expected: {}\n  actual:   {}\n  columns:  {:?}",
+                        format_row(expected_first),
+                        format_row_values(&result.columns, &result.rows[0]),
+                        result.columns
                     ),
                 ));
             }
@@ -369,8 +549,10 @@ impl Assertion {
                 return Err(ExampleError::assertion_failed(
                     step,
                     format!(
-                        "last row {:?} does not match expected {:?}",
-                        last_row, expected_last
+                        "last() row mismatch:\n  expected: {}\n  actual:   {}\n  columns:  {:?}",
+                        format_row(expected_last),
+                        format_row_values(&result.columns, last_row),
+                        result.columns
                     ),
                 ));
             }
@@ -424,9 +606,50 @@ impl AssertionBuilder {
         self
     }
 
-    // ========== Query assertions - single value ==========
+    /// Assert that N edges were removed (unlinked).
+    pub fn unlinked(mut self, n: usize) -> Self {
+        self.assertion.linked = Some(n);
+        self
+    }
+
+    // ========== Query assertions - columns ==========
+
+    /// Assert that the result has exactly these columns (in order).
+    ///
+    /// # Example
+    /// ```ignore
+    /// .step("query", |a| a.columns(&["id", "name", "email"]).rows(5))
+    /// ```
+    pub fn columns(mut self, names: &[&str]) -> Self {
+        self.assertion.columns = Some(names.iter().map(|s| s.to_string()).collect());
+        self
+    }
+
+    // ========== Query assertions - scalar ==========
+
+    /// Assert a single-row, single-column result with column name verification.
+    ///
+    /// This is the strict replacement for `contains_value()` - it verifies:
+    /// - Exactly 1 row
+    /// - Exactly 1 column
+    /// - Column name matches
+    /// - Value matches
+    ///
+    /// # Example
+    /// ```ignore
+    /// .step("count_products", |a| a.scalar("total_products", 5i64))
+    /// ```
+    pub fn scalar<V: IntoValue>(mut self, column: &str, value: V) -> Self {
+        self.assertion.scalar_column = Some(column.to_string());
+        self.assertion.scalar_value = Some(value.into_value());
+        self
+    }
+
+    // ========== Query assertions - single value (legacy) ==========
 
     /// Assert that the result is a single value equal to the given value.
+    ///
+    /// Note: This does not verify the column name. Consider using `scalar()` instead.
     pub fn value<V: IntoValue>(mut self, v: V) -> Self {
         self.assertion.value = Some(v.into_value());
         self
@@ -464,6 +687,16 @@ impl AssertionBuilder {
         self
     }
 
+    /// Alias for rows_min - assert at least N rows.
+    pub fn rows_gte(self, n: usize) -> Self {
+        self.rows_min(n)
+    }
+
+    /// Alias for rows_max - assert at most N rows.
+    pub fn rows_lte(self, n: usize) -> Self {
+        self.rows_max(n)
+    }
+
     /// Assert that the result is empty.
     pub fn empty(mut self) -> Self {
         self.assertion.empty = Some(true);
@@ -476,19 +709,34 @@ impl AssertionBuilder {
         self
     }
 
-    /// Assert that the result contains a row matching the given fields.
-    pub fn contains(mut self, row: Row) -> Self {
-        self.assertion.contains.push(row);
+    // ========== Query assertions - row matching ==========
+
+    /// Assert that the result contains exactly these rows.
+    ///
+    /// By default, order does not matter (multiset comparison).
+    /// Use `.ordered()` to require rows in exact sequence.
+    ///
+    /// # Example
+    /// ```ignore
+    /// .step("list_users", |a| a.returns(vec![
+    ///     row!{ name: "Alice", age: 30 },
+    ///     row!{ name: "Bob", age: 25 },
+    /// ]))
+    ///
+    /// // With ordering
+    /// .step("sorted_users", |a| a
+    ///     .returns(vec![row!{ name: "Alice" }, row!{ name: "Bob" }])
+    ///     .ordered()
+    /// )
+    /// ```
+    pub fn returns(mut self, rows: Vec<Row>) -> Self {
+        self.assertion.returns = Some(rows);
         self
     }
 
-    /// Assert that the result contains exactly these rows (order-independent).
-    pub fn exactly(mut self, rows: Vec<Row>) -> Self {
-        self.assertion.exactly = Some(rows);
-        self
-    }
-
-    /// Assert that order matters for contains checks.
+    /// Assert that order matters for `returns()` or `exactly()` checks.
+    ///
+    /// When set, rows must match in exact sequence rather than as a multiset.
     pub fn ordered(mut self) -> Self {
         self.assertion.ordered = true;
         self
@@ -506,6 +754,85 @@ impl AssertionBuilder {
         self
     }
 
+    // ========== Deprecated methods ==========
+
+    /// Assert that the result contains exactly these rows (order-independent).
+    ///
+    /// **Deprecated**: Use `returns()` instead for clearer semantics.
+    #[deprecated(since = "0.1.0", note = "use returns() instead")]
+    pub fn exactly(mut self, rows: Vec<Row>) -> Self {
+        self.assertion.exactly = Some(rows);
+        self
+    }
+
+    /// Assert that the result contains a row matching the given fields.
+    ///
+    /// **Deprecated**: This is a loose check that ignores extra columns.
+    /// Use `returns(vec![row])` for strict single-row matching.
+    #[deprecated(since = "0.1.0", note = "use returns(vec![row]) instead")]
+    pub fn contains(mut self, row: Row) -> Self {
+        self.assertion.contains.push(row);
+        self
+    }
+
+    /// Assert that the result contains a specific value (anywhere in any row).
+    ///
+    /// **Deprecated**: This is very loose - it doesn't verify which column or row.
+    /// Use `scalar(column, value)` for single-value results, or `returns()` for row matching.
+    #[deprecated(since = "0.1.0", note = "use scalar() or returns() instead")]
+    pub fn contains_value<V: IntoValue>(self, v: V) -> Self {
+        let value = v.into_value();
+        self.assert_fn(move |result| {
+            if let StatementResult::Query(q) = result {
+                for row in &q.rows {
+                    for cell in row {
+                        if values_equal(cell, &value) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        })
+    }
+
+    /// Assert that the result contains a NULL value (anywhere in any row).
+    ///
+    /// **Deprecated**: Use `returns()` with explicit null values instead.
+    #[deprecated(since = "0.1.0", note = "use returns() with explicit null instead")]
+    pub fn contains_null(self) -> Self {
+        self.assert_fn(move |result| {
+            if let StatementResult::Query(q) = result {
+                for row in &q.rows {
+                    for cell in row {
+                        if matches!(cell, Value::Null) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        })
+    }
+
+    /// Assert that the first row's first column equals the given value.
+    ///
+    /// **Deprecated**: Use `scalar(column, value)` or `first(row)` instead.
+    #[deprecated(since = "0.1.0", note = "use scalar() or first() instead")]
+    pub fn first_value<V: IntoValue>(self, v: V) -> Self {
+        let value = v.into_value();
+        self.assert_fn(move |result| {
+            if let StatementResult::Query(q) = result {
+                if let Some(first_row) = q.rows.first() {
+                    if let Some(first_cell) = first_row.first() {
+                        return values_equal(first_cell, &value);
+                    }
+                }
+            }
+            false
+        })
+    }
+
     // ========== Error assertions ==========
 
     /// Assert that the step fails with an error containing the given string.
@@ -521,12 +848,6 @@ impl AssertionBuilder {
     }
 
     // ========== Advanced ==========
-
-    /// Capture a value for use in later steps (future feature).
-    pub fn capture(mut self, name: impl Into<String>) -> Self {
-        self.assertion.capture = Some(name.into());
-        self
-    }
 
     /// Custom assertion function.
     pub fn assert_fn<F>(mut self, f: F) -> Self
@@ -577,6 +898,41 @@ fn row_matches(columns: &[String], row: &[Value], expected: &Row) -> bool {
         }
     }
     true
+}
+
+/// Format a Value for display in error messages.
+fn format_value(v: &Value) -> String {
+    match v {
+        Value::Int(i) => i.to_string(),
+        Value::Float(f) => format!("{:.6}", f),
+        Value::String(s) => format!("\"{}\"", s),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_string(),
+        Value::Timestamp(ts) => format!("timestamp({})", ts),
+        Value::Duration(d) => format!("duration({})", d),
+        Value::NodeRef(id) => format!("node({})", id),
+        Value::EdgeRef(id) => format!("edge({})", id),
+    }
+}
+
+/// Format a Row (HashMap) for display in error messages.
+fn format_row(row: &Row) -> String {
+    let mut parts: Vec<String> = row
+        .iter()
+        .map(|(k, v)| format!("{}: {}", k, format_value(v)))
+        .collect();
+    parts.sort(); // Consistent ordering
+    format!("{{ {} }}", parts.join(", "))
+}
+
+/// Format actual row values with column names for display in error messages.
+fn format_row_values(columns: &[String], values: &[Value]) -> String {
+    let parts: Vec<String> = columns
+        .iter()
+        .zip(values.iter())
+        .map(|(col, val)| format!("{}: {}", col, format_value(val)))
+        .collect();
+    format!("{{ {} }}", parts.join(", "))
 }
 
 /// Trait for converting values into MEW Values.

@@ -1,0 +1,290 @@
+-- ===========================================================================
+-- SCENARIO: EXISTS Patterns and Aggregates in WHERE
+-- DESCRIPTION: Tests EXISTS, NOT EXISTS, and aggregate functions in WHERE
+-- FOCUS: Advanced pattern matching (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- BASIC EXISTS PATTERNS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_skills
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[:has_skill]->(s:Skill)
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 3
+--@ expect:has_row { first_name = "Alice" }
+--@ expect:has_row { first_name = "Bob" }
+--@ expect:has_row { first_name = "Charlie" }
+
+--# test_employees_without_certifications
+MATCH (e:Employee)
+WHERE NOT EXISTS {
+  MATCH (e)-[:has_certification]->(cert:Certification)
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 3
+
+-- ---------------------------------------------------------------------------
+-- EXISTS WITH FILTERS IN SUBQUERY
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_expert_level_skills
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[r:has_skill]->(s:Skill)
+  WHERE r.level = "expert"
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 2
+--@ expect:has_row { first_name = "Alice" }
+--@ expect:has_row { first_name = "Charlie" }
+
+--# test_employees_with_programming_skills
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[:has_skill]->(s:Skill)
+  WHERE s.category = "Programming"
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 2
+--@ expect:has_row { first_name = "Alice" }
+--@ expect:has_row { first_name = "Bob" }
+
+-- ---------------------------------------------------------------------------
+-- NESTED EXISTS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_role_requiring_skill_they_have
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[:has_role]->(r:Role)
+  WHERE EXISTS {
+    MATCH (r)-[:requires_skill]->(s:Skill)
+    WHERE EXISTS {
+      MATCH (e)-[:has_skill]->(s)
+    }
+  }
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 1
+
+-- ---------------------------------------------------------------------------
+-- EXISTS WITH MULTIPLE CONDITIONS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_in_engineering_with_rust_skill
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[:in_department]->(d:Department)
+  WHERE d.name = "Engineering"
+} AND EXISTS {
+  MATCH (e)-[:has_skill]->(s:Skill)
+  WHERE s.name = "Rust"
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 2
+--@ expect:has_row { first_name = "Alice" }
+--@ expect:has_row { first_name = "Bob" }
+
+-- ---------------------------------------------------------------------------
+-- NOT EXISTS PATTERNS
+-- ---------------------------------------------------------------------------
+
+--# test_skills_without_employees
+MATCH (s:Skill)
+WHERE NOT EXISTS {
+  MATCH (e:Employee)-[:has_skill]->(s)
+}
+RETURN s.name
+ORDER BY s.name
+--@ expect:rows >= 0
+
+--# test_departments_without_managers
+MATCH (d:Department)
+WHERE NOT EXISTS {
+  MATCH (m:Manager)-[:heads_department]->(d)
+}
+RETURN d.name
+ORDER BY d.name
+--@ expect:rows >= 2
+
+--# test_employees_not_completed_any_course
+MATCH (e:Employee)
+WHERE NOT EXISTS {
+  MATCH (e)-[:completed_course]->(c:Course)
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 3
+
+-- ---------------------------------------------------------------------------
+-- COMBINING EXISTS AND NOT EXISTS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_skills_but_no_certifications
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[:has_skill]->(s:Skill)
+} AND NOT EXISTS {
+  MATCH (e)-[:has_certification]->(cert:Certification)
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 2
+
+-- ---------------------------------------------------------------------------
+-- EXISTS WITH AGGREGATIONS IN WHERE CLAUSE
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_multiple_skills
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[:has_skill]->(s:Skill)
+  WITH e, COUNT(s) AS skill_count
+  WHERE skill_count > 1
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 1
+--@ expect:has_row { first_name = "Alice" }
+
+--# test_managers_with_multiple_reports
+MATCH (m:Manager)
+WHERE EXISTS {
+  MATCH (e:Employee)-[:reports_to]->(m)
+  WITH m, COUNT(e) AS report_count
+  WHERE report_count >= 2
+}
+RETURN m.first_name
+ORDER BY m.first_name
+--@ expect:rows >= 1
+--@ expect:has_row { first_name = "Charlie" }
+
+-- ---------------------------------------------------------------------------
+-- EXISTS WITH EDGE ATTRIBUTE CONDITIONS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_high_years_experience_in_any_skill
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[r:has_skill]->(s:Skill)
+  WHERE r.years_experience >= 5
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 2
+
+--# test_employees_with_primary_department_assignment
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[r:in_department]->(d:Department)
+  WHERE r.is_primary = true
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 4
+
+-- ---------------------------------------------------------------------------
+-- COMPLEX EXISTS PATTERNS
+-- ---------------------------------------------------------------------------
+
+--# test_departments_with_employees_having_management_skills
+MATCH (d:Department)
+WHERE EXISTS {
+  MATCH (d)<-[:in_department]-(e:Employee)-[:has_skill]->(s:Skill)
+  WHERE s.category = "Management"
+}
+RETURN d.name
+ORDER BY d.name
+--@ expect:rows >= 1
+
+--# test_roles_with_unfilled_skill_requirements
+MATCH (r:Role)
+WHERE EXISTS {
+  MATCH (r)-[:requires_skill]->(s:Skill)
+  WHERE NOT EXISTS {
+    MATCH (e:Employee)-[:has_role]->(r)
+    WHERE EXISTS {
+      MATCH (e)-[:has_skill]->(s)
+    }
+  }
+}
+RETURN r.title
+ORDER BY r.title
+--@ expect:rows >= 0
+
+-- ---------------------------------------------------------------------------
+-- EXISTS WITH PATH PATTERNS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_direct_or_indirect_reports
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)<-[:reports_to]-(direct:Employee)
+} OR EXISTS {
+  MATCH (e)<-[:reports_to]-(:Employee)<-[:reports_to]-(indirect:Employee)
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 2
+
+-- ---------------------------------------------------------------------------
+-- NOT EXISTS WITH COMPLEX CONDITIONS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_without_skills_matching_role_requirements
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[:has_role]->(r:Role)-[:requires_skill]->(s:Skill)
+  WHERE NOT EXISTS {
+    MATCH (e)-[:has_skill]->(s)
+  }
+}
+RETURN e.first_name, e.employee_id
+ORDER BY e.first_name
+--@ expect:rows >= 0
+
+--# test_courses_not_completed_by_anyone
+MATCH (c:Course)
+WHERE NOT EXISTS {
+  MATCH (e:Employee)-[:completed_course]->(c)
+}
+RETURN c.name
+ORDER BY c.name
+--@ expect:rows >= 0
+
+-- ---------------------------------------------------------------------------
+-- EXISTS WITH ARITHMETIC IN SUBQUERY
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_high_total_skill_experience
+MATCH (e:Employee)
+WHERE EXISTS {
+  MATCH (e)-[r:has_skill]->(s:Skill)
+  WITH e, SUM(r.years_experience) AS total_years
+  WHERE total_years > 5
+}
+RETURN e.first_name
+ORDER BY e.first_name
+--@ expect:rows >= 1
+
+--# test_departments_over_budget_threshold
+MATCH (d:Department)
+WHERE d.budget > 1000000.0
+AND EXISTS {
+  MATCH (d)<-[:in_department]-(e:Employee)
+  WITH d, SUM(e.salary) AS total_salaries
+  WHERE total_salaries > d.budget * 0.8
+}
+RETURN d.name
+ORDER BY d.name
+--@ expect:rows >= 0

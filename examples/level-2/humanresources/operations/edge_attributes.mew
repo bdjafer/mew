@@ -1,0 +1,220 @@
+-- ===========================================================================
+-- SCENARIO: Edge Attributes
+-- DESCRIPTION: Tests edges with attributes - CRUD on edge attributes
+-- FOCUS: Edge attributes (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create test entities
+-- ---------------------------------------------------------------------------
+
+--# test_setup_employee
+SPAWN test_emp: Employee {
+  first_name = "Test",
+  last_name = "User",
+  email = "test@company.com",
+  employee_id = "TEST001",
+  hire_date = now(),
+  salary = 85000.0
+}
+--@ expect:ok
+
+--# test_setup_skill
+SPAWN test_skill: Skill {
+  name = "Testing",
+  category = "QA"
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- CREATE EDGE WITH ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_link_with_edge_attributes
+LINK has_skill(test_emp, test_skill) {
+  level = "intermediate",
+  years_experience = 2
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- QUERY EDGE ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_query_edge_attributes
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001"
+RETURN e.first_name, s.name, r.level, r.years_experience
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Test", name = "Testing", level = "intermediate", years_experience = 2 }
+
+-- ---------------------------------------------------------------------------
+-- UPDATE EDGE ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_update_edge_attribute
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001" AND s.name = "Testing"
+SET r.level = "expert", r.years_experience = 5
+--@ expect:ok
+
+--# test_verify_edge_attribute_updated
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001"
+RETURN r.level, r.years_experience
+--@ expect:rows = 1
+--@ expect:has_row { level = "expert", years_experience = 5 }
+
+-- ---------------------------------------------------------------------------
+-- QUERY WITH EDGE ATTRIBUTE FILTERS
+-- ---------------------------------------------------------------------------
+
+--# test_filter_by_edge_attribute_level
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE r.level = "expert"
+RETURN e.first_name, s.name
+ORDER BY e.first_name, s.name
+--@ expect:rows >= 2
+--@ expect:has_row { first_name = "Test", name = "Testing" }
+
+--# test_filter_by_edge_attribute_numeric
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE r.years_experience >= 5
+RETURN e.first_name, s.name, r.years_experience
+ORDER BY r.years_experience DESC
+--@ expect:rows >= 2
+
+-- ---------------------------------------------------------------------------
+-- AGGREGATIONS ON EDGE ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_avg_years_experience_per_skill
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+RETURN s.name, AVG(r.years_experience) AS avg_years
+ORDER BY avg_years DESC
+--@ expect:rows >= 1
+
+--# test_count_employees_by_skill_level
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE s.name = "Rust"
+RETURN r.level, COUNT(e) AS employee_count
+ORDER BY r.level
+--@ expect:rows >= 1
+
+-- ---------------------------------------------------------------------------
+-- EDGE ATTRIBUTES ON DIFFERENT EDGE TYPES
+-- ---------------------------------------------------------------------------
+
+--# test_department_edge_attributes
+MATCH (e:Employee)-[r:in_department]->(d:Department)
+WHERE e.first_name = "Alice"
+RETURN e.first_name, d.name, r.is_primary
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Alice", name = "Engineering", is_primary = true }
+
+--# test_role_requirement_edge_attributes
+MATCH (role:Role)-[r:requires_skill]->(s:Skill)
+WHERE role.code = "SWE"
+RETURN role.title, s.name, r.minimum_level
+--@ expect:rows = 1
+--@ expect:has_row { title = "Software Engineer", name = "Rust", minimum_level = "intermediate" }
+
+--# test_course_completion_edge_attributes
+MATCH (e:Employee)-[r:completed_course]->(c:Course)
+WHERE e.first_name = "Alice"
+RETURN e.first_name, c.name, r.score
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Alice", name = "Introduction to Rust", score = 95 }
+
+--# test_certification_edge_attributes
+MATCH (e:Employee)-[r:has_certification]->(cert:Certification)
+WHERE e.first_name = "Alice"
+RETURN e.first_name, cert.name, r.certificate_number
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Alice", name = "AWS Solutions Architect", certificate_number = "AWS-2024-001" }
+
+-- ---------------------------------------------------------------------------
+-- COMPLEX QUERIES WITH EDGE ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_find_overqualified_employees
+MATCH (e:Employee)-[has_role]->(role:Role)
+MATCH (role)-[req:requires_skill]->(s:Skill)
+MATCH (e)-[emp_skill:has_skill]->(s)
+WHERE emp_skill.level > req.minimum_level
+RETURN e.first_name, role.title, s.name, emp_skill.level AS has, req.minimum_level AS required
+--@ expect:rows >= 0
+
+--# test_employees_with_multiple_edge_attribute_conditions
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE r.level IN ["expert", "advanced"] AND r.years_experience >= 3
+RETURN e.first_name, s.name, r.level, r.years_experience
+ORDER BY r.years_experience DESC
+--@ expect:rows >= 1
+
+-- ---------------------------------------------------------------------------
+-- SET EDGE ATTRIBUTE TO NULL
+-- ---------------------------------------------------------------------------
+
+--# test_set_edge_attribute_null
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001"
+SET r.years_experience = NULL
+--@ expect:ok
+
+--# test_verify_edge_attribute_null
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001"
+RETURN r.years_experience
+--@ expect:rows = 1
+--@ expect:has_row { years_experience = NULL }
+
+-- ---------------------------------------------------------------------------
+-- DELETE EDGE AND VERIFY ATTRIBUTES GONE
+-- ---------------------------------------------------------------------------
+
+--# test_unlink_edge_with_attributes
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001"
+UNLINK r
+--@ expect:ok
+
+--# test_verify_edge_deleted
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001"
+RETURN COUNT(r) AS edge_count
+--@ expect:rows = 1
+--@ expect:has_row { edge_count = 0 }
+
+-- ---------------------------------------------------------------------------
+-- CREATE EDGE WITH PARTIAL ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_link_with_partial_attributes
+LINK has_skill(test_emp, test_skill) {
+  level = "beginner"
+}
+--@ expect:ok
+
+--# test_verify_partial_attributes
+MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+WHERE e.employee_id = "TEST001"
+RETURN r.level, r.years_experience
+--@ expect:rows = 1
+--@ expect:has_row { level = "beginner", years_experience = NULL }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_test_entities
+MATCH (e:Employee)
+WHERE e.employee_id = "TEST001"
+KILL e
+--@ expect:ok
+
+--# test_cleanup_test_skill
+MATCH (s:Skill)
+WHERE s.name = "Testing"
+KILL s
+--@ expect:ok

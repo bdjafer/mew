@@ -124,3 +124,49 @@ SPAWN phone_img: ProductImage {
   alt_text = "SmartPhone X",
   is_primary = true
 }
+
+-- ===========================================================================
+-- EDGE RELATIONSHIPS
+-- ===========================================================================
+
+-- Category hierarchy
+--# seed_link_computers_electronics
+LINK parent_category(computers, electronics)
+
+-- Products to categories
+--# seed_link_laptop_computers
+LINK in_category(laptop, computers)
+
+--# seed_link_phone_electronics
+LINK in_category(phone, electronics)
+
+--# seed_link_headphones_electronics
+LINK in_category(headphones, electronics)
+
+--# seed_link_ebook_books
+LINK in_category(ebook, books)
+
+-- Reviews to products
+--# seed_link_laptop_review
+LINK review_of(laptop_review, laptop)
+
+--# seed_link_phone_review
+LINK review_of(phone_review, phone)
+
+-- Reviews to customers
+--# seed_link_laptop_review_customer
+LINK reviewed_by(laptop_review, alice)
+
+--# seed_link_phone_review_customer
+LINK reviewed_by(phone_review, bob)
+
+-- Product images
+--# seed_link_laptop_image
+LINK has_image(laptop, laptop_img)
+
+--# seed_link_phone_image
+LINK has_image(phone, phone_img)
+
+-- Related products
+--# seed_link_phone_headphones_related
+LINK related_to(phone, headphones)

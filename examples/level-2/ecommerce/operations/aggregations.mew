@@ -1,0 +1,95 @@
+-- ===========================================================================
+-- SCENARIO: Aggregations
+-- DESCRIPTION: Tests COUNT, SUM, AVG, MIN, MAX and grouped aggregations
+-- FOCUS: Aggregation functions (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- BASIC AGGREGATIONS
+-- ---------------------------------------------------------------------------
+
+--# test_count_all_products
+MATCH (p:Product)
+RETURN COUNT(p) AS total_products
+
+--# test_count_by_type
+MATCH (p:PhysicalProduct)
+RETURN COUNT(p) AS physical_count
+
+--# test_sum_price_all_products
+MATCH (p:Product)
+WHERE p.status = "active"
+RETURN SUM(p.price) AS total_value
+
+--# test_avg_price
+MATCH (p:Product)
+WHERE p.status = "active"
+RETURN AVG(p.price) AS avg_price
+
+--# test_min_max_price
+MATCH (p:Product)
+WHERE p.status = "active"
+RETURN MIN(p.price) AS min_price, MAX(p.price) AS max_price
+
+-- ---------------------------------------------------------------------------
+-- AGGREGATIONS WITH GROUPING
+-- ---------------------------------------------------------------------------
+
+--# test_count_by_status
+MATCH (p:Product)
+RETURN p.status, COUNT(p) AS count
+ORDER BY p.status
+
+-- ---------------------------------------------------------------------------
+-- AGGREGATIONS ON SUBTYPE ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_sum_weight_physical_products
+MATCH (p:PhysicalProduct)
+RETURN SUM(p.weight_kg) AS total_weight
+--@ expect:rows = 1
+--@ expect:has_row { total_weight = 2.6 }
+
+--# test_avg_weight_physical_products
+MATCH (p:PhysicalProduct)
+RETURN AVG(p.weight_kg) AS avg_weight
+
+-- ---------------------------------------------------------------------------
+-- AGGREGATIONS WITH RELATIONSHIPS
+-- ---------------------------------------------------------------------------
+
+--# test_count_reviews_per_product
+MATCH (p:Product)<-[review_of]-(r:Review)
+RETURN p.name, COUNT(r) AS review_count
+ORDER BY p.name
+
+--# test_avg_rating_per_product
+MATCH (p:Product)<-[review_of]-(r:Review)
+RETURN p.name, AVG(r.rating) AS avg_rating
+ORDER BY p.name
+
+-- ---------------------------------------------------------------------------
+-- COMPLEX AGGREGATIONS
+-- ---------------------------------------------------------------------------
+
+--# test_products_without_reviews_count
+MATCH (p:Product)
+WHERE NOT EXISTS {
+  MATCH (p)<-[review_of]-(r:Review)
+}
+RETURN COUNT(p) AS products_without_reviews
+
+--# test_aggregation_with_having_like_filter
+MATCH (p:Product)
+WITH p, COUNT((p)<-[review_of]-(:Review)) AS review_count
+WHERE review_count > 0
+RETURN p.name, review_count
+ORDER BY p.name
+
+-- ---------------------------------------------------------------------------
+-- AGGREGATION WITH DISTINCT
+-- ---------------------------------------------------------------------------
+
+--# test_count_distinct_customers_with_reviews
+MATCH (c:Customer)-[reviewed_by]-(r:Review)
+RETURN COUNT(DISTINCT c) AS customers_with_reviews

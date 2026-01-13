@@ -50,6 +50,7 @@ pub mod prelude {
     pub use crate::assertion::{Assertion, AssertionBuilder, Row};
     pub use crate::error::{ExampleError, ExampleResult};
     pub use crate::row;
+    pub use crate::row_str;
     pub use crate::scenario::{examples_path, Scenario};
 }
 
@@ -68,6 +69,26 @@ macro_rules! row {
         let mut row = $crate::Row::new();
         $(
             row.insert(stringify!($key).to_string(), $crate::value_ext::IntoRowValue::into_row_value($value));
+        )*
+        row
+    }};
+}
+
+/// Macro for creating a Row with string keys (supports dotted names like "b.field").
+///
+/// # Example
+///
+/// ```ignore
+/// use mew_tests::prelude::*;
+///
+/// let row = row_str!{ "b.title": "Example", "b.count": 42 };
+/// ```
+#[macro_export]
+macro_rules! row_str {
+    { $($key:expr => $value:expr),* $(,)? } => {{
+        let mut row = $crate::Row::new();
+        $(
+            row.insert($key.to_string(), $crate::value_ext::IntoRowValue::into_row_value($value));
         )*
         row
     }};
