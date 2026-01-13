@@ -20,7 +20,7 @@ impl Parser {
     pub fn parse_stmt(&mut self) -> ParseResult<Stmt> {
         let token = self.peek();
         match &token.kind {
-            TokenKind::Match => self.parse_match().map(Stmt::Match),
+            TokenKind::Match => self.parse_match_or_mutate(),
             TokenKind::Spawn => self.parse_spawn().map(Stmt::Spawn),
             TokenKind::Kill => self.parse_kill().map(Stmt::Kill),
             TokenKind::Link => self.parse_link().map(Stmt::Link),
@@ -58,6 +58,88 @@ impl Parser {
         }
     }
 
+    /// Parse MATCH, which can be either:
+    /// - MATCH ... RETURN ... (query)
+    /// - MATCH ... LINK/SET/KILL/UNLINK ... (compound mutation)
+    fn parse_match_or_mutate(&mut self) -> ParseResult<Stmt> {
+        let start = self.expect(&TokenKind::Match)?.span;
+
+        // Parse pattern
+        let pattern = self.parse_pattern()?;
+
+        // Parse optional WHERE
+        let where_clause = if self.check(&TokenKind::Where) {
+            self.advance();
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        // Check what comes next: RETURN or mutation keyword
+        if self.check(&TokenKind::Return) {
+            // Parse as normal MATCH query
+            let return_clause = self.parse_return_clause()?;
+
+            // Parse optional ORDER BY
+            let order_by = if self.check(&TokenKind::Order) {
+                self.advance();
+                self.expect(&TokenKind::By)?;
+                Some(self.parse_order_terms()?)
+            } else {
+                None
+            };
+
+            // Parse optional LIMIT
+            let limit = if self.check(&TokenKind::Limit) {
+                self.advance();
+                Some(self.expect_int()?)
+            } else {
+                None
+            };
+
+            // Parse optional OFFSET
+            let offset = if self.check(&TokenKind::Offset) {
+                self.advance();
+                Some(self.expect_int()?)
+            } else {
+                None
+            };
+
+            let span = self.span_from(start);
+
+            Ok(Stmt::Match(MatchStmt {
+                pattern,
+                where_clause,
+                return_clause,
+                order_by,
+                limit,
+                offset,
+                span,
+            }))
+        } else if self.is_mutation_keyword() {
+            // Parse as compound mutation
+            let mut mutations = Vec::new();
+            while self.is_mutation_keyword() {
+                mutations.push(self.parse_mutation_action()?);
+            }
+
+            let span = self.span_from(start);
+
+            Ok(Stmt::MatchMutate(MatchMutateStmt {
+                pattern,
+                where_clause,
+                mutations,
+                span,
+            }))
+        } else {
+            Err(crate::ParseError::unexpected_token(
+                self.peek().span,
+                "RETURN",
+                self.peek().kind.name(),
+            ))
+        }
+    }
+
     /// Parse multiple statements until end of input.
     pub fn parse_stmts(&mut self) -> ParseResult<Vec<Stmt>> {
         let mut stmts = Vec::new();
@@ -69,6 +151,8 @@ impl Parser {
 
     // ==================== MATCH ====================
 
+    /// Parse a MATCH statement. Returns either a MatchStmt (with RETURN) or
+    /// a MatchMutateStmt (with mutations like LINK, SET, KILL, UNLINK).
     pub(crate) fn parse_match(&mut self) -> ParseResult<MatchStmt> {
         let start = self.expect(&TokenKind::Match)?.span;
 
@@ -83,7 +167,7 @@ impl Parser {
             None
         };
 
-        // Parse RETURN (required)
+        // Parse RETURN (required for query)
         let return_clause = self.parse_return_clause()?;
 
         // Parse optional ORDER BY
@@ -122,6 +206,29 @@ impl Parser {
             offset,
             span,
         })
+    }
+
+    /// Check if current token is a mutation keyword.
+    fn is_mutation_keyword(&self) -> bool {
+        matches!(
+            &self.peek().kind,
+            TokenKind::Link | TokenKind::Set | TokenKind::Kill | TokenKind::Unlink
+        )
+    }
+
+    /// Parse a mutation action within a compound statement.
+    fn parse_mutation_action(&mut self) -> ParseResult<MutationAction> {
+        match &self.peek().kind {
+            TokenKind::Link => Ok(MutationAction::Link(self.parse_link()?)),
+            TokenKind::Set => Ok(MutationAction::Set(self.parse_set()?)),
+            TokenKind::Kill => Ok(MutationAction::Kill(self.parse_kill()?)),
+            TokenKind::Unlink => Ok(MutationAction::Unlink(self.parse_unlink()?)),
+            _ => Err(crate::ParseError::unexpected_token(
+                self.peek().span,
+                "mutation (LINK, SET, KILL, UNLINK)",
+                self.peek().kind.name(),
+            )),
+        }
     }
 
     fn parse_return_clause(&mut self) -> ParseResult<ReturnClause> {

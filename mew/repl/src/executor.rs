@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use mew_core::EntityId;
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{InspectStmt, MatchStmt, Target, TargetRef, TxnStmt, WalkStmt};
+use mew_parser::{InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Target, TargetRef, TxnStmt, WalkStmt};
 use mew_pattern::{Binding, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -369,4 +369,129 @@ pub fn to_pattern_bindings(bindings: &HashMap<String, EntityId>) -> Bindings {
 /// Remove bindings for a deleted entity.
 pub fn remove_bindings_for_entity(bindings: &mut HashMap<String, EntityId>, entity_id: EntityId) {
     bindings.retain(|_, value| *value != entity_id);
+}
+
+/// Execute a MATCH...mutation compound statement.
+pub fn execute_match_mutate(
+    registry: &Registry,
+    graph: &mut Graph,
+    bindings: &mut HashMap<String, EntityId>,
+    stmt: &MatchMutateStmt,
+) -> Result<String, String> {
+    use mew_pattern::{CompiledPattern, Matcher};
+
+    // Compile the pattern
+    let mut pattern = CompiledPattern::compile(&stmt.pattern, registry)
+        .map_err(|e| format!("Pattern compile error: {}", e))?;
+
+    // Add WHERE clause as filter if present
+    if let Some(ref where_expr) = stmt.where_clause {
+        pattern = pattern.with_filter(where_expr.clone());
+    }
+
+    // Execute the pattern match to get all bindings
+    let matcher = Matcher::new(registry, graph);
+    let bindings_list = matcher
+        .find_all(&pattern)
+        .map_err(|e| format!("Match error: {}", e))?;
+
+    let mut total_nodes = 0usize;
+    let mut total_edges = 0usize;
+
+    // For each set of bindings from the match, execute the mutations
+    for pattern_bindings in bindings_list {
+        // Convert pattern bindings to a HashMap for variable lookup
+        let mut local_bindings: HashMap<String, EntityId> = HashMap::new();
+
+        // Copy existing bindings
+        for (k, v) in bindings.iter() {
+            local_bindings.insert(k.clone(), *v);
+        }
+
+        // Add bindings from pattern match
+        for (var, binding) in pattern_bindings.iter() {
+            if let Some(node_id) = binding.as_node() {
+                local_bindings.insert(var.to_string(), node_id.into());
+            } else if let Some(edge_id) = binding.as_edge() {
+                local_bindings.insert(var.to_string(), edge_id.into());
+            }
+        }
+
+        // Execute each mutation with the current bindings
+        for mutation in &stmt.mutations {
+            match mutation {
+                MutationAction::Link(link_stmt) => {
+                    let mut targets = Vec::new();
+                    for target_ref in &link_stmt.targets {
+                        let entity_id = resolve_target_ref(target_ref, &local_bindings)?;
+                        targets.push(entity_id);
+                    }
+
+                    let mut executor = MutationExecutor::new(registry, graph);
+                    let result = executor
+                        .execute_link(link_stmt, targets)
+                        .map_err(|e| format!("Link error: {}", e))?;
+
+                    if let Some(ref var) = link_stmt.var {
+                        if let Some(edge_id) = result.created_edge() {
+                            local_bindings.insert(var.clone(), edge_id.into());
+                        }
+                    }
+
+                    if result.created_edge().is_some() {
+                        total_edges += 1;
+                    }
+                }
+                MutationAction::Set(set_stmt) => {
+                    let target_id = resolve_target(&set_stmt.target, &local_bindings)?;
+                    let node_id = target_id
+                        .as_node()
+                        .ok_or_else(|| "SET requires a node target".to_string())?;
+
+                    let pb = Bindings::new();
+                    let mut executor = MutationExecutor::new(registry, graph);
+                    let result = executor
+                        .execute_set(set_stmt, vec![node_id], &pb)
+                        .map_err(|e| format!("Set error: {}", e))?;
+
+                    use mew_mutation::MutationOutput;
+                    if let MutationOutput::Updated(ref u) = result {
+                        total_nodes += u.node_ids.len();
+                    }
+                }
+                MutationAction::Kill(kill_stmt) => {
+                    let target_id = resolve_target(&kill_stmt.target, &local_bindings)?;
+                    let node_id = target_id
+                        .as_node()
+                        .ok_or_else(|| "KILL requires a node target".to_string())?;
+
+                    let mut executor = MutationExecutor::new(registry, graph);
+                    let result = executor
+                        .execute_kill(kill_stmt, node_id)
+                        .map_err(|e| format!("Kill error: {}", e))?;
+
+                    total_nodes += result.deleted_nodes();
+                    total_edges += result.deleted_edges();
+                }
+                MutationAction::Unlink(unlink_stmt) => {
+                    let target_id = resolve_target(&unlink_stmt.target, &local_bindings)?;
+                    let edge_id = target_id
+                        .as_edge()
+                        .ok_or_else(|| "UNLINK requires an edge target".to_string())?;
+
+                    let mut executor = MutationExecutor::new(registry, graph);
+                    let result = executor
+                        .execute_unlink(unlink_stmt, edge_id)
+                        .map_err(|e| format!("Unlink error: {}", e))?;
+
+                    total_edges += result.deleted_edges();
+                }
+            }
+        }
+    }
+
+    Ok(format!(
+        "Affected {} nodes and {} edges",
+        total_nodes, total_edges
+    ))
 }

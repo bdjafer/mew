@@ -26,6 +26,7 @@ impl Span {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Match(MatchStmt),
+    MatchMutate(MatchMutateStmt),
     Spawn(SpawnStmt),
     Kill(KillStmt),
     Link(LinkStmt),
@@ -48,6 +49,25 @@ pub struct MatchStmt {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
     pub span: Span,
+}
+
+/// MATCH followed by mutations (compound statement).
+/// E.g., MATCH a: T, b: U WHERE ... LINK edge(a, b)
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchMutateStmt {
+    pub pattern: Vec<PatternElem>,
+    pub where_clause: Option<Expr>,
+    pub mutations: Vec<MutationAction>,
+    pub span: Span,
+}
+
+/// A mutation action within a compound statement.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MutationAction {
+    Link(LinkStmt),
+    Set(SetStmt),
+    Kill(KillStmt),
+    Unlink(UnlinkStmt),
 }
 
 /// An element in a pattern (node or edge pattern).

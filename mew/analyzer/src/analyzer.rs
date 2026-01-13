@@ -31,6 +31,7 @@ impl<'r> Analyzer<'r> {
     pub fn analyze_stmt(&mut self, stmt: &Stmt) -> AnalyzerResult<Type> {
         match stmt {
             Stmt::Match(m) => self.analyze_match(m),
+            Stmt::MatchMutate(mm) => self.analyze_match_mutate(mm),
             Stmt::Spawn(s) => self.analyze_spawn(s),
             Stmt::Kill(k) => self.analyze_kill(k),
             Stmt::Link(l) => self.analyze_link(l),
@@ -40,6 +41,46 @@ impl<'r> Analyzer<'r> {
             Stmt::Inspect(_) => Ok(Type::Any), // INSPECT returns entity data
             Stmt::Txn(_) => Ok(Type::Null), // Txn statements don't produce a value
         }
+    }
+
+    /// Analyze a MATCH...mutation compound statement.
+    fn analyze_match_mutate(&mut self, stmt: &mew_parser::MatchMutateStmt) -> AnalyzerResult<Type> {
+        // Push a new scope for pattern bindings
+        self.scope.push();
+
+        // Analyze pattern elements
+        for elem in &stmt.pattern {
+            self.analyze_pattern_elem(elem)?;
+        }
+
+        // Analyze WHERE clause if present
+        if let Some(ref where_expr) = stmt.where_clause {
+            self.analyze_expr(where_expr)?;
+        }
+
+        // Analyze each mutation
+        for mutation in &stmt.mutations {
+            match mutation {
+                mew_parser::MutationAction::Link(l) => {
+                    self.analyze_link(l)?;
+                }
+                mew_parser::MutationAction::Set(s) => {
+                    self.analyze_set(s)?;
+                }
+                mew_parser::MutationAction::Kill(k) => {
+                    self.analyze_kill(k)?;
+                }
+                mew_parser::MutationAction::Unlink(u) => {
+                    self.analyze_unlink(u)?;
+                }
+            }
+        }
+
+        // Pop scope
+        self.scope.pop();
+
+        // Returns a count of affected entities
+        Ok(Type::Int)
     }
 
     /// Analyze a MATCH statement.

@@ -224,6 +224,154 @@ impl<'r> Evaluator<'r> {
                 }
                 Err(PatternError::type_error("ABS expects one argument"))
             }
+            "is_null" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return Ok(Value::Bool(matches!(val, Value::Null)));
+                }
+                Err(PatternError::type_error("IS_NULL expects one argument"))
+            }
+            "is_not_null" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return Ok(Value::Bool(!matches!(val, Value::Null)));
+                }
+                Err(PatternError::type_error("IS_NOT_NULL expects one argument"))
+            }
+            "length" | "len" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::String(s) => Ok(Value::Int(s.len() as i64)),
+                        Value::Null => Ok(Value::Null),
+                        _ => Err(PatternError::type_error("LENGTH expects a string argument")),
+                    };
+                }
+                Err(PatternError::type_error("LENGTH expects one argument"))
+            }
+            "concat" => {
+                let mut result = String::new();
+                for arg in args {
+                    let val = self.eval(arg, bindings, graph)?;
+                    match val {
+                        Value::String(s) => result.push_str(&s),
+                        Value::Int(i) => result.push_str(&i.to_string()),
+                        Value::Float(f) => result.push_str(&f.to_string()),
+                        Value::Bool(b) => result.push_str(&b.to_string()),
+                        Value::Null => {}
+                        _ => return Err(PatternError::type_error("CONCAT expects string or primitive arguments")),
+                    }
+                }
+                Ok(Value::String(result))
+            }
+            "substring" | "substr" => {
+                // substring(string, start, length)
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let start = self.eval(&args[1], bindings, graph)?;
+
+                    if let (Value::String(s), Value::Int(start)) = (s, start) {
+                        let start_idx = (start.max(0) as usize).min(s.len());
+
+                        let result = if args.len() >= 3 {
+                            let length = self.eval(&args[2], bindings, graph)?;
+                            if let Value::Int(len) = length {
+                                let end_idx = (start_idx + len.max(0) as usize).min(s.len());
+                                s[start_idx..end_idx].to_string()
+                            } else {
+                                s[start_idx..].to_string()
+                            }
+                        } else {
+                            s[start_idx..].to_string()
+                        };
+                        return Ok(Value::String(result));
+                    }
+                }
+                Err(PatternError::type_error("SUBSTRING expects (string, start[, length])"))
+            }
+            "trim" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::String(s) = val {
+                        return Ok(Value::String(s.trim().to_string()));
+                    }
+                }
+                Err(PatternError::type_error("TRIM expects a string argument"))
+            }
+            "starts_with" => {
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let prefix = self.eval(&args[1], bindings, graph)?;
+                    if let (Value::String(s), Value::String(prefix)) = (s, prefix) {
+                        return Ok(Value::Bool(s.starts_with(&prefix)));
+                    }
+                }
+                Err(PatternError::type_error("STARTS_WITH expects (string, prefix)"))
+            }
+            "ends_with" => {
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let suffix = self.eval(&args[1], bindings, graph)?;
+                    if let (Value::String(s), Value::String(suffix)) = (s, suffix) {
+                        return Ok(Value::Bool(s.ends_with(&suffix)));
+                    }
+                }
+                Err(PatternError::type_error("ENDS_WITH expects (string, suffix)"))
+            }
+            "contains" => {
+                if args.len() >= 2 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let pattern = self.eval(&args[1], bindings, graph)?;
+                    if let (Value::String(s), Value::String(pattern)) = (s, pattern) {
+                        return Ok(Value::Bool(s.contains(&pattern)));
+                    }
+                }
+                Err(PatternError::type_error("CONTAINS expects (string, pattern)"))
+            }
+            "replace" => {
+                if args.len() >= 3 {
+                    let s = self.eval(&args[0], bindings, graph)?;
+                    let from = self.eval(&args[1], bindings, graph)?;
+                    let to = self.eval(&args[2], bindings, graph)?;
+                    if let (Value::String(s), Value::String(from), Value::String(to)) = (s, from, to) {
+                        return Ok(Value::String(s.replace(&from, &to)));
+                    }
+                }
+                Err(PatternError::type_error("REPLACE expects (string, from, to)"))
+            }
+            "floor" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::Int(i) => Ok(Value::Int(i)),
+                        Value::Float(f) => Ok(Value::Int(f.floor() as i64)),
+                        _ => Err(PatternError::type_error("FLOOR expects a numeric argument")),
+                    };
+                }
+                Err(PatternError::type_error("FLOOR expects one argument"))
+            }
+            "ceil" | "ceiling" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::Int(i) => Ok(Value::Int(i)),
+                        Value::Float(f) => Ok(Value::Int(f.ceil() as i64)),
+                        _ => Err(PatternError::type_error("CEIL expects a numeric argument")),
+                    };
+                }
+                Err(PatternError::type_error("CEIL expects one argument"))
+            }
+            "round" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    return match val {
+                        Value::Int(i) => Ok(Value::Int(i)),
+                        Value::Float(f) => Ok(Value::Int(f.round() as i64)),
+                        _ => Err(PatternError::type_error("ROUND expects a numeric argument")),
+                    };
+                }
+                Err(PatternError::type_error("ROUND expects one argument"))
+            }
             _ => Err(PatternError::invalid_operation(format!(
                 "unknown function '{}'",
                 name
