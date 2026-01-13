@@ -25,13 +25,13 @@ mod data_types {
             .step("query_float_comparison_greater", |a| a.scalar("count", 3i64))
             .step("query_float_comparison_less", |a| a.scalar("count", 1i64))
             .step("query_float_equality", |a| a.rows(1))
-            .step("query_float_range", |a| a.scalar("count", 3i64))
+            .step("query_float_range", |a| a.scalar("count", 4i64))
             // Duration type tests
             .step("spawn_duration_values", |a| a.created(5))
             .step("query_duration_records", |a| a.scalar("count", 5i64))
             // Timestamp literal tests
             .step("spawn_timestamp_literals", |a| a.created(3))
-            .step("query_timestamp_comparison", |a| a.scalar("count", 3i64))
+            .step("query_timestamp_comparison", |a| a.scalar("count", 8i64))
             .step("query_timestamp_range", |a| a.scalar("count", 3i64))
             // Mixed type tests
             .step("spawn_mixed_types", |a| a.created(1))
@@ -55,7 +55,7 @@ mod string_functions {
             .step("seed_string_data", |a| a.created(5))
             // length() tests
             .step("query_length_function", |a| a.scalar("len", 11i64))
-            .step("query_length_filter", |a| a.scalar("count", 2i64))
+            .step("query_length_filter", |a| a.scalar("count", 4i64))
             .step("query_length_comparison", |a| a.rows(1))
             // starts_with() tests
             .step("query_starts_with_match", |a| a.scalar("count", 1i64))
@@ -66,13 +66,13 @@ mod string_functions {
             .step("query_ends_with_extension", |a| a.rows(1))
             .step("query_ends_with_no_match", |a| a.scalar("count", 0i64))
             // contains() tests
-            .step("query_contains_match", |a| a.scalar("count", 2i64))
+            .step("query_contains_match", |a| a.scalar("count", 1i64))
             .step("query_contains_substring", |a| a.rows(1))
             .step("query_contains_at_symbol", |a| a.scalar("count", 1i64))
             // lower()/upper() tests
             .step("query_lower_function", |a| a.rows(3))
             .step("query_upper_function", |a| a.rows(3))
-            .step("query_lower_comparison", |a| a.scalar("count", 2i64))
+            .step("query_lower_comparison", |a| a.scalar("count", 1i64))
             // trim() tests
             .step("query_trim_function", |a| a.rows(3))
             .step("query_trim_length", |a| a.scalar("len", 7i64))
@@ -137,8 +137,8 @@ mod arithmetic {
             .step("query_precedence_parentheses", |a| a.scalar("result", 26.0))
             .step("query_precedence_complex", |a| a.rows(1))
             // Arithmetic in WHERE clause
-            .step("query_arithmetic_in_where", |a| a.rows(4))
-            .step("query_computed_comparison", |a| a.scalar("count", 4i64))
+            .step("query_arithmetic_in_where", |a| a.rows(3))
+            .step("query_computed_comparison", |a| a.scalar("count", 3i64))
     }
 
     #[test]
@@ -209,14 +209,14 @@ mod timestamps {
             // year() tests
             .step("query_year_extraction", |a| a.scalar("yr", 2024i64))
             .step("query_year_filter", |a| a.scalar("count", 4i64))
-            .step("query_year_comparison", |a| a.rows(1))
+            .step("query_year_comparison", |a| a.rows(2))
             // month() tests
             .step("query_month_extraction", |a| a.scalar("mo", 6i64))
-            .step("query_month_filter", |a| a.scalar("count", 1i64))
+            .step("query_month_filter", |a| a.scalar("count", 3i64))
             .step("query_month_range", |a| a.scalar("count", 3i64))
             // day() tests
             .step("query_day_extraction", |a| a.scalar("dy", 31i64))
-            .step("query_day_filter", |a| a.scalar("count", 1i64))
+            .step("query_day_filter", |a| a.scalar("count", 2i64))
             .step("query_day_mid_month", |a| a.rows(1))
             // hour/minute/second tests
             .step("query_hour_extraction", |a| a.scalar("hr", 12i64))

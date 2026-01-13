@@ -81,6 +81,8 @@ impl<'r> Evaluator<'r> {
             LiteralKind::Int(i) => Value::Int(*i),
             LiteralKind::Float(f) => Value::Float(*f),
             LiteralKind::String(s) => Value::String(s.clone()),
+            LiteralKind::Duration(ms) => Value::Duration(*ms),
+            LiteralKind::Timestamp(ms) => Value::Timestamp(*ms),
         })
     }
 
@@ -160,6 +162,15 @@ impl<'r> Evaluator<'r> {
 
             // String
             BinaryOp::Concat => self.eval_concat(&left_val, &right_val),
+
+            // Null coalescing: return left if not null, otherwise right
+            BinaryOp::NullCoalesce => {
+                if matches!(left_val, Value::Null) {
+                    Ok(right_val)
+                } else {
+                    Ok(left_val)
+                }
+            }
         }
     }
 
@@ -181,6 +192,7 @@ impl<'r> Evaluator<'r> {
             },
             UnaryOp::Not => match val {
                 Value::Bool(b) => Ok(Value::Bool(!b)),
+                Value::Null => Ok(Value::Null), // NOT NULL = NULL
                 _ => Err(PatternError::type_error(format!(
                     "cannot apply NOT to {:?}",
                     val
@@ -207,6 +219,72 @@ impl<'r> Evaluator<'r> {
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default();
                 Ok(Value::Timestamp(duration.as_millis() as i64))
+            }
+            "year" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::Timestamp(ms) = val {
+                        let (year, _, _) = Self::timestamp_to_date(ms);
+                        return Ok(Value::Int(year as i64));
+                    }
+                    return Err(PatternError::type_error("YEAR expects a timestamp argument"));
+                }
+                Err(PatternError::type_error("YEAR expects one argument"))
+            }
+            "month" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::Timestamp(ms) = val {
+                        let (_, month, _) = Self::timestamp_to_date(ms);
+                        return Ok(Value::Int(month as i64));
+                    }
+                    return Err(PatternError::type_error("MONTH expects a timestamp argument"));
+                }
+                Err(PatternError::type_error("MONTH expects one argument"))
+            }
+            "day" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::Timestamp(ms) = val {
+                        let (_, _, day) = Self::timestamp_to_date(ms);
+                        return Ok(Value::Int(day as i64));
+                    }
+                    return Err(PatternError::type_error("DAY expects a timestamp argument"));
+                }
+                Err(PatternError::type_error("DAY expects one argument"))
+            }
+            "hour" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::Timestamp(ms) = val {
+                        let (hour, _, _) = Self::timestamp_to_time(ms);
+                        return Ok(Value::Int(hour as i64));
+                    }
+                    return Err(PatternError::type_error("HOUR expects a timestamp argument"));
+                }
+                Err(PatternError::type_error("HOUR expects one argument"))
+            }
+            "minute" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::Timestamp(ms) = val {
+                        let (_, minute, _) = Self::timestamp_to_time(ms);
+                        return Ok(Value::Int(minute as i64));
+                    }
+                    return Err(PatternError::type_error("MINUTE expects a timestamp argument"));
+                }
+                Err(PatternError::type_error("MINUTE expects one argument"))
+            }
+            "second" => {
+                if let Some(arg) = args.first() {
+                    let val = self.eval(arg, bindings, graph)?;
+                    if let Value::Timestamp(ms) = val {
+                        let (_, _, second) = Self::timestamp_to_time(ms);
+                        return Ok(Value::Int(second as i64));
+                    }
+                    return Err(PatternError::type_error("SECOND expects a timestamp argument"));
+                }
+                Err(PatternError::type_error("SECOND expects one argument"))
             }
             "count" => {
                 // COUNT expects 0 or 1 arguments
@@ -463,10 +541,17 @@ impl<'r> Evaluator<'r> {
 
     fn eval_add(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
+            // Timestamp + Duration = Timestamp
+            (Value::Timestamp(ts), Value::Duration(dur)) => Ok(Value::Timestamp(ts + dur)),
+            (Value::Duration(dur), Value::Timestamp(ts)) => Ok(Value::Timestamp(ts + dur)),
+            // Duration + Duration = Duration
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Duration(a + b)),
             _ => Err(PatternError::type_error(format!(
                 "cannot add {:?} and {:?}",
                 left, right
@@ -476,10 +561,18 @@ impl<'r> Evaluator<'r> {
 
     fn eval_sub(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 - b)),
             (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - *b as f64)),
+            // Timestamp - Duration = Timestamp
+            (Value::Timestamp(ts), Value::Duration(dur)) => Ok(Value::Timestamp(ts - dur)),
+            // Timestamp - Timestamp = Duration
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Duration(a - b)),
+            // Duration - Duration = Duration
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Duration(a - b)),
             _ => Err(PatternError::type_error(format!(
                 "cannot subtract {:?} and {:?}",
                 left, right
@@ -489,6 +582,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_mul(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
             (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 * b)),
@@ -502,6 +597,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_div(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => {
                 if *b == 0 {
                     Err(PatternError::DivisionByZero)
@@ -539,6 +636,8 @@ impl<'r> Evaluator<'r> {
 
     fn eval_mod(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
             (Value::Int(a), Value::Int(b)) => {
                 if *b == 0 {
                     Err(PatternError::DivisionByZero)
@@ -571,67 +670,75 @@ impl<'r> Evaluator<'r> {
     }
 
     fn eval_lt(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a < b,
-            (Value::Float(a), Value::Float(b)) => a < b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) < *b,
-            (Value::Float(a), Value::Int(b)) => *a < (*b as f64),
-            (Value::String(a), Value::String(b)) => a < b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} < {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation - comparison with null returns null
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a < b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) < *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a < (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a < b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a < b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a < b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} < {:?}",
+                left, right
+            ))),
+        }
     }
 
     fn eval_lte(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a <= b,
-            (Value::Float(a), Value::Float(b)) => a <= b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) <= *b,
-            (Value::Float(a), Value::Int(b)) => *a <= (*b as f64),
-            (Value::String(a), Value::String(b)) => a <= b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} <= {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) <= *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a <= (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a <= b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} <= {:?}",
+                left, right
+            ))),
+        }
     }
 
     fn eval_gt(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a > b,
-            (Value::Float(a), Value::Float(b)) => a > b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) > *b,
-            (Value::Float(a), Value::Int(b)) => *a > (*b as f64),
-            (Value::String(a), Value::String(b)) => a > b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} > {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a > b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a > b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) > *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a > (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a > b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a > b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a > b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} > {:?}",
+                left, right
+            ))),
+        }
     }
 
     fn eval_gte(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a >= b,
-            (Value::Float(a), Value::Float(b)) => a >= b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) >= *b,
-            (Value::Float(a), Value::Int(b)) => *a >= (*b as f64),
-            (Value::String(a), Value::String(b)) => a >= b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} >= {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) >= *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a >= (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a >= b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} >= {:?}",
+                left, right
+            ))),
+        }
     }
 
     // ========== Logical helpers ==========
@@ -639,6 +746,16 @@ impl<'r> Evaluator<'r> {
     fn eval_and(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(*a && *b)),
+            // SQL three-valued logic for AND:
+            // NULL AND true = NULL, NULL AND false = false
+            (Value::Null, Value::Bool(b)) | (Value::Bool(b), Value::Null) => {
+                if *b {
+                    Ok(Value::Null)
+                } else {
+                    Ok(Value::Bool(false))
+                }
+            }
+            (Value::Null, Value::Null) => Ok(Value::Null),
             _ => Err(PatternError::type_error(format!(
                 "cannot AND {:?} and {:?}",
                 left, right
@@ -649,6 +766,16 @@ impl<'r> Evaluator<'r> {
     fn eval_or(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(*a || *b)),
+            // SQL three-valued logic for OR:
+            // NULL OR true = true, NULL OR false = NULL
+            (Value::Null, Value::Bool(b)) | (Value::Bool(b), Value::Null) => {
+                if *b {
+                    Ok(Value::Bool(true))
+                } else {
+                    Ok(Value::Null)
+                }
+            }
+            (Value::Null, Value::Null) => Ok(Value::Null),
             _ => Err(PatternError::type_error(format!(
                 "cannot OR {:?} and {:?}",
                 left, right
@@ -666,6 +793,41 @@ impl<'r> Evaluator<'r> {
                 left, right
             ))),
         }
+    }
+
+    // ========== Timestamp helpers ==========
+
+    /// Convert milliseconds since epoch to (year, month, day).
+    fn timestamp_to_date(ms: i64) -> (i32, u32, u32) {
+        // Convert ms to days since epoch
+        let days = (ms / 86_400_000) as i32;
+        Self::days_to_date(days)
+    }
+
+    /// Convert milliseconds since epoch to (hour, minute, second).
+    fn timestamp_to_time(ms: i64) -> (u32, u32, u32) {
+        let ms_in_day = ms.rem_euclid(86_400_000) as u64;
+        let total_seconds = ms_in_day / 1000;
+        let hour = (total_seconds / 3600) as u32;
+        let minute = ((total_seconds % 3600) / 60) as u32;
+        let second = (total_seconds % 60) as u32;
+        (hour, minute, second)
+    }
+
+    /// Convert days since Unix epoch (1970-01-01) to (year, month, day).
+    fn days_to_date(days: i32) -> (i32, u32, u32) {
+        // Algorithm from https://howardhinnant.github.io/date_algorithms.html
+        let z = days + 719468;
+        let era = if z >= 0 { z } else { z - 146096 } / 146097;
+        let doe = (z - era * 146097) as u32; // day of era [0, 146096]
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // year of era [0, 399]
+        let y = yoe as i32 + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // day of year [0, 365]
+        let mp = (5 * doy + 2) / 153; // month offset [0, 11]
+        let d = doy - (153 * mp + 2) / 5 + 1; // day [1, 31]
+        let m = if mp < 10 { mp + 3 } else { mp - 9 }; // month [1, 12]
+        let y = if m <= 2 { y + 1 } else { y };
+        (y, m, d)
     }
 
     /// Evaluate an expression and convert to bool.

@@ -363,6 +363,10 @@ pub enum LiteralKind {
     Int(i64),
     Float(f64),
     String(String),
+    /// Duration in milliseconds
+    Duration(i64),
+    /// Timestamp as milliseconds since Unix epoch
+    Timestamp(i64),
 }
 
 impl fmt::Display for LiteralKind {
@@ -373,6 +377,8 @@ impl fmt::Display for LiteralKind {
             LiteralKind::Int(i) => write!(f, "{}", i),
             LiteralKind::Float(fl) => write!(f, "{}", fl),
             LiteralKind::String(s) => write!(f, "\"{}\"", s),
+            LiteralKind::Duration(ms) => write!(f, "{}ms", ms),
+            LiteralKind::Timestamp(ms) => write!(f, "@{}", ms),
         }
     }
 }
@@ -398,6 +404,8 @@ pub enum BinaryOp {
     Or,
     // String
     Concat,
+    // Null coalescing
+    NullCoalesce,
 }
 
 impl fmt::Display for BinaryOp {
@@ -417,6 +425,7 @@ impl fmt::Display for BinaryOp {
             BinaryOp::And => write!(f, "AND"),
             BinaryOp::Or => write!(f, "OR"),
             BinaryOp::Concat => write!(f, "++"),
+            BinaryOp::NullCoalesce => write!(f, "??"),
         }
     }
 }

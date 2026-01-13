@@ -21,14 +21,28 @@ impl Parser {
     }
 
     fn parse_or(&mut self) -> ParseResult<Expr> {
-        let mut left = self.parse_and()?;
+        let mut left = self.parse_null_coalesce()?;
 
         while self.check(&TokenKind::Or) {
             let start = left.span();
             self.advance();
-            let right = self.parse_and()?;
+            let right = self.parse_null_coalesce()?;
             let span = self.span_from(start);
             left = Expr::BinaryOp(BinaryOp::Or, Box::new(left), Box::new(right), span);
+        }
+
+        Ok(left)
+    }
+
+    fn parse_null_coalesce(&mut self) -> ParseResult<Expr> {
+        let mut left = self.parse_and()?;
+
+        while self.check(&TokenKind::NullCoalesce) {
+            let start = left.span();
+            self.advance();
+            let right = self.parse_and()?;
+            let span = self.span_from(start);
+            left = Expr::BinaryOp(BinaryOp::NullCoalesce, Box::new(left), Box::new(right), span);
         }
 
         Ok(left)
@@ -168,15 +182,74 @@ impl Parser {
         let mut expr = self.parse_primary()?;
 
         // Handle attribute access: expr.attr
+        // And duration literals: 30.seconds, 5.minutes, etc.
         while self.check(&TokenKind::Dot) {
             let start = expr.span();
             self.advance();
             let attr = self.expect_ident()?;
-            let span = self.span_from(start);
-            expr = Expr::AttrAccess(Box::new(expr), attr, span);
+
+            // Check if this is a duration literal (number.unit)
+            if let Some(duration_ms) = self.try_parse_duration_unit(&expr, &attr) {
+                let span = self.span_from(start);
+                expr = Expr::Literal(Literal {
+                    kind: LiteralKind::Duration(duration_ms),
+                    span,
+                });
+            } else {
+                let span = self.span_from(start);
+                expr = Expr::AttrAccess(Box::new(expr), attr, span);
+            }
         }
 
         Ok(expr)
+    }
+
+    /// Try to parse a duration literal from a numeric expression and unit name.
+    /// Returns Some(milliseconds) if successful, None otherwise.
+    fn try_parse_duration_unit(&self, expr: &Expr, unit: &str) -> Option<i64> {
+        // Extract numeric value from the expression
+        let value = match expr {
+            Expr::Literal(Literal {
+                kind: LiteralKind::Int(n),
+                ..
+            }) => *n as f64,
+            Expr::Literal(Literal {
+                kind: LiteralKind::Float(f),
+                ..
+            }) => *f,
+            _ => return None,
+        };
+
+        // Convert unit to milliseconds multiplier (case-insensitive without allocation)
+        let multiplier: f64 = if unit.eq_ignore_ascii_case("millisecond")
+            || unit.eq_ignore_ascii_case("milliseconds")
+            || unit.eq_ignore_ascii_case("ms")
+        {
+            1.0
+        } else if unit.eq_ignore_ascii_case("second")
+            || unit.eq_ignore_ascii_case("seconds")
+            || unit.eq_ignore_ascii_case("s")
+        {
+            1_000.0
+        } else if unit.eq_ignore_ascii_case("minute")
+            || unit.eq_ignore_ascii_case("minutes")
+            || unit.eq_ignore_ascii_case("min")
+        {
+            60_000.0
+        } else if unit.eq_ignore_ascii_case("hour")
+            || unit.eq_ignore_ascii_case("hours")
+            || unit.eq_ignore_ascii_case("h")
+        {
+            3_600_000.0
+        } else if unit.eq_ignore_ascii_case("day") || unit.eq_ignore_ascii_case("days") {
+            86_400_000.0
+        } else if unit.eq_ignore_ascii_case("week") || unit.eq_ignore_ascii_case("weeks") {
+            604_800_000.0
+        } else {
+            return None;
+        };
+
+        Some((value * multiplier) as i64)
     }
 
     fn parse_primary(&mut self) -> ParseResult<Expr> {
@@ -218,6 +291,14 @@ impl Parser {
                 self.advance();
                 Ok(Expr::Literal(Literal {
                     kind: LiteralKind::Float(f),
+                    span: token.span,
+                }))
+            }
+            TokenKind::Timestamp(ts) => {
+                let ts = *ts;
+                self.advance();
+                Ok(Expr::Literal(Literal {
+                    kind: LiteralKind::Timestamp(ts),
                     span: token.span,
                 }))
             }

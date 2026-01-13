@@ -445,6 +445,8 @@ impl<'r> Analyzer<'r> {
             LiteralKind::Int(_) => Type::Int,
             LiteralKind::Float(_) => Type::Float,
             LiteralKind::String(_) => Type::String,
+            LiteralKind::Duration(_) => Type::Duration,
+            LiteralKind::Timestamp(_) => Type::Timestamp,
         })
     }
 

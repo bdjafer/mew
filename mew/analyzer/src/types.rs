@@ -117,6 +117,18 @@ impl Type {
                 (Type::Any, _) | (_, Type::Any) => Some(Type::Bool),
                 _ => None,
             },
+            // Null coalesce returns type of left operand (or right if left is null)
+            // Since we allow nullable types, accept any type combination
+            BinaryOpType::NullCoalesce => {
+                match (self, other) {
+                    // Same types
+                    (t, u) if t == u => Some(t.clone()),
+                    // If one is Any, use the other type
+                    (Type::Any, t) | (t, Type::Any) => Some(t.clone()),
+                    // Different types - use Any as result
+                    _ => Some(Type::Any),
+                }
+            }
         }
     }
 
@@ -174,6 +186,7 @@ pub enum BinaryOpType {
     GtEq,
     And,
     Or,
+    NullCoalesce,
 }
 
 /// Type for unary operators.
@@ -201,6 +214,7 @@ impl From<mew_parser::BinaryOp> for BinaryOpType {
             mew_parser::BinaryOp::GtEq => BinaryOpType::GtEq,
             mew_parser::BinaryOp::And => BinaryOpType::And,
             mew_parser::BinaryOp::Or => BinaryOpType::Or,
+            mew_parser::BinaryOp::NullCoalesce => BinaryOpType::NullCoalesce,
         }
     }
 }

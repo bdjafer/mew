@@ -66,6 +66,8 @@ pub enum TokenKind {
     Int(i64),
     Float(f64),
     String(String),
+    /// Timestamp literal (milliseconds since epoch)
+    Timestamp(i64),
 
     // Symbols
     LParen,     // (
@@ -93,9 +95,10 @@ pub enum TokenKind {
     Dollar,     // $
     Concat,     // ++
     Range,      // ..
-    Question,   // ?
-    Arrow,      // =>
-    RightArrow, // ->
+    Question,      // ?
+    NullCoalesce,  // ??
+    Arrow,         // =>
+    RightArrow,    // ->
 
     // End of file
     Eof,
@@ -162,6 +165,7 @@ impl TokenKind {
             TokenKind::Int(_) => "integer",
             TokenKind::Float(_) => "float",
             TokenKind::String(_) => "string",
+            TokenKind::Timestamp(_) => "timestamp",
             TokenKind::LParen => "(",
             TokenKind::RParen => ")",
             TokenKind::LBrace => "{",
@@ -188,6 +192,7 @@ impl TokenKind {
             TokenKind::Concat => "++",
             TokenKind::Range => "..",
             TokenKind::Question => "?",
+            TokenKind::NullCoalesce => "??",
             TokenKind::Arrow => "=>",
             TokenKind::RightArrow => "->",
             TokenKind::Eof => "end of input",
@@ -442,7 +447,15 @@ impl<'a> Lexer<'a> {
             '|' => TokenKind::Pipe,
             '#' => TokenKind::Hash,
             '$' => TokenKind::Dollar,
-            '?' => TokenKind::Question,
+            '?' => {
+                if self.peek_char() == Some('?') {
+                    self.next_char();
+                    TokenKind::NullCoalesce
+                } else {
+                    TokenKind::Question
+                }
+            }
+            '@' => self.scan_timestamp(start, start_line, start_col)?,
             '"' => self.scan_string(start, start_line, start_col)?,
             '_' | 'a'..='z' | 'A'..='Z' => {
                 self.scan_ident_or_keyword(c, start, start_line, start_col)
@@ -611,37 +624,40 @@ impl<'a> Lexer<'a> {
         }
 
         // Check for decimal point
-        if self.peek_char() == Some('.') {
-            // Look ahead to ensure it's not '..' (range)
+        let has_decimal = if self.peek_char() == Some('.') {
+            // Look ahead to see what follows the '.'
             let mut lookahead = self.chars.clone();
             lookahead.next(); // consume '.'
-            if let Some((_, next_c)) = lookahead.peek() {
-                if *next_c == '.' {
-                    // It's a range, don't consume the first '.'
-                    let value: i64 = number.parse().map_err(|_| {
-                        ParseError::new(
-                            format!("invalid integer literal '{}'", number),
-                            self.span_from(start, start_line, start_col),
-                        )
-                    })?;
-                    return Ok(TokenKind::Int(value));
-                }
-            }
-
-            number.push('.');
-            self.next_char();
-
-            // Fractional part
-            while let Some(c) = self.peek_char() {
-                if c.is_ascii_digit() {
-                    number.push(c);
+            match lookahead.peek() {
+                // Range '..', or no digit after '.', or end of input: don't consume '.'
+                Some((_, next_c)) if *next_c == '.' || !next_c.is_ascii_digit() => false,
+                None => false,
+                // Digit follows '.': consume it and the fractional part
+                Some(_) => {
+                    number.push('.');
                     self.next_char();
-                } else {
-                    break;
+                    while let Some(c) = self.peek_char() {
+                        if c.is_ascii_digit() {
+                            number.push(c);
+                            self.next_char();
+                        } else {
+                            break;
+                        }
+                    }
+                    true
                 }
             }
+        } else {
+            false
+        };
 
-            // Parse as float
+        // Check for exponent (scientific notation)
+        let has_exponent = matches!(self.peek_char(), Some('e' | 'E'));
+        if has_exponent {
+            self.scan_exponent(&mut number)?;
+        }
+
+        if has_decimal || has_exponent {
             let value: f64 = number.parse().map_err(|_| {
                 ParseError::new(
                     format!("invalid float literal '{}'", number),
@@ -650,7 +666,6 @@ impl<'a> Lexer<'a> {
             })?;
             Ok(TokenKind::Float(value))
         } else {
-            // Parse as integer
             let value: i64 = number.parse().map_err(|_| {
                 ParseError::new(
                     format!("invalid integer literal '{}'", number),
@@ -659,6 +674,262 @@ impl<'a> Lexer<'a> {
             })?;
             Ok(TokenKind::Int(value))
         }
+    }
+
+    /// Scan the exponent part of a number (e.g., e10, E-5, e+3)
+    fn scan_exponent(&mut self, number: &mut String) -> ParseResult<()> {
+        // Consume 'e' or 'E'
+        if let Some(c) = self.peek_char() {
+            if c == 'e' || c == 'E' {
+                number.push(c);
+                self.next_char();
+            } else {
+                return Ok(());
+            }
+        }
+
+        // Optional sign
+        if let Some(c) = self.peek_char() {
+            if c == '+' || c == '-' {
+                number.push(c);
+                self.next_char();
+            }
+        }
+
+        // Exponent digits (at least one required)
+        let mut has_digits = false;
+        while let Some(c) = self.peek_char() {
+            if c.is_ascii_digit() {
+                number.push(c);
+                self.next_char();
+                has_digits = true;
+            } else {
+                break;
+            }
+        }
+
+        if !has_digits {
+            return Err(ParseError::new(
+                format!("invalid exponent in number literal '{}'", number),
+                self.current_span(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Scan a timestamp literal (e.g., @2024-01-15 or @2024-01-15T10:30:00Z)
+    fn scan_timestamp(
+        &mut self,
+        start: usize,
+        start_line: usize,
+        start_col: usize,
+    ) -> ParseResult<TokenKind> {
+        let mut ts_str = String::new();
+
+        // Scan characters that are valid in ISO 8601 timestamps
+        // (digits, dashes, colons, T, Z, plus, period)
+        while let Some(c) = self.peek_char() {
+            if c.is_ascii_digit()
+                || c == '-'
+                || c == ':'
+                || c == 'T'
+                || c == 'Z'
+                || c == '+'
+                || c == '.'
+            {
+                ts_str.push(c);
+                self.next_char();
+            } else {
+                break;
+            }
+        }
+
+        if ts_str.is_empty() {
+            return Err(ParseError::new(
+                "expected timestamp after '@'",
+                self.span_from(start, start_line, start_col),
+            ));
+        }
+
+        // Parse the timestamp string to milliseconds since epoch
+        let millis = self.parse_timestamp_to_millis(&ts_str).map_err(|e| {
+            ParseError::new(
+                format!("invalid timestamp '{}': {}", ts_str, e),
+                self.span_from(start, start_line, start_col),
+            )
+        })?;
+
+        Ok(TokenKind::Timestamp(millis))
+    }
+
+    /// Parse an ISO 8601 timestamp string to milliseconds since Unix epoch.
+    fn parse_timestamp_to_millis(&self, s: &str) -> Result<i64, String> {
+        // Parse formats:
+        // @2024-01-15                    - date only (midnight UTC)
+        // @2024-01-15T10:30:00Z          - full timestamp UTC
+        // @2024-01-15T10:30:00+05:30     - with timezone offset
+        // @2024-01-15T10:30:00.500Z      - with milliseconds
+
+        let (datetime_part, tz_offset_ms) = if let Some(pos) = s.rfind('+') {
+            // Has positive timezone offset
+            let (dt, tz) = s.split_at(pos);
+            let offset = self.parse_tz_offset(tz)?;
+            (dt, offset)
+        } else if s.ends_with('Z') {
+            // UTC
+            (&s[..s.len() - 1], 0i64)
+        } else if let Some(pos) = s.rfind('-') {
+            // Could be negative offset or just date separator
+            // Check if it's after 'T' (time section)
+            if s.contains('T') && pos > s.find('T').unwrap() {
+                let (dt, tz) = s.split_at(pos);
+                let offset = self.parse_tz_offset(tz)?;
+                (dt, offset)
+            } else {
+                (s, 0i64)
+            }
+        } else {
+            (s, 0i64)
+        };
+
+        // Parse the datetime part
+        let parts: Vec<&str> = datetime_part.split('T').collect();
+        let date_str = parts[0];
+        let time_str = parts.get(1).copied();
+
+        // Parse date: YYYY-MM-DD
+        let date_parts: Vec<&str> = date_str.split('-').collect();
+        if date_parts.len() != 3 {
+            return Err(format!("invalid date format: {}", date_str));
+        }
+
+        let year: i32 = date_parts[0]
+            .parse()
+            .map_err(|_| format!("invalid year: {}", date_parts[0]))?;
+        let month: u32 = date_parts[1]
+            .parse()
+            .map_err(|_| format!("invalid month: {}", date_parts[1]))?;
+        let day: u32 = date_parts[2]
+            .parse()
+            .map_err(|_| format!("invalid day: {}", date_parts[2]))?;
+
+        if month < 1 || month > 12 {
+            return Err(format!("month out of range: {}", month));
+        }
+        if day < 1 || day > 31 {
+            return Err(format!("day out of range: {}", day));
+        }
+
+        // Parse time if present: HH:MM:SS or HH:MM:SS.mmm
+        let (hour, minute, second, millis) = if let Some(time) = time_str {
+            let (time_main, millis) = if let Some(dot_pos) = time.find('.') {
+                let ms_str = &time[dot_pos + 1..];
+                // Normalize fractional seconds to 3 digits (milliseconds)
+                let ms: i64 = match ms_str.len() {
+                    1 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))? * 100,
+                    2 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))? * 10,
+                    3 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
+                    _ => ms_str[..3].parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
+                };
+                (&time[..dot_pos], ms)
+            } else {
+                (time, 0i64)
+            };
+
+            let time_parts: Vec<&str> = time_main.split(':').collect();
+            if time_parts.len() < 2 {
+                return Err(format!("invalid time format: {}", time));
+            }
+
+            let hour: u32 = time_parts[0]
+                .parse()
+                .map_err(|_| format!("invalid hour: {}", time_parts[0]))?;
+            let minute: u32 = time_parts[1]
+                .parse()
+                .map_err(|_| format!("invalid minute: {}", time_parts[1]))?;
+            let second: u32 = time_parts
+                .get(2)
+                .map(|s| s.parse().unwrap_or(0))
+                .unwrap_or(0);
+
+            (hour, minute, second, millis)
+        } else {
+            (0, 0, 0, 0)
+        };
+
+        // Calculate days since Unix epoch (1970-01-01)
+        // This is a simplified calculation - doesn't handle all edge cases
+        let days = self.days_since_epoch(year, month, day);
+
+        // Convert to milliseconds
+        let total_ms = (days as i64) * 86_400_000 // days to ms
+            + (hour as i64) * 3_600_000          // hours to ms
+            + (minute as i64) * 60_000           // minutes to ms
+            + (second as i64) * 1_000            // seconds to ms
+            + millis                              // milliseconds
+            - tz_offset_ms;                       // subtract timezone offset
+
+        Ok(total_ms)
+    }
+
+    /// Parse timezone offset like "+05:30" or "-08:00" to milliseconds
+    fn parse_tz_offset(&self, tz: &str) -> Result<i64, String> {
+        if tz.is_empty() {
+            return Ok(0);
+        }
+
+        let sign = if tz.starts_with('-') { -1i64 } else { 1i64 };
+        let tz_clean = tz.trim_start_matches('+').trim_start_matches('-');
+
+        let parts: Vec<&str> = tz_clean.split(':').collect();
+        if parts.is_empty() {
+            return Err(format!("invalid timezone: {}", tz));
+        }
+
+        let hours: i64 = parts[0]
+            .parse()
+            .map_err(|_| format!("invalid tz hours: {}", parts[0]))?;
+        let minutes: i64 = parts.get(1).map(|s| s.parse().unwrap_or(0)).unwrap_or(0);
+
+        Ok(sign * (hours * 3_600_000 + minutes * 60_000))
+    }
+
+    /// Calculate days since Unix epoch (1970-01-01)
+    fn days_since_epoch(&self, year: i32, month: u32, day: u32) -> i64 {
+        // Days in months (non-leap year)
+        let days_before_month: [i64; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+
+        // Calculate years since 1970
+        let y = year as i64;
+        let mut days = (y - 1970) * 365;
+
+        // Add leap days: every 4 years, minus every 100, plus every 400
+        // Leap years between 1970 and year (exclusive)
+        let leap_years_before = |yr: i64| -> i64 {
+            let yr = yr - 1; // Years up to but not including yr
+            yr / 4 - yr / 100 + yr / 400
+        };
+
+        days += leap_years_before(y) - leap_years_before(1970);
+
+        // Add days from months
+        days += days_before_month[(month - 1) as usize];
+
+        // Add leap day if after Feb in a leap year
+        if month > 2 && self.is_leap_year(year) {
+            days += 1;
+        }
+
+        // Add days
+        days += (day - 1) as i64;
+
+        days
+    }
+
+    /// Check if a year is a leap year
+    fn is_leap_year(&self, year: i32) -> bool {
+        (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
     }
 }
 
@@ -897,5 +1168,28 @@ mod tests {
                 TokenKind::Eof
             ]
         );
+    }
+
+    #[test]
+    fn test_scientific_notation() {
+        // Basic scientific notation
+        let kinds = tokenize("1.23e10");
+        assert_eq!(kinds, vec![TokenKind::Float(1.23e10), TokenKind::Eof]);
+
+        // With negative exponent
+        let kinds = tokenize("1.5e-10");
+        assert_eq!(kinds, vec![TokenKind::Float(1.5e-10), TokenKind::Eof]);
+
+        // Integer with exponent becomes float
+        let kinds = tokenize("1e10");
+        assert_eq!(kinds, vec![TokenKind::Float(1e10), TokenKind::Eof]);
+
+        // With positive sign in exponent
+        let kinds = tokenize("2.5E+3");
+        assert_eq!(kinds, vec![TokenKind::Float(2.5e3), TokenKind::Eof]);
+
+        // Uppercase E
+        let kinds = tokenize("3.14E10");
+        assert_eq!(kinds, vec![TokenKind::Float(3.14e10), TokenKind::Eof]);
     }
 }
