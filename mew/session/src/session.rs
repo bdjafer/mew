@@ -2,7 +2,7 @@
 
 use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
-use mew_mutation::MutationExecutor;
+use mew_mutation::{MutationExecutor, MutationOutcome};
 use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, WalkStmt};
 use mew_pattern::{target, Bindings};
 use mew_query::QueryExecutor;
@@ -107,7 +107,7 @@ impl<'r> Session<'r> {
         let stmts = parse_stmts(input)?;
 
         if stmts.is_empty() {
-            return Ok(StatementResult::Mutation(MutationSummary::new(0, 0)));
+            return Ok(StatementResult::Mutation(MutationSummary::default()));
         }
 
         // If there's only one statement, just execute it normally
@@ -116,16 +116,14 @@ impl<'r> Session<'r> {
         }
 
         // Execute all statements and aggregate results
-        let mut total_nodes = 0usize;
-        let mut total_edges = 0usize;
+        let mut total = MutationSummary::default();
         let mut last_result = None;
 
         for stmt in &stmts {
             let result = self.execute_statement(stmt)?;
             match &result {
                 StatementResult::Mutation(m) => {
-                    total_nodes += m.nodes_affected;
-                    total_edges += m.edges_affected;
+                    total.merge(m);
                 }
                 _ => {}
             }
@@ -133,14 +131,11 @@ impl<'r> Session<'r> {
         }
 
         // Return aggregated mutation result if any mutations happened
-        if total_nodes > 0 || total_edges > 0 {
-            Ok(StatementResult::Mutation(MutationSummary::new(
-                total_nodes,
-                total_edges,
-            )))
+        if total.total_affected() > 0 {
+            Ok(StatementResult::Mutation(total))
         } else {
             // Otherwise return the last statement's result
-            Ok(last_result.unwrap_or(StatementResult::Mutation(MutationSummary::new(0, 0))))
+            Ok(last_result.unwrap_or(StatementResult::Mutation(MutationSummary::default())))
         }
     }
 
@@ -434,22 +429,21 @@ impl<'r> Session<'r> {
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_spawn(stmt, &pattern_bindings)?;
 
-        // Store the created node ID with the variable name
-        if let Some(node_id) = result.created_node() {
+        // Store the created node ID with the variable name and count it
+        let nodes_created = if let Some(node_id) = result.created_node() {
             self.bindings.insert(stmt.var.clone(), node_id.into());
-        }
+            1
+        } else {
+            0
+        };
 
-        let nodes = if result.created_node().is_some() {
-            1
-        } else {
-            0
-        };
-        let edges = if result.created_edge().is_some() {
-            1
-        } else {
-            0
-        };
-        Ok(MutationSummary::new(nodes, edges))
+        let edges_created = usize::from(result.created_edge().is_some());
+
+        Ok(MutationSummary {
+            nodes_created,
+            edges_created,
+            ..Default::default()
+        })
     }
 
     /// Execute a KILL statement.
@@ -463,37 +457,39 @@ impl<'r> Session<'r> {
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_kill(stmt, node_id)?;
 
-        Ok(MutationSummary::new(
-            result.deleted_nodes(),
-            result.deleted_edges(),
-        ))
+        Ok(MutationSummary {
+            nodes_deleted: result.deleted_nodes(),
+            edges_deleted: result.deleted_edges(),
+            ..Default::default()
+        })
     }
 
     /// Execute a LINK statement.
     fn execute_link(&mut self, stmt: &mew_parser::LinkStmt) -> SessionResult<MutationSummary> {
         // Resolve all targets
-        let mut target_ids = Vec::new();
-        for target_ref in &stmt.targets {
-            let entity_id = self.resolve_target_ref(target_ref)?;
-            target_ids.push(entity_id);
-        }
+        let target_ids: Vec<_> = stmt
+            .targets
+            .iter()
+            .map(|t| self.resolve_target_ref(t))
+            .collect::<Result<_, _>>()?;
 
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_link(stmt, target_ids)?;
 
         // Store the created edge ID with the variable name if present
-        if let Some(ref var) = stmt.var {
-            if let Some(edge_id) = result.created_edge() {
+        let edges_created = if let Some(edge_id) = result.created_edge() {
+            if let Some(ref var) = stmt.var {
                 self.bindings.insert(var.clone(), edge_id.into());
             }
-        }
-
-        let edges = if result.created_edge().is_some() {
             1
         } else {
             0
         };
-        Ok(MutationSummary::new(0, edges))
+
+        Ok(MutationSummary {
+            edges_created,
+            ..Default::default()
+        })
     }
 
     /// Execute an UNLINK statement.
@@ -507,12 +503,14 @@ impl<'r> Session<'r> {
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_unlink(stmt, edge_id)?;
 
-        Ok(MutationSummary::new(0, result.deleted_edges()))
+        Ok(MutationSummary {
+            edges_deleted: result.deleted_edges(),
+            ..Default::default()
+        })
     }
 
     /// Execute a SET statement.
     fn execute_set(&mut self, stmt: &mew_parser::SetStmt) -> SessionResult<MutationSummary> {
-        // Resolve the target
         let target_id = self.resolve_target(&stmt.target)?;
         let node_id = target_id
             .as_node()
@@ -522,13 +520,15 @@ impl<'r> Session<'r> {
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_set(stmt, vec![node_id], &pattern_bindings)?;
 
-        // Count updated nodes from the result
-        use mew_mutation::MutationOutcome;
-        let nodes = match result {
+        let nodes_modified = match result {
             MutationOutcome::Updated(ref u) => u.node_ids.len(),
             _ => 0,
         };
-        Ok(MutationSummary::new(nodes, 0))
+
+        Ok(MutationSummary {
+            nodes_modified,
+            ..Default::default()
+        })
     }
 
     /// Resolve a target to an EntityId.
@@ -733,7 +733,7 @@ mod tests {
         assert!(result.is_ok());
         match result.unwrap() {
             StatementResult::Mutation(mutation_result) => {
-                assert_eq!(mutation_result.nodes_affected, 1);
+                assert_eq!(mutation_result.nodes_created, 1);
             }
             _ => panic!("Expected mutation result"),
         }

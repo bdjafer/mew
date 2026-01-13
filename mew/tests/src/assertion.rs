@@ -17,6 +17,7 @@ pub struct Assertion {
     pub modified: Option<usize>,
     pub deleted: Option<usize>,
     pub linked: Option<usize>,
+    pub unlinked: Option<usize>,
 
     // Query assertions - single value
     pub value: Option<Value>,
@@ -155,50 +156,60 @@ impl Assertion {
 
     fn verify_mutation(&self, step: &str, result: &MutationSummary) -> ExampleResult<()> {
         if let Some(expected) = self.created {
-            if result.nodes_affected != expected {
+            if result.nodes_created != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
                     format!(
                         "expected {} created, got {}",
-                        expected, result.nodes_affected
+                        expected, result.nodes_created
                     ),
                 ));
             }
         }
 
         if let Some(expected) = self.modified {
-            // For now, modified is tracked via nodes_affected in SET operations
-            if result.nodes_affected != expected {
+            if result.nodes_modified != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
                     format!(
                         "expected {} modified, got {}",
-                        expected, result.nodes_affected
+                        expected, result.nodes_modified
                     ),
                 ));
             }
         }
 
         if let Some(expected) = self.deleted {
-            // Deleted nodes are tracked via nodes_affected in KILL operations
-            if result.nodes_affected != expected {
+            if result.nodes_deleted != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
                     format!(
                         "expected {} deleted, got {}",
-                        expected, result.nodes_affected
+                        expected, result.nodes_deleted
                     ),
                 ));
             }
         }
 
         if let Some(expected) = self.linked {
-            if result.edges_affected != expected {
+            if result.edges_created != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
                     format!(
                         "expected {} linked, got {}",
-                        expected, result.edges_affected
+                        expected, result.edges_created
+                    ),
+                ));
+            }
+        }
+
+        if let Some(expected) = self.unlinked {
+            if result.edges_deleted != expected {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "expected {} unlinked, got {}",
+                        expected, result.edges_deleted
                     ),
                 ));
             }
@@ -608,7 +619,7 @@ impl AssertionBuilder {
 
     /// Assert that N edges were removed (unlinked).
     pub fn unlinked(mut self, n: usize) -> Self {
-        self.assertion.linked = Some(n);
+        self.assertion.unlinked = Some(n);
         self
     }
 
