@@ -825,9 +825,13 @@ impl<'a> Lexer<'a> {
         let (hour, minute, second, millis) = if let Some(time) = time_str {
             let (time_main, millis) = if let Some(dot_pos) = time.find('.') {
                 let ms_str = &time[dot_pos + 1..];
-                let ms: i64 = ms_str
-                    .parse()
-                    .map_err(|_| format!("invalid milliseconds: {}", ms_str))?;
+                // Normalize fractional seconds to 3 digits (milliseconds)
+                let ms: i64 = match ms_str.len() {
+                    1 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))? * 100,
+                    2 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))? * 10,
+                    3 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
+                    _ => ms_str[..3].parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
+                };
                 (&time[..dot_pos], ms)
             } else {
                 (time, 0i64)
