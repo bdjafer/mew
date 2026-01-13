@@ -434,6 +434,13 @@ impl<'r> Analyzer<'r> {
             Expr::NotExists(pattern, where_clause, span) => {
                 self.analyze_exists(pattern, where_clause.as_deref(), *span)
             }
+            Expr::List(elements, _) => {
+                // Analyze all elements but return a generic list type
+                for elem in elements {
+                    self.analyze_expr(elem)?;
+                }
+                Ok(Type::Any) // List type - could be refined to Type::List in future
+            }
         }
     }
 

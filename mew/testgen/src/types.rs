@@ -173,6 +173,14 @@ impl From<&mew_core::Value> for Value {
             mew_core::Value::Duration(d) => Value::Int(*d),
             mew_core::Value::NodeRef(id) => Value::Id(id.0),
             mew_core::Value::EdgeRef(id) => Value::Id(id.0),
+            mew_core::Value::List(items) => {
+                // Convert list to string representation for testgen
+                let formatted: Vec<String> = items
+                    .iter()
+                    .map(|v| format!("{}", v))
+                    .collect();
+                Value::String(format!("[{}]", formatted.join(", ")))
+            }
         }
     }
 }

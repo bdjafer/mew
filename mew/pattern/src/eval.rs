@@ -44,6 +44,14 @@ impl<'r> Evaluator<'r> {
                 let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
                 Ok(Value::Bool(!exists))
             }
+            Expr::List(elements, _) => {
+                // Evaluate each element and collect into a list
+                let values: PatternResult<Vec<Value>> = elements
+                    .iter()
+                    .map(|e| self.eval(e, bindings, graph))
+                    .collect();
+                Ok(Value::List(values?))
+            }
         }
     }
 
@@ -450,6 +458,17 @@ impl<'r> Evaluator<'r> {
                     }
                 }
                 Err(PatternError::type_error("CONTAINS expects (string, pattern)"))
+            }
+            "in" => {
+                // x IN [a, b, c] - check if x is in the list
+                if args.len() >= 2 {
+                    let needle = self.eval(&args[0], bindings, graph)?;
+                    let haystack = self.eval(&args[1], bindings, graph)?;
+                    if let Value::List(list) = haystack {
+                        return Ok(Value::Bool(list.contains(&needle)));
+                    }
+                }
+                Err(PatternError::type_error("IN expects (value, list)"))
             }
             "replace" => {
                 if args.len() >= 3 {

@@ -923,6 +923,10 @@ fn format_value(v: &Value) -> String {
         Value::Duration(d) => format!("duration({})", d),
         Value::NodeRef(id) => format!("node({})", id),
         Value::EdgeRef(id) => format!("edge({})", id),
+        Value::List(items) => {
+            let formatted: Vec<String> = items.iter().map(format_value).collect();
+            format!("[{}]", formatted.join(", "))
+        }
     }
 }
 

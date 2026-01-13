@@ -63,8 +63,13 @@ impl<'r, 'g> Matcher<'r, 'g> {
     fn execute_op(&self, op: &PatternOp, bindings: &Bindings) -> PatternResult<Vec<Bindings>> {
         match op {
             PatternOp::ScanNodes { var, type_id } => {
-                // Scan all nodes of the given type
-                let node_ids: Vec<NodeId> = self.graph.nodes_by_type(*type_id).collect();
+                // Scan all nodes of the given type AND all subtypes (polymorphic matching)
+                let mut node_ids: Vec<NodeId> = self.graph.nodes_by_type(*type_id).collect();
+
+                // Also include nodes of all subtypes
+                for subtype_id in self.registry.get_subtypes(*type_id) {
+                    node_ids.extend(self.graph.nodes_by_type(subtype_id));
+                }
 
                 let matches: Vec<Bindings> = node_ids
                     .into_iter()
