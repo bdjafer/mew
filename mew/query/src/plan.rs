@@ -137,9 +137,18 @@ impl<'r> QueryPlanner<'r> {
 
         // Add aggregate operator if needed (before ORDER BY)
         if has_aggregates {
+            // Extract non-aggregate expressions as implicit GROUP BY
+            let group_by: Vec<Expr> = stmt
+                .return_clause
+                .projections
+                .iter()
+                .filter(|p| self.get_aggregate(&p.expr).is_none())
+                .map(|p| p.expr.clone())
+                .collect();
+
             plan = PlanOp::Aggregate {
                 input: Box::new(plan),
-                group_by: Vec::new(), // TODO: Support GROUP BY clause
+                group_by,
                 aggregates,
             };
         }

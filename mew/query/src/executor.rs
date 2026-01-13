@@ -350,14 +350,24 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
 
                 for (_, group) in groups {
                     let first_bindings = group.first().map(|(b, _)| b.clone()).unwrap_or_default();
-                    let mut agg_values = Vec::new();
+                    let mut row_values = Vec::new();
 
-                    for (_, kind, expr, distinct) in aggregates {
-                        let agg_val = self.compute_aggregate(*kind, &group, expr, *distinct)?;
-                        agg_values.push(agg_val);
+                    // Add group_by values first
+                    for group_expr in group_by {
+                        let val = self
+                            .evaluator
+                            .eval(group_expr, &first_bindings, self.graph)
+                            .unwrap_or(Value::Null);
+                        row_values.push(val);
                     }
 
-                    output.push((first_bindings, agg_values));
+                    // Then add aggregate values
+                    for (_, kind, expr, distinct) in aggregates {
+                        let agg_val = self.compute_aggregate(*kind, &group, expr, *distinct)?;
+                        row_values.push(agg_val);
+                    }
+
+                    output.push((first_bindings, row_values));
                 }
 
                 Ok(output)
