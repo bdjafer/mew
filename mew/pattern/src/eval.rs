@@ -317,18 +317,17 @@ impl<'r> Evaluator<'r> {
                     let start = self.eval(&args[1], bindings, graph)?;
 
                     if let (Value::String(s), Value::Int(start)) = (s, start) {
-                        let start_idx = (start.max(0) as usize).min(s.len());
+                        let start_idx = start.max(0) as usize;
 
                         let result = if args.len() >= 3 {
                             let length = self.eval(&args[2], bindings, graph)?;
                             if let Value::Int(len) = length {
-                                let end_idx = (start_idx + len.max(0) as usize).min(s.len());
-                                s[start_idx..end_idx].to_string()
+                                s.chars().skip(start_idx).take(len.max(0) as usize).collect()
                             } else {
-                                s[start_idx..].to_string()
+                                s.chars().skip(start_idx).collect()
                             }
                         } else {
-                            s[start_idx..].to_string()
+                            s.chars().skip(start_idx).collect()
                         };
                         return Ok(Value::String(result));
                     }

@@ -98,17 +98,21 @@ OrderTerm = Expr ("asc" | "desc")?
 LimitClause = "limit" IntLiteral ("offset" IntLiteral)?
 ```
 
-**Note:** The RETURN clause is **required**. MATCH without RETURN is a compile error:
+**Note:** The RETURN clause is **required** for query MATCH statements. MATCH without RETURN or mutation is a compile error:
 
 ```
--- INVALID: Missing RETURN
+-- INVALID: Missing RETURN and no mutation
 MATCH t: Task WHERE t.priority > 5
--- ERROR: MATCH statement requires RETURN clause.
+-- ERROR: MATCH statement requires RETURN clause or mutation operation.
 --        Did you mean: MATCH t: Task WHERE t.priority > 5 RETURN t
 
--- VALID:
+-- VALID: Query with RETURN
 MATCH t: Task WHERE t.priority > 5
 RETURN t
+
+-- VALID: Compound statement with mutation
+MATCH t: Task WHERE t.priority > 5
+SET t.reviewed = true
 ```
 
 ### 20.2.1 MATCH in Different Contexts
@@ -117,15 +121,20 @@ MATCH behavior varies by context:
 
 | Context | RETURN Required? | Purpose |
 |---------|------------------|---------|
-| **Statement** | ✅ Yes | Specifies what to return to caller |
+| **Query Statement** | ✅ Yes | Specifies what to return to caller |
+| **Compound Statement** | ❌ No | Followed by LINK/SET/KILL/UNLINK mutations |
 | **Subquery** (in KILL, SET, etc.) | ✅ Yes | Specifies what to operate on |
 | **EXISTS pattern** | ❌ No | EXISTS uses Pattern, not MATCH |
 
 **Examples:**
 ```
--- Statement MATCH: RETURN required
+-- Query Statement: RETURN required
 MATCH t: Task WHERE t.status = "done"
 RETURN t
+
+-- Compound Statement: Mutation instead of RETURN
+MATCH t: Task WHERE t.status = "done"
+SET t.archived = true
 
 -- Subquery MATCH: RETURN specifies targets
 KILL { MATCH t: Task WHERE t.archived RETURN t }
@@ -687,7 +696,76 @@ type Value =
   | Value[]                   // for COLLECT
 ```
 
-## 2.11 AST
+## 2.11 Compound MATCH Statements
+
+### 2.11.1 Purpose
+
+Compound MATCH statements allow mutations to be performed on all nodes that match a pattern, combining pattern matching with mutation operations in a single statement.
+
+### 2.11.2 Syntax
+
+```
+CompoundMatchStmt =
+  "match" Pattern
+  ("where" Expr)?
+  MutationOp+
+
+MutationOp =
+    "link" EdgeExpr
+  | "unlink" EdgeExpr
+  | "set" AttributeAssignment
+  | "kill" Identifier
+```
+
+### 2.11.3 Semantics
+
+1. The MATCH pattern is evaluated to find all matching bindings
+2. Each mutation operation is applied to every matching binding
+3. All mutations execute within the current transaction context
+4. No RETURN clause is allowed (compound statements don't return results)
+
+### 2.11.4 Examples
+
+```
+-- Update all high-priority tasks
+MATCH t: Task WHERE t.priority > 8
+SET t.reviewed = true
+
+-- Archive completed tasks and link them to an archive
+MATCH t: Task WHERE t.status = "done"
+SET t.archived_at = now()
+LINK archived_in(t, $archive_id)
+
+-- Delete all expired sessions
+MATCH s: Session WHERE s.expires < now()
+KILL s
+
+-- Multiple mutations on same matches
+MATCH p: Person WHERE p.inactive_days > 90
+SET p.status = "suspended"
+UNLINK member_of(p, *)
+```
+
+### 2.11.5 Error Handling
+
+If any mutation fails (e.g., type mismatch, constraint violation), the entire compound statement fails and the transaction should be rolled back if in a transaction context.
+
+### 2.11.6 Difference from Subquery Mutations
+
+Compound MATCH statements differ from subquery-based mutations:
+
+```
+-- Compound statement (new syntax)
+MATCH t: Task WHERE t.done
+SET t.archived = true
+
+-- Subquery mutation (existing syntax)
+SET { MATCH t: Task WHERE t.done RETURN t }.archived = true
+```
+
+The compound statement syntax is more concise and clearly expresses the intent of "find and mutate."
+
+## 2.12 AST
 
 ```typescript
 interface MatchStmt {
@@ -698,6 +776,18 @@ interface MatchStmt {
   orderBy: OrderTerm[] | null
   limit: number | null
   offset: number | null
+}
+
+interface MatchMutateStmt {
+  kind: "MatchMutate"
+  pattern: Pattern
+  where: Expr | null
+  mutations: MutationOp[]
+}
+
+interface MutationOp {
+  kind: "Link" | "Unlink" | "Set" | "Kill"
+  // Specific fields depend on mutation type
 }
 
 interface ReturnClause {
