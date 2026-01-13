@@ -25,10 +25,16 @@
 - Session and REPL now use shared module
 - Reduced code duplication by ~100 lines
 
-### Phase 3 & 4: Deferred
-- `session.rs` and `query/executor.rs` have tight coupling
+### Phase 3: Partial Session Extraction ✓
+- Extracted `session/src/transaction.rs` for transaction control logic
+- Extracted `session/src/query.rs` for query result conversion helpers
+- Session struct now uses `TransactionState` for cleaner state management
+- session.rs reduced from 953 → 897 lines (includes tests)
+
+### Phase 4: Deferred
+- `query/executor.rs` has tight coupling with operator implementations
 - Further splitting requires significant architectural changes
-- Current file sizes (953 and 1063 lines) are acceptable
+- Current file sizes (897 and 1063 lines) are acceptable
 
 ---
 

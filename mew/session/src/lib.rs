@@ -10,8 +10,10 @@
 //! - Handle errors gracefully
 
 mod error;
+mod query;
 mod result;
 mod session;
+mod transaction;
 
 pub use error::{SessionError, SessionResult};
 pub use result::{MutationSummary, QueryResult, StatementResult, TransactionResult};

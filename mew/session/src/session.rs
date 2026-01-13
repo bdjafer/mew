@@ -3,14 +3,16 @@
 use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, TxnStmt, WalkStmt};
+use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, WalkStmt};
 use mew_pattern::{target, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
 use std::collections::HashMap;
 
 use crate::error::{SessionError, SessionResult};
-use crate::result::{MutationSummary, QueryResult, StatementResult, TransactionResult};
+use crate::query::convert_query_result;
+use crate::result::{MutationSummary, QueryResult, StatementResult};
+use crate::transaction::{self, TransactionState};
 
 /// Session ID type.
 pub type SessionId = u64;
@@ -25,8 +27,8 @@ pub struct Session<'r> {
     graph: Graph,
     /// Auto-commit mode.
     auto_commit: bool,
-    /// Whether a transaction is active.
-    in_transaction: bool,
+    /// Transaction state.
+    txn_state: TransactionState,
     /// Variable bindings (var_name -> EntityId) for mutation targets.
     bindings: HashMap<String, EntityId>,
 }
@@ -39,7 +41,7 @@ impl<'r> Session<'r> {
             registry,
             graph: Graph::new(),
             auto_commit: true,
-            in_transaction: false,
+            txn_state: TransactionState::new(),
             bindings: HashMap::new(),
         }
     }
@@ -51,7 +53,7 @@ impl<'r> Session<'r> {
             registry,
             graph,
             auto_commit: true,
-            in_transaction: false,
+            txn_state: TransactionState::new(),
             bindings: HashMap::new(),
         }
     }
@@ -88,7 +90,7 @@ impl<'r> Session<'r> {
 
     /// Check if a transaction is active.
     pub fn in_transaction(&self) -> bool {
-        self.in_transaction
+        self.txn_state.in_transaction
     }
 
     /// Execute a statement string.
@@ -198,21 +200,7 @@ impl<'r> Session<'r> {
     fn execute_match(&self, stmt: &MatchStmt) -> SessionResult<QueryResult> {
         let executor = QueryExecutor::new(self.registry, &self.graph);
         let result = executor.execute_match(stmt)?;
-
-        // Convert to QueryResult
-        let columns: Vec<String> = result.column_names().to_vec();
-        let types = vec!["any".to_string(); columns.len()]; // Simplified
-
-        let mut rows = Vec::new();
-        for row in result.rows() {
-            let mut values = Vec::with_capacity(columns.len());
-            for col in &columns {
-                values.push(row.get_by_name(col).cloned().unwrap_or(Value::Null));
-            }
-            rows.push(values);
-        }
-
-        Ok(QueryResult::new(columns, types, rows))
+        Ok(convert_query_result(&result))
     }
 
     /// Execute a MATCH...mutation compound statement.
@@ -349,21 +337,7 @@ impl<'r> Session<'r> {
     fn execute_walk(&self, stmt: &WalkStmt) -> SessionResult<QueryResult> {
         let executor = QueryExecutor::new(self.registry, &self.graph);
         let result = executor.execute_walk(stmt)?;
-
-        // Convert to QueryResult
-        let columns: Vec<String> = result.column_names().iter().cloned().collect();
-        let types = vec!["any".to_string(); columns.len()]; // Simplified
-
-        let mut rows = Vec::new();
-        for row in result.rows() {
-            let mut values = Vec::with_capacity(columns.len());
-            for col in &columns {
-                values.push(row.get_by_name(col).cloned().unwrap_or(Value::Null));
-            }
-            rows.push(values);
-        }
-
-        Ok(QueryResult::new(columns, types, rows))
+        Ok(convert_query_result(&result))
     }
 
     /// Execute an INSPECT statement.
@@ -568,38 +542,8 @@ impl<'r> Session<'r> {
     }
 
     /// Execute a transaction statement.
-    fn execute_txn(&mut self, stmt: &TxnStmt) -> SessionResult<StatementResult> {
-        match stmt {
-            TxnStmt::Begin { .. } => {
-                if self.in_transaction {
-                    return Err(SessionError::TransactionError(
-                        mew_transaction::TransactionError::AlreadyActive,
-                    ));
-                }
-                self.in_transaction = true;
-                Ok(StatementResult::Transaction(TransactionResult::Begun))
-            }
-
-            TxnStmt::Commit => {
-                if !self.in_transaction {
-                    return Err(SessionError::TransactionError(
-                        mew_transaction::TransactionError::NoActiveTransaction,
-                    ));
-                }
-                self.in_transaction = false;
-                Ok(StatementResult::Transaction(TransactionResult::Committed))
-            }
-
-            TxnStmt::Rollback => {
-                if !self.in_transaction {
-                    return Err(SessionError::TransactionError(
-                        mew_transaction::TransactionError::NoActiveTransaction,
-                    ));
-                }
-                self.in_transaction = false;
-                Ok(StatementResult::Transaction(TransactionResult::RolledBack))
-            }
-        }
+    fn execute_txn(&mut self, stmt: &mew_parser::TxnStmt) -> SessionResult<StatementResult> {
+        transaction::execute_txn(&mut self.txn_state, stmt)
     }
 }
 
