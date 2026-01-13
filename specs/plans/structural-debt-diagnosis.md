@@ -1,7 +1,7 @@
 # Structural Debt Diagnosis
 
 **Date:** 2026-01-13
-**Status:** Partial Remediation Complete
+**Status:** Remediation Complete
 **Scope:** Full MEW workspace (17 crates)
 
 ## Completed Remediation
@@ -31,10 +31,15 @@
 - Session struct now uses `TransactionState` for cleaner state management
 - session.rs reduced from 953 → 897 lines (includes tests)
 
-### Phase 4: Deferred
-- `query/executor.rs` has tight coupling with operator implementations
-- Further splitting requires significant architectural changes
-- Current file sizes (897 and 1063 lines) are acceptable
+### Phase 4: Query Executor Extraction ✓
+- Extracted `query/src/operators.rs` (625 lines) for plan operator execution
+  - `OperatorContext` struct encapsulates execution dependencies
+  - All PlanOp variant handlers moved to focused module
+  - Value comparison and grouping helpers
+- Extracted `query/src/aggregates.rs` (253 lines) for aggregate computation
+  - COUNT, SUM, AVG, MIN, MAX implementations
+  - Unit tests for aggregate functions
+- executor.rs reduced from 1063 → 514 lines (52% reduction)
 
 ---
 
