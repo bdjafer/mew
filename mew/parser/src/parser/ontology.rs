@@ -232,6 +232,20 @@ impl Parser {
             self.expect(&TokenKind::Colon)?;
             let pattern = self.expect_string()?;
             Ok(AttrModifier::Match(pattern))
+        } else if self.check_ident("length") {
+            // length: N..M - string length constraint
+            self.advance();
+            self.expect(&TokenKind::Colon)?;
+            let min = self.expect_int()?;
+            self.expect(&TokenKind::Range)?;
+            let max = self.expect_int()?;
+            Ok(AttrModifier::Length { min, max })
+        } else if self.check_ident("format") {
+            // format: email, url, uuid, etc.
+            self.advance();
+            self.expect(&TokenKind::Colon)?;
+            let format_name = self.expect_ident()?;
+            Ok(AttrModifier::Format(format_name))
         } else if self.check(&TokenKind::GtEq) {
             self.advance();
             let min = self.parse_expr()?;

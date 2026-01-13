@@ -59,7 +59,7 @@ impl<'s> Runner<'s> {
             // Execute each step in the seed
             for step_name in seed_ops.step_names() {
                 if let Some(statement) = seed_ops.get_step(step_name) {
-                    session.execute(statement).map_err(|e| {
+                    session.execute_all(statement).map_err(|e| {
                         ExampleError::step_execution(format!("seed:{}", step_name), e.to_string())
                     })?;
                 }
@@ -74,7 +74,7 @@ impl<'s> Runner<'s> {
                 .ok_or_else(|| ExampleError::step_not_found(&step.name))?;
 
             // Execute the statement
-            let result = session.execute(statement);
+            let result = session.execute_all(statement);
 
             // Convert to the format expected by assertions
             let result_for_assertion = result.map_err(|e| e.to_string());

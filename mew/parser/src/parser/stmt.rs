@@ -58,6 +58,15 @@ impl Parser {
         }
     }
 
+    /// Parse multiple statements until end of input.
+    pub fn parse_stmts(&mut self) -> ParseResult<Vec<Stmt>> {
+        let mut stmts = Vec::new();
+        while !self.check(&TokenKind::Eof) {
+            stmts.push(self.parse_stmt()?);
+        }
+        Ok(stmts)
+    }
+
     // ==================== MATCH ====================
 
     pub(crate) fn parse_match(&mut self) -> ParseResult<MatchStmt> {
@@ -331,8 +340,26 @@ impl Parser {
             self.expect(&TokenKind::RBrace)?;
             Ok(Target::Pattern(Box::new(pattern)))
         } else {
-            let var = self.expect_ident()?;
-            Ok(Target::Var(var))
+            let ident = self.expect_ident()?;
+            // Check if this is an edge pattern: edge_type(targets)
+            if self.check(&TokenKind::LParen) {
+                self.advance();
+                let mut targets = Vec::new();
+                if !self.check(&TokenKind::RParen) {
+                    targets.push(self.expect_ident()?);
+                    while self.check(&TokenKind::Comma) {
+                        self.advance();
+                        targets.push(self.expect_ident()?);
+                    }
+                }
+                self.expect(&TokenKind::RParen)?;
+                Ok(Target::EdgePattern {
+                    edge_type: ident,
+                    targets,
+                })
+            } else {
+                Ok(Target::Var(ident))
+            }
         }
     }
 

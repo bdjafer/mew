@@ -328,8 +328,8 @@ pub fn resolve_target(
             .get(name)
             .copied()
             .ok_or_else(|| format!("Unknown variable: {}", name)),
-        Target::Id(_) | Target::Pattern(_) => {
-            Err("Only variable targets are supported".to_string())
+        Target::Id(_) | Target::Pattern(_) | Target::EdgePattern { .. } => {
+            Err("Only variable targets are supported in direct REPL execution".to_string())
         }
     }
 }

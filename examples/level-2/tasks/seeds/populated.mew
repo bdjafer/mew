@@ -119,9 +119,7 @@ LINK subtask_of(crud_subtask, api_task)
 
 -- Blocking relationships (dependency chain)
 -- done_task → api_task → tests_task → review_task → deploy_task
---# seed_link_done_blocks_api
--- Setup is done, so API can proceed
--- (No block needed - done_task is complete)
+-- Note: No block from done_task to api_task since done_task is already complete
 
 --# seed_link_api_blocks_tests
 LINK blocks(api_task, tests_task)

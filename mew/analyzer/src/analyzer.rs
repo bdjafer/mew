@@ -348,6 +348,10 @@ impl<'r> Analyzer<'r> {
             }
             mew_parser::Target::Id(_) => Ok(Type::AnyNodeRef),
             mew_parser::Target::Pattern(match_stmt) => self.analyze_match(match_stmt),
+            mew_parser::Target::EdgePattern { .. } => {
+                // Edge pattern is used in UNLINK, returns an edge reference
+                Ok(Type::AnyEdgeRef)
+            }
         }
     }
 

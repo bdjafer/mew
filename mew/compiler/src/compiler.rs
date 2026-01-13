@@ -288,6 +288,25 @@ impl Compiler {
                             condition: format!("t.{} MATCHES \"{}\"", attr_def.name, pattern),
                         });
                     }
+                    AttrModifier::Length { min, max } => {
+                        // Generate length constraint for strings
+                        self.generated_type_constraints.push(GeneratedConstraint {
+                            name: format!("_{}_{}_{}", node_def.name, attr_def.name, "length"),
+                            on_type: node_def.name.clone(),
+                            condition: format!(
+                                "length(t.{}) >= {} AND length(t.{}) <= {}",
+                                attr_def.name, min, attr_def.name, max
+                            ),
+                        });
+                    }
+                    AttrModifier::Format(format_name) => {
+                        // Generate format constraint
+                        self.generated_type_constraints.push(GeneratedConstraint {
+                            name: format!("_{}_{}_{}", node_def.name, attr_def.name, "format"),
+                            on_type: node_def.name.clone(),
+                            condition: format!("is_{}(t.{})", format_name, attr_def.name),
+                        });
+                    }
                 }
             }
 
@@ -366,7 +385,10 @@ impl Compiler {
                         let max_val = max.as_ref().and_then(expr_to_value);
                         attr = attr.with_range(min_val, max_val);
                     }
-                    AttrModifier::InValues(_) | AttrModifier::Match(_) => {
+                    AttrModifier::InValues(_)
+                    | AttrModifier::Match(_)
+                    | AttrModifier::Length { .. }
+                    | AttrModifier::Format(_) => {
                         // These are constraint-generating modifiers
                         // For edge attributes, we'd generate edge-level constraints
                         // For now, just skip - runtime constraint checking will handle them
