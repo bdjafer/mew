@@ -1,0 +1,135 @@
+-- ===========================================================================
+-- OPERATIONS: String Function Tests
+-- Tests string operations: length, starts_with, ends_with, contains, etc.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SEED DATA
+-- ---------------------------------------------------------------------------
+
+--# seed_string_data
+SPAWN t1: TextEntry { content = "Hello World", mixed_case = "HeLLo WoRLD", raw_input = "  trim me  " }
+SPAWN t2: TextEntry { content = "hello", mixed_case = "hello", raw_input = "no_trim" }
+SPAWN t3: TextEntry { content = "HELLO WORLD", mixed_case = "HELLO", raw_input = "  spaces  " }
+SPAWN t4: TextEntry { content = "The quick brown fox", long_text = "Lorem ipsum dolor sit amet" }
+SPAWN t5: TextEntry { content = "test@example.com", alt_content = "backup@example.com" }
+
+-- ---------------------------------------------------------------------------
+-- LENGTH FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_length_function
+MATCH t: TextEntry WHERE t.content = "Hello World"
+RETURN length(t.content) AS len
+
+--# query_length_filter
+MATCH t: TextEntry WHERE length(t.content) > 10
+RETURN COUNT(t) AS count
+
+--# query_length_comparison
+MATCH t: TextEntry WHERE length(t.content) <= 5
+RETURN t.content
+
+-- ---------------------------------------------------------------------------
+-- STARTS_WITH FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_starts_with_match
+MATCH t: TextEntry WHERE starts_with(t.content, "Hello")
+RETURN COUNT(t) AS count
+
+--# query_starts_with_no_match
+MATCH t: TextEntry WHERE starts_with(t.content, "Goodbye")
+RETURN COUNT(t) AS count
+
+--# query_starts_with_case_sensitive
+MATCH t: TextEntry WHERE starts_with(t.content, "hello")
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- ENDS_WITH FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_ends_with_match
+MATCH t: TextEntry WHERE ends_with(t.content, "World")
+RETURN COUNT(t) AS count
+
+--# query_ends_with_extension
+MATCH t: TextEntry WHERE ends_with(t.content, ".com")
+RETURN t.content
+
+--# query_ends_with_no_match
+MATCH t: TextEntry WHERE ends_with(t.content, "xyz")
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- CONTAINS FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_contains_match
+MATCH t: TextEntry WHERE contains(t.content, "World")
+RETURN COUNT(t) AS count
+
+--# query_contains_substring
+MATCH t: TextEntry WHERE contains(t.content, "quick")
+RETURN t.content
+
+--# query_contains_at_symbol
+MATCH t: TextEntry WHERE contains(t.content, "@")
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- LOWER/UPPER FUNCTIONS
+-- ---------------------------------------------------------------------------
+
+--# query_lower_function
+MATCH t: TextEntry WHERE t.mixed_case != null
+RETURN t.mixed_case, lower(t.mixed_case) AS lowered
+
+--# query_upper_function
+MATCH t: TextEntry WHERE t.mixed_case != null
+RETURN t.mixed_case, upper(t.mixed_case) AS uppered
+
+--# query_lower_comparison
+MATCH t: TextEntry WHERE lower(t.content) = "hello"
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- TRIM FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_trim_function
+MATCH t: TextEntry WHERE t.raw_input != null
+RETURN t.raw_input, trim(t.raw_input) AS trimmed
+
+--# query_trim_length
+MATCH t: TextEntry WHERE t.raw_input = "  trim me  "
+RETURN length(trim(t.raw_input)) AS len
+
+-- ---------------------------------------------------------------------------
+-- SUBSTRING FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_substring_basic
+MATCH t: TextEntry WHERE t.long_text != null
+RETURN substring(t.long_text, 0, 5) AS sub
+
+--# query_substring_middle
+MATCH t: TextEntry WHERE t.content = "Hello World"
+RETURN substring(t.content, 6, 5) AS sub
+
+-- ---------------------------------------------------------------------------
+-- STRING CONCATENATION (++)
+-- ---------------------------------------------------------------------------
+
+--# query_concat_basic
+MATCH t: TextEntry WHERE t.content = "hello"
+RETURN t.content ++ " world" AS concatenated
+
+--# query_concat_multiple
+MATCH t: TextEntry WHERE t.content = "Hello World"
+RETURN "Prefix: " ++ t.content ++ " :Suffix" AS concatenated
+
+--# query_concat_attributes
+MATCH t: TextEntry WHERE t.alt_content != null
+RETURN t.content ++ " / " ++ t.alt_content AS combined

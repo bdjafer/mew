@@ -1,0 +1,312 @@
+-- ===========================================================================
+-- SCENARIO: Multiple Inheritance
+-- DESCRIPTION: Tests nodes inheriting from multiple parent types
+-- FOCUS: Level-2 multiple inheritance - TeamLead : Employee, Mentorship
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create base entities
+-- ---------------------------------------------------------------------------
+
+--# test_setup_team_lead
+SPAWN multi_lead: TeamLead {
+  first_name = "Multi",
+  last_name = "Lead",
+  email = "multi.lead@company.com",
+  employee_id = "EMP800001",
+  hire_date = now(),
+  salary = 120000.0,
+  -- From Employee
+  employment_type = "full_time",
+  status = "active",
+  -- From Mentorship mixin
+  can_mentor = true,
+  max_mentees = 5,
+  mentoring_areas = "Rust, Architecture, Code Review",
+  -- From TeamLead
+  technical_specialty = "Backend Engineering",
+  team_size = 8
+}
+--@ expect:ok
+
+--# test_setup_mentee_1
+SPAWN mentee_1: Employee {
+  first_name = "Mentee",
+  last_name = "One",
+  email = "mentee.one@company.com",
+  employee_id = "EMP800002",
+  hire_date = now(),
+  salary = 70000.0
+}
+--@ expect:ok
+
+--# test_setup_mentee_2
+SPAWN mentee_2: Employee {
+  first_name = "Mentee",
+  last_name = "Two",
+  email = "mentee.two@company.com",
+  employee_id = "EMP800003",
+  hire_date = now(),
+  salary = 65000.0
+}
+--@ expect:ok
+
+--# test_setup_second_team_lead
+SPAWN multi_lead_2: TeamLead {
+  first_name = "Second",
+  last_name = "Lead",
+  email = "second.lead@company.com",
+  employee_id = "EMP800004",
+  hire_date = now(),
+  salary = 115000.0,
+  can_mentor = true,
+  max_mentees = 3,
+  mentoring_areas = "Frontend, UX",
+  technical_specialty = "Frontend Engineering",
+  team_size = 5
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- QUERY AS EACH PARENT TYPE
+-- ---------------------------------------------------------------------------
+
+--# test_query_as_team_lead
+MATCH tl: TeamLead
+WHERE tl.employee_id = "EMP800001"
+RETURN tl.first_name, tl.technical_specialty, tl.team_size
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Multi", technical_specialty = "Backend Engineering", team_size = 8 }
+
+--# test_query_as_employee
+MATCH e: Employee
+WHERE e.employee_id = "EMP800001"
+RETURN e.first_name, e.salary, e.employment_type
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Multi", salary = 120000.0, employment_type = "full_time" }
+
+--# test_query_as_person
+MATCH p: Person
+WHERE p.email = "multi.lead@company.com"
+RETURN p.first_name, p.last_name
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Multi", last_name = "Lead" }
+
+--# test_query_as_mentorship
+MATCH m: Mentorship
+WHERE m.can_mentor = true AND m.max_mentees >= 5
+RETURN m.mentoring_areas, m.max_mentees
+--@ expect:rows >= 1
+--@ expect:has_row { mentoring_areas = "Rust, Architecture, Code Review", max_mentees = 5 }
+
+-- ---------------------------------------------------------------------------
+-- POLYMORPHIC QUERIES ACROSS MULTIPLE INHERITANCE
+-- ---------------------------------------------------------------------------
+
+--# test_count_all_employees_includes_team_leads
+MATCH e: Employee
+WHERE e.employee_id STARTS WITH "EMP8000"
+RETURN count(e) AS employee_count
+--@ expect:rows = 1
+--@ expect:has_row { employee_count = 4 }
+
+--# test_count_all_team_leads
+MATCH tl: TeamLead
+WHERE tl.employee_id STARTS WITH "EMP8000"
+RETURN count(tl) AS team_lead_count
+--@ expect:rows = 1
+--@ expect:has_row { team_lead_count = 2 }
+
+--# test_count_all_mentorship_capable
+MATCH m: Mentorship
+WHERE m.can_mentor = true
+RETURN count(m) AS mentor_count
+--@ expect:rows = 1
+--@ expect:has_row { mentor_count >= 2 }
+
+-- ---------------------------------------------------------------------------
+-- ACCESS ATTRIBUTES FROM EACH PARENT
+-- ---------------------------------------------------------------------------
+
+--# test_access_all_parent_attributes
+MATCH tl: TeamLead
+WHERE tl.employee_id = "EMP800001"
+RETURN
+  tl.first_name,          -- From Person
+  tl.email,               -- From Person
+  tl.employee_id,         -- From Employee
+  tl.salary,              -- From Employee
+  tl.can_mentor,          -- From Mentorship
+  tl.max_mentees,         -- From Mentorship
+  tl.technical_specialty, -- From TeamLead
+  tl.team_size            -- From TeamLead
+--@ expect:rows = 1
+--@ expect:has_row { first_name = "Multi", employee_id = "EMP800001", can_mentor = true, technical_specialty = "Backend Engineering" }
+
+-- ---------------------------------------------------------------------------
+-- UPDATE ATTRIBUTES FROM DIFFERENT PARENTS
+-- ---------------------------------------------------------------------------
+
+--# test_update_person_attribute
+MATCH tl: TeamLead
+WHERE tl.employee_id = "EMP800001"
+SET tl { last_name = "LeadUpdated" }
+--@ expect:ok
+
+--# test_verify_person_update
+MATCH p: Person
+WHERE p.email = "multi.lead@company.com"
+RETURN p.last_name
+--@ expect:rows = 1
+--@ expect:has_row { last_name = "LeadUpdated" }
+
+--# test_update_employee_attribute
+MATCH tl: TeamLead
+WHERE tl.employee_id = "EMP800001"
+SET tl { salary = 130000.0 }
+--@ expect:ok
+
+--# test_verify_employee_update
+MATCH e: Employee
+WHERE e.employee_id = "EMP800001"
+RETURN e.salary
+--@ expect:rows = 1
+--@ expect:has_row { salary = 130000.0 }
+
+--# test_update_mentorship_attribute
+MATCH tl: TeamLead
+WHERE tl.employee_id = "EMP800001"
+SET tl { max_mentees = 7 }
+--@ expect:ok
+
+--# test_verify_mentorship_update
+MATCH m: Mentorship
+WHERE m.max_mentees = 7
+RETURN m.mentoring_areas
+--@ expect:rows >= 1
+
+--# test_update_team_lead_attribute
+MATCH tl: TeamLead
+WHERE tl.employee_id = "EMP800001"
+SET tl { team_size = 10 }
+--@ expect:ok
+
+--# test_verify_team_lead_update
+MATCH tl: TeamLead
+WHERE tl.employee_id = "EMP800001"
+RETURN tl.team_size
+--@ expect:rows = 1
+--@ expect:has_row { team_size = 10 }
+
+-- ---------------------------------------------------------------------------
+-- MENTORING RELATIONSHIPS (edge specific to TeamLead)
+-- ---------------------------------------------------------------------------
+
+--# test_create_mentoring_relationships
+MATCH lead: TeamLead, m1: Employee, m2: Employee
+WHERE lead.employee_id = "EMP800001" AND m1.employee_id = "EMP800002" AND m2.employee_id = "EMP800003"
+LINK mentors(lead, m1) { focus_area = "Backend development" }
+LINK mentors(lead, m2) { focus_area = "Code review" }
+--@ expect:ok
+
+--# test_verify_mentoring_relationships
+MATCH lead: TeamLead, mentee: Employee, mentors(lead, mentee) AS r
+WHERE lead.employee_id = "EMP800001"
+RETURN mentee.first_name, r.focus_area
+ORDER BY mentee.first_name
+--@ expect:rows = 2
+--@ expect:has_row { first_name = "Mentee", focus_area = "Backend development" }
+
+--# test_count_mentees
+MATCH lead: TeamLead, mentee: Employee, mentors(lead, mentee)
+WHERE lead.employee_id = "EMP800001"
+RETURN count(mentee) AS mentee_count
+--@ expect:rows = 1
+--@ expect:has_row { mentee_count = 2 }
+
+-- ---------------------------------------------------------------------------
+-- QUERY MENTORS BY MENTORSHIP ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_find_mentors_with_capacity
+MATCH m: Mentorship
+WHERE m.can_mentor = true AND m.max_mentees > 3
+MATCH mentee: Employee, mentors(m, mentee)
+RETURN count(DISTINCT m) AS active_mentors
+--@ expect:rows = 1
+
+--# test_find_mentors_by_area
+MATCH m: Mentorship
+WHERE m.mentoring_areas CONTAINS "Rust"
+RETURN m.max_mentees
+--@ expect:rows >= 1
+
+-- ---------------------------------------------------------------------------
+-- FILTER BY ATTRIBUTES FROM DIFFERENT PARENTS
+-- ---------------------------------------------------------------------------
+
+--# test_filter_high_salary_mentors
+MATCH tl: TeamLead
+WHERE tl.salary > 100000.0 AND tl.can_mentor = true
+RETURN tl.first_name, tl.salary, tl.technical_specialty
+ORDER BY tl.salary DESC
+--@ expect:rows >= 1
+
+--# test_filter_large_team_backend_leads
+MATCH tl: TeamLead
+WHERE tl.team_size >= 5 AND tl.technical_specialty CONTAINS "Backend"
+RETURN tl.first_name, tl.team_size
+--@ expect:rows >= 1
+--@ expect:has_row { first_name = "Multi", team_size = 10 }
+
+-- ---------------------------------------------------------------------------
+-- SPAWN NEW TEAM LEAD WITH ALL ATTRIBUTES
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_new_team_lead
+SPAWN new_lead: TeamLead {
+  first_name = "New",
+  last_name = "TeamLead",
+  email = "new.lead@company.com",
+  employee_id = "EMP800005",
+  hire_date = now(),
+  salary = 110000.0,
+  employment_type = "full_time",
+  status = "active",
+  can_mentor = true,
+  max_mentees = 4,
+  mentoring_areas = "Testing, QA",
+  technical_specialty = "Quality Engineering",
+  team_size = 6
+}
+--@ expect:ok
+
+--# test_verify_new_lead_as_all_types
+MATCH p: Person
+WHERE p.email = "new.lead@company.com"
+MATCH e: Employee
+WHERE e.employee_id = "EMP800005"
+MATCH m: Mentorship
+WHERE m.mentoring_areas = "Testing, QA"
+MATCH tl: TeamLead
+WHERE tl.technical_specialty = "Quality Engineering"
+RETURN count(*) AS type_check
+--@ expect:rows = 1
+--@ expect:has_row { type_check = 1 }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_team_leads
+MATCH tl: TeamLead
+WHERE tl.employee_id STARTS WITH "EMP8000"
+KILL tl
+--@ expect:ok
+
+--# test_cleanup_mentees
+MATCH e: Employee
+WHERE e.employee_id IN ["EMP800002", "EMP800003"]
+KILL e
+--@ expect:ok
+

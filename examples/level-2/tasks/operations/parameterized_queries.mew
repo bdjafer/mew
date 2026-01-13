@@ -1,0 +1,291 @@
+-- ===========================================================================
+-- SCENARIO: Parameterized Queries
+-- DESCRIPTION: Tests $param syntax, PREPARE/EXECUTE statements
+-- FOCUS: Level-2 parameterized queries (unique to this ontology)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP
+-- ---------------------------------------------------------------------------
+
+--# test_setup_param_tasks
+SPAWN param_task_1: Task { title = "Param Task One", status = "todo", priority = 5 }
+SPAWN param_task_2: Task { title = "Param Task Two", status = "in_progress", priority = 3 }
+SPAWN param_task_3: Task { title = "Param Task Three", status = "done", priority = 1 }
+SPAWN param_task_4: Task { title = "Param Task Four", status = "todo", priority = 4 }
+SPAWN param_task_5: Task { title = "Param Task Five", status = "in_progress", priority = 2 }
+--@ expect:ok
+
+--# test_setup_param_tags
+SPAWN param_tag_urgent: Tag { name = "param-urgent", color = "#FF0000" }
+SPAWN param_tag_work: Tag { name = "param-work", color = "#00FF00" }
+--@ expect:ok
+
+--# test_setup_param_links
+MATCH t1: Task, t2: Task, t4: Task, urgent: Tag, work: Tag
+WHERE t1.title = "Param Task One" AND t2.title = "Param Task Two" AND t4.title = "Param Task Four"
+AND urgent.name = "param-urgent" AND work.name = "param-work"
+LINK tagged(t1, urgent)
+LINK tagged(t2, work)
+LINK tagged(t4, urgent)
+LINK tagged(t4, work)
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- BASIC $param IN WHERE CLAUSE
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_where_string
+-- @param $status = "todo"
+MATCH t: Task
+WHERE t.status = $status AND t.title STARTS WITH "Param Task"
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 2
+--@ expect:has_row { title = "Param Task Four" }
+--@ expect:has_row { title = "Param Task One" }
+
+--# test_param_in_where_int
+-- @param $min_priority = 3
+MATCH t: Task
+WHERE t.priority >= $min_priority AND t.title STARTS WITH "Param Task"
+RETURN t.title, t.priority
+ORDER BY t.priority DESC
+--@ expect:rows = 3
+--@ expect:has_row { title = "Param Task One", priority = 5 }
+
+--# test_param_in_where_multiple
+-- @param $status = "in_progress"
+-- @param $max_priority = 3
+MATCH t: Task
+WHERE t.status = $status AND t.priority <= $max_priority AND t.title STARTS WITH "Param Task"
+RETURN t.title, t.priority
+--@ expect:rows = 2
+--@ expect:has_row { title = "Param Task Two", priority = 3 }
+--@ expect:has_row { title = "Param Task Five", priority = 2 }
+
+-- ---------------------------------------------------------------------------
+-- $param IN PATTERN MATCHING
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_tag_filter
+-- @param $tag_name = "param-urgent"
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE tag.name = $tag_name
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 2
+--@ expect:has_row { title = "Param Task Four" }
+--@ expect:has_row { title = "Param Task One" }
+
+-- ---------------------------------------------------------------------------
+-- $param IN SPAWN
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_spawn
+-- @param $new_title = "Parameterized Spawn Task"
+-- @param $new_status = "todo"
+-- @param $new_priority = 3
+SPAWN param_spawned: Task {
+  title = $new_title,
+  status = $new_status,
+  priority = $new_priority
+}
+--@ expect:ok
+
+--# test_verify_param_spawn
+MATCH t: Task
+WHERE t.title = "Parameterized Spawn Task"
+RETURN t.status, t.priority
+--@ expect:rows = 1
+--@ expect:has_row { status = "todo", priority = 3 }
+
+-- ---------------------------------------------------------------------------
+-- $param IN SET
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_set
+-- @param $new_status = "done"
+MATCH t: Task
+WHERE t.title = "Parameterized Spawn Task"
+SET t { status = $new_status }
+--@ expect:ok
+
+--# test_verify_param_set
+MATCH t: Task
+WHERE t.title = "Parameterized Spawn Task"
+RETURN t.status
+--@ expect:rows = 1
+--@ expect:has_row { status = "done" }
+
+-- ---------------------------------------------------------------------------
+-- $param IN LIST OPERATIONS
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_list
+-- @param $statuses = ["todo", "in_progress"]
+MATCH t: Task
+WHERE t.status IN $statuses AND t.title STARTS WITH "Param Task"
+RETURN t.title, t.status
+ORDER BY t.title
+--@ expect:rows = 4
+
+--# test_param_in_list_titles
+-- @param $titles = ["Param Task One", "Param Task Three", "Param Task Five"]
+MATCH t: Task
+WHERE t.title IN $titles
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 3
+
+-- ---------------------------------------------------------------------------
+-- $param TYPE INFERENCE
+-- ---------------------------------------------------------------------------
+
+--# test_param_string_type
+-- @param $search = "Param"
+MATCH t: Task
+WHERE t.title STARTS WITH $search
+RETURN count(t) AS count
+--@ expect:rows = 1
+--@ expect:has_row { count >= 5 }
+
+--# test_param_bool_type
+-- @param $blocking = true
+SPAWN param_subtask: SubTask {
+  title = "Param SubTask",
+  priority = 3,
+  is_blocking = $blocking
+}
+--@ expect:ok
+
+--# test_verify_param_bool
+MATCH st: SubTask
+WHERE st.title = "Param SubTask"
+RETURN st.is_blocking
+--@ expect:rows = 1
+--@ expect:has_row { is_blocking = true }
+
+-- ---------------------------------------------------------------------------
+-- PREPARE / EXECUTE
+-- ---------------------------------------------------------------------------
+
+--# test_prepare_basic_query
+PREPARE find_by_status AS
+MATCH t: Task
+WHERE t.status = $status AND t.title STARTS WITH "Param Task"
+RETURN t.title
+ORDER BY t.title
+--@ expect:ok
+
+--# test_execute_prepared_todo
+EXECUTE find_by_status WITH $status = "todo"
+--@ expect:rows = 2
+
+--# test_execute_prepared_done
+EXECUTE find_by_status WITH $status = "done"
+--@ expect:rows = 1
+--@ expect:has_row { title = "Param Task Three" }
+
+--# test_execute_prepared_in_progress
+EXECUTE find_by_status WITH $status = "in_progress"
+--@ expect:rows = 2
+
+-- ---------------------------------------------------------------------------
+-- PREPARE WITH MULTIPLE PARAMETERS
+-- ---------------------------------------------------------------------------
+
+--# test_prepare_multi_param
+PREPARE find_by_status_priority AS
+MATCH t: Task
+WHERE t.status = $status AND t.priority >= $min_priority AND t.title STARTS WITH "Param Task"
+RETURN t.title, t.priority
+ORDER BY t.priority DESC
+--@ expect:ok
+
+--# test_execute_multi_param_1
+EXECUTE find_by_status_priority WITH $status = "todo", $min_priority = 4
+--@ expect:rows = 2
+--@ expect:has_row { title = "Param Task One", priority = 5 }
+--@ expect:has_row { title = "Param Task Four", priority = 4 }
+
+--# test_execute_multi_param_2
+EXECUTE find_by_status_priority WITH $status = "in_progress", $min_priority = 3
+--@ expect:rows = 1
+--@ expect:has_row { title = "Param Task Two", priority = 3 }
+
+-- ---------------------------------------------------------------------------
+-- PREPARE FOR MUTATIONS
+-- ---------------------------------------------------------------------------
+
+--# test_prepare_update_status
+PREPARE update_task_status AS
+MATCH t: Task
+WHERE t.title = $title
+SET t { status = $new_status }
+--@ expect:ok
+
+--# test_execute_update_status
+EXECUTE update_task_status WITH $title = "Param Task Five", $new_status = "done"
+--@ expect:ok
+
+--# test_verify_executed_update
+MATCH t: Task
+WHERE t.title = "Param Task Five"
+RETURN t.status
+--@ expect:rows = 1
+--@ expect:has_row { status = "done" }
+
+-- ---------------------------------------------------------------------------
+-- DROP PREPARED STATEMENT
+-- ---------------------------------------------------------------------------
+
+--# test_drop_prepared
+DROP PREPARED find_by_status
+--@ expect:ok
+
+--# test_execute_dropped_should_fail
+EXECUTE find_by_status WITH $status = "todo"
+--@ expect:error
+--@ expect:not_found
+
+-- ---------------------------------------------------------------------------
+-- MISSING PARAMETER ERROR
+-- ---------------------------------------------------------------------------
+
+--# test_missing_param_error
+-- @param $status = "todo"
+-- Missing $priority parameter
+MATCH t: Task
+WHERE t.status = $status AND t.priority >= $missing_priority
+RETURN t.title
+--@ expect:error
+--@ expect:missing_parameter
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_param_tasks
+MATCH t: Task
+WHERE t.title STARTS WITH "Param Task" OR t.title = "Parameterized Spawn Task"
+KILL t
+--@ expect:ok
+
+--# test_cleanup_param_subtask
+MATCH st: SubTask
+WHERE st.title = "Param SubTask"
+KILL st
+--@ expect:ok
+
+--# test_cleanup_param_tags
+MATCH tag: Tag
+WHERE tag.name STARTS WITH "param-"
+KILL tag
+--@ expect:ok
+
+--# test_drop_remaining_prepared
+DROP PREPARED find_by_status_priority
+DROP PREPARED update_task_status
+--@ expect:ok
+

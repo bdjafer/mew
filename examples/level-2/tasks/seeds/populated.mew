@@ -74,3 +74,62 @@ SPAWN crud_subtask: SubTask {
   priority = 4,
   is_blocking = false
 }
+
+-- Additional tag for variety
+--# seed_tag_bug
+SPAWN bug: Tag {
+  name = "bug",
+  color = "#DC2626"
+}
+
+-- Additional task for blocking chains
+--# seed_task_review
+SPAWN review_task: Task {
+  title = "Code review",
+  status = "todo",
+  priority = 4
+}
+
+-- ===========================================================================
+-- EDGE RELATIONSHIPS
+-- ===========================================================================
+
+-- Tags on tasks
+--# seed_link_api_dev
+LINK tagged(api_task, dev)
+
+--# seed_link_api_urgent
+LINK tagged(api_task, urgent)
+
+--# seed_link_tests_dev
+LINK tagged(tests_task, dev)
+
+--# seed_link_docs_docs
+LINK tagged(docs_task, docs)
+
+--# seed_link_deploy_urgent
+LINK tagged(deploy_task, urgent)
+
+-- Subtask relationships
+--# seed_link_auth_api
+LINK subtask_of(auth_subtask, api_task)
+
+--# seed_link_crud_api
+LINK subtask_of(crud_subtask, api_task)
+
+-- Blocking relationships (dependency chain)
+-- done_task → api_task → tests_task → review_task → deploy_task
+-- Note: No block from done_task to api_task since done_task is already complete
+
+--# seed_link_api_blocks_tests
+LINK blocks(api_task, tests_task)
+
+--# seed_link_tests_blocks_review
+LINK blocks(tests_task, review_task)
+
+--# seed_link_review_blocks_deploy
+LINK blocks(review_task, deploy_task)
+
+-- API also blocks docs (parallel dependency)
+--# seed_link_api_blocks_docs
+LINK blocks(api_task, docs_task)

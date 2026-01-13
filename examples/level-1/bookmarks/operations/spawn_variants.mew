@@ -1,0 +1,51 @@
+-- ===========================================================================
+-- SCENARIO: Attribute Fundamentals
+-- DESCRIPTION: Test required/optional/default/null attribute behaviors
+-- ===========================================================================
+
+--# spawn_minimal_required_only
+SPAWN b1: Bookmark {
+  url = "https://minimal.com",
+  title = "Minimal"
+}
+
+--# verify_defaults_applied
+MATCH b: Bookmark WHERE b.url = "https://minimal.com"
+RETURN b.is_favorite, b.visit_count
+
+--# spawn_with_all_explicit
+SPAWN b2: Bookmark {
+  url = "https://complete.com",
+  title = "Complete",
+  description = "Full attributes",
+  is_favorite = true,
+  visit_count = 42
+}
+
+--# verify_explicit_values
+MATCH b: Bookmark WHERE b.url = "https://complete.com"
+RETURN b.description, b.is_favorite, b.visit_count
+
+--# spawn_explicit_null
+SPAWN b3: Bookmark {
+  url = "https://null.com",
+  title = "Explicit Null",
+  description = null
+}
+
+--# query_null_handling
+MATCH b: Bookmark WHERE b.description = null
+RETURN count(b)
+
+--# set_to_null_then_restore
+SET b3 { description = "Added later" }
+
+--# verify_null_to_value_transition
+MATCH b: Bookmark WHERE b.url = "https://null.com"
+RETURN b.description
+
+SET b3 { description = null }
+
+--# verify_value_to_null_transition
+MATCH b: Bookmark WHERE b.url = "https://null.com"
+RETURN b.description

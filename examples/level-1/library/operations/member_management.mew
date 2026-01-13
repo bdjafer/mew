@@ -1,0 +1,84 @@
+-- ===========================================================================
+-- SCENARIO: Member Management
+-- DESCRIPTION: Test member operations and activity tracking
+-- ===========================================================================
+
+--# create_active_members
+SPAWN m1: Member {
+  member_id = "ACT-001",
+  name = "Alice Active",
+  email = "alice@example.com",
+  phone = "555-0001",
+  active = true
+}
+
+SPAWN m2: Member {
+  member_id = "ACT-002",
+  name = "Bob Bookworm",
+  email = "bob@example.com",
+  active = true
+}
+
+SPAWN m3: Member {
+  member_id = "INA-001",
+  name = "Charlie Inactive",
+  phone = "555-0003",
+  active = false
+}
+
+--# count_active_members
+MATCH m: Member WHERE m.active = true
+RETURN count(m)
+
+--# count_inactive_members
+MATCH m: Member WHERE m.active = false
+RETURN count(m)
+
+--# query_members_with_email
+MATCH m: Member WHERE m.email != null
+RETURN count(m)
+
+--# query_members_with_phone
+MATCH m: Member WHERE m.phone != null
+RETURN count(m)
+
+--# setup_borrowing_history
+SPAWN book: Book { isbn = "978-TEST", title = "Test Book" }
+SPAWN copy: Copy { barcode = "TEST-COPY", is_available = false }
+LINK copy_of(copy, book)
+
+LINK borrowed(m1, copy) {
+  borrowed_at = 1704067200000,
+  due_at = 1706659200000
+}
+
+--# query_members_with_active_loans
+MATCH m: Member, c: Copy, borrowed(m, c)
+RETURN DISTINCT m.member_id
+
+--# query_members_without_loans
+MATCH m: Member
+WHERE NOT EXISTS(c: Copy, borrowed(m, c))
+RETURN count(m)
+
+--# deactivate_member
+SET m3 { active = false }
+
+--# verify_deactivation
+MATCH m: Member WHERE m.member_id = "INA-001"
+RETURN m.active
+
+--# update_member_info
+SET m1 {
+  email = "alice.updated@example.com",
+  phone = "555-9999"
+}
+
+--# verify_member_update
+MATCH m: Member WHERE m.member_id = "ACT-001"
+RETURN m.email, m.phone
+
+--# query_by_name_partial
+MATCH m: Member
+WHERE m.name = "Alice Active" OR m.name = "Bob Bookworm"
+RETURN count(m)

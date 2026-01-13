@@ -708,7 +708,7 @@ Option C: Commit weighted
 
 In physics: observation collapses superposition.
 
-In HOHG: should queries collapse branches? Or just read without effect?
+In MEW: should queries collapse branches? Or just read without effect?
 
 Probably: Queries read without effect. Explicit OBSERVE action collapses/decoheres.
 

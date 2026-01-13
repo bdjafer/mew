@@ -1,0 +1,60 @@
+-- ===========================================================================
+-- SCENARIO: EXISTS and NOT EXISTS
+-- DESCRIPTION: Test subquery patterns for existence checking
+-- ===========================================================================
+
+--# seed_with_mixed_relationships
+SPAWN b1: Bookmark { url = "https://1.com", title = "Has Folder" }
+SPAWN b2: Bookmark { url = "https://2.com", title = "Has Tag" }
+SPAWN b3: Bookmark { url = "https://3.com", title = "Has Both" }
+SPAWN b4: Bookmark { url = "https://4.com", title = "Has Neither" }
+
+SPAWN f: Folder { name = "Test Folder" }
+SPAWN t: Tag { name = "test-tag" }
+
+LINK in_folder(b1, f)
+LINK tagged(b2, t)
+LINK in_folder(b3, f)
+LINK tagged(b3, t)
+
+--# exists_in_folder
+MATCH b: Bookmark
+WHERE EXISTS(f: Folder, in_folder(b, f))
+RETURN count(b)
+
+--# exists_with_tag
+MATCH b: Bookmark
+WHERE EXISTS(t: Tag, tagged(b, t))
+RETURN count(b)
+
+--# not_exists_in_folder
+MATCH b: Bookmark
+WHERE NOT EXISTS(f: Folder, in_folder(b, f))
+RETURN count(b)
+
+--# not_exists_with_tag
+MATCH b: Bookmark
+WHERE NOT EXISTS(t: Tag, tagged(b, t))
+RETURN count(b)
+
+--# exists_both
+MATCH b: Bookmark
+WHERE EXISTS(f: Folder, in_folder(b, f))
+  AND EXISTS(t: Tag, tagged(b, t))
+RETURN count(b)
+
+--# exists_neither
+MATCH b: Bookmark
+WHERE NOT EXISTS(f: Folder, in_folder(b, f))
+  AND NOT EXISTS(t: Tag, tagged(b, t))
+RETURN count(b)
+
+--# exists_with_condition
+MATCH b: Bookmark
+WHERE EXISTS(f: Folder, in_folder(b, f) WHERE f.name = "Test Folder")
+RETURN count(b)
+
+--# not_exists_with_condition
+MATCH b: Bookmark
+WHERE NOT EXISTS(t: Tag, tagged(b, t) WHERE t.name = "nonexistent")
+RETURN count(b)

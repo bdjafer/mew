@@ -1,0 +1,61 @@
+-- ===========================================================================
+-- SCENARIO: Query Ordering and Limits
+-- DESCRIPTION: Test ORDER BY, LIMIT, OFFSET, and DISTINCT
+-- ===========================================================================
+
+--# seed_bookmarks
+SPAWN b1: Bookmark { url = "https://z.com", title = "Zebra", visit_count = 5 }
+SPAWN b2: Bookmark { url = "https://a.com", title = "Apple", visit_count = 10 }
+SPAWN b3: Bookmark { url = "https://m.com", title = "Mango", visit_count = 3 }
+SPAWN b4: Bookmark { url = "https://b.com", title = "Banana", visit_count = 7 }
+SPAWN b5: Bookmark { url = "https://c.com", title = "Cherry", visit_count = 10 }
+
+--# order_by_title_asc
+MATCH b: Bookmark
+RETURN b.title
+ORDER BY b.title ASC
+
+--# order_by_title_desc
+MATCH b: Bookmark
+RETURN b.title
+ORDER BY b.title DESC
+
+--# order_by_visit_count_asc
+MATCH b: Bookmark
+RETURN b.title, b.visit_count
+ORDER BY b.visit_count ASC
+
+--# order_by_visit_count_desc
+MATCH b: Bookmark
+RETURN b.title, b.visit_count
+ORDER BY b.visit_count DESC
+
+--# order_by_multiple_fields
+MATCH b: Bookmark
+RETURN b.title, b.visit_count
+ORDER BY b.visit_count DESC, b.title ASC
+
+--# limit_results
+MATCH b: Bookmark
+RETURN b.title
+LIMIT 3
+
+--# limit_with_order
+MATCH b: Bookmark
+RETURN b.title
+ORDER BY b.title ASC
+LIMIT 2
+
+--# offset_results
+MATCH b: Bookmark
+RETURN b.title
+ORDER BY b.title ASC
+LIMIT 2 OFFSET 2
+
+--# distinct_visit_counts
+MATCH b: Bookmark
+RETURN DISTINCT b.visit_count
+
+--# count_distinct
+MATCH b: Bookmark
+RETURN count(DISTINCT b.visit_count)

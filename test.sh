@@ -110,131 +110,93 @@ REPORTS:
 EOF
 }
 
-run_unit_tests() {
-    local package=""
-    local verbose=""
+run_cargo_tests() {
+    local name=$1 cmd=$2 result_var=$3 verbose=$4
+    print_header "$name"
+    cd mew
 
-    # Parse arguments
+    if [ -n "$verbose" ]; then
+        $cmd -- $verbose 2>&1 && eval "$result_var=pass" || eval "$result_var=fail"
+    else
+        local output exit_code=0
+        output=$($cmd 2>&1) || exit_code=$?
+        local passed=$(echo "$output" | grep -oE '[0-9]+ passed' | awk '{sum+=$1} END {print sum+0}')
+        local failed=$(echo "$output" | grep -oE '[0-9]+ failed' | awk '{sum+=$1} END {print sum+0}')
+        local total=$((passed + failed))
+        
+        if [ $exit_code -eq 0 ]; then
+            echo -e "${GREEN}✓${NC} All tests passed ($total tests)"
+            eval "$result_var=pass"
+        else
+            echo -e "${RED}✗${NC} $passed/$total passed ($failed failed)"
+            # Extract test name + first error line, limit to 50
+            echo "$output" | awk '
+                /^---- .* stdout ----$/ { if(test && err) print "  " test ": " err; test=$2; err=""; next }
+                test && !err && /called.*unwrap.*Err|AssertionFailed|assertion failed|left:/ { 
+                    gsub(/^[[:space:]]+/, ""); err=substr($0,1,100); if(length($0)>100) err=err"..." 
+                }
+                END { if(test && err) print "  " test ": " err }
+            ' | head -50
+            eval "$result_var=fail"
+        fi
+    fi
+    cd "$SCRIPT_DIR"
+}
+
+run_unit_tests() {
+    local package="" verbose=""
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -p|--package)
-                package="$2"
-                shift 2
-                ;;
-            -v|--verbose)
-                verbose="--nocapture"
-                shift
-                ;;
-            *)
-                shift
-                ;;
+            -p|--package) package="$2"; shift 2 ;;
+            -v|--verbose) verbose="--nocapture"; shift ;;
+            *) shift ;;
         esac
     done
 
-    print_header "Unit Tests"
-
-    cd mew
-
-    if [ -n "$package" ]; then
-        echo "Running unit tests for package: $package"
-        if cargo test -p "$package" -- $verbose 2>&1; then
-            UNIT_RESULT="pass"
-        else
-            UNIT_RESULT="fail"
-        fi
-    else
-        echo "Running all unit tests..."
-        if cargo test --workspace -- $verbose 2>&1; then
-            UNIT_RESULT="pass"
-        else
-            UNIT_RESULT="fail"
-        fi
-    fi
-
-    cd "$SCRIPT_DIR"
+    local cmd="cargo test --workspace --lib"
+    [ -n "$package" ] && cmd="cargo test -p $package --lib"
+    
+    run_cargo_tests "Unit Tests" "$cmd" UNIT_RESULT "$verbose"
 }
 
 run_integration_tests() {
     local verbose=""
-
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -v|--verbose)
-                verbose="--nocapture"
-                shift
-                ;;
-            *)
-                shift
-                ;;
+            -v|--verbose) verbose="--nocapture"; shift ;;
+            *) shift ;;
         esac
     done
-
-    print_header "Integration Tests (Scenarios)"
-
-    cd mew
-
-    echo "Running scenario-based integration tests..."
-    if cargo test -p mew-tests -- $verbose 2>&1; then
-        INTEGRATION_RESULT="pass"
-    else
-        INTEGRATION_RESULT="fail"
-    fi
-
-    cd "$SCRIPT_DIR"
+    
+    run_cargo_tests "Integration Tests (Scenarios)" "cargo test -p mew-tests --no-fail-fast" INTEGRATION_RESULT "$verbose"
 }
 
 run_testgen() {
-    local testgen_args=""
-    local do_execute=true
+    local testgen_args="" do_execute=true
 
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --level)
-                testgen_args="$testgen_args --level $2"
-                shift 2
-                ;;
-            --ontology)
-                testgen_args="$testgen_args --ontology $2"
-                shift 2
-                ;;
-            --no-execute)
-                do_execute=false
-                shift
-                ;;
-            *)
-                shift
-                ;;
+            --level) testgen_args="$testgen_args --level $2"; shift 2 ;;
+            --ontology) testgen_args="$testgen_args --ontology $2"; shift 2 ;;
+            --no-execute) do_execute=false; shift ;;
+            *) shift ;;
         esac
     done
 
-    # Execute by default
-    if $do_execute; then
-        testgen_args="$testgen_args --execute"
-    fi
+    $do_execute && testgen_args="$testgen_args --execute"
 
     print_header "Generated Tests (testgen)"
 
-    # Build testgen if needed
     echo "Building testgen runner..."
     cd mew
     cargo build -p mew-testgen --bin testgen-runner --quiet 2>/dev/null || cargo build -p mew-testgen --bin testgen-runner
     cd "$SCRIPT_DIR"
 
-    if $do_execute; then
-        echo "Generating and executing tests..."
-    else
-        echo "Generating tests (execution skipped)..."
-    fi
+    $do_execute && echo "Generating and executing tests..." || echo "Generating tests (execution skipped)..."
 
-    if ./mew/target/debug/testgen-runner \
-        --ontologies-dir examples \
-        --output mew/tests/reports \
-        $testgen_args 2>&1; then
+    if ./mew/target/debug/testgen-runner --ontologies-dir examples --output mew/tests/reports $testgen_args 2>&1; then
         TESTGEN_RESULT="pass"
-        echo ""
-        echo "Reports saved to: mew/tests/reports/"
+        echo -e "\nReports saved to: mew/tests/reports/"
     else
         TESTGEN_RESULT="fail"
     fi
@@ -244,78 +206,31 @@ print_summary() {
     print_header "Test Summary"
 
     local all_pass=true
+    for result in "$UNIT_RESULT" "$INTEGRATION_RESULT" "$TESTGEN_RESULT"; do
+        [ "$result" = "fail" ] && all_pass=false
+    done
 
-    if [ -n "$UNIT_RESULT" ]; then
-        print_status "Unit Tests" "$UNIT_RESULT"
-        [ "$UNIT_RESULT" != "pass" ] && all_pass=false
-    else
-        print_status "Unit Tests" "skip"
-    fi
-
-    if [ -n "$INTEGRATION_RESULT" ]; then
-        print_status "Integration Tests" "$INTEGRATION_RESULT"
-        [ "$INTEGRATION_RESULT" != "pass" ] && all_pass=false
-    else
-        print_status "Integration Tests" "skip"
-    fi
-
-    if [ -n "$TESTGEN_RESULT" ]; then
-        print_status "Generated Tests" "$TESTGEN_RESULT"
-        [ "$TESTGEN_RESULT" != "pass" ] && all_pass=false
-    else
-        print_status "Generated Tests" "skip"
-    fi
+    [ -n "$UNIT_RESULT" ] && print_status "Unit Tests" "$UNIT_RESULT" || print_status "Unit Tests" "skip"
+    [ -n "$INTEGRATION_RESULT" ] && print_status "Integration Tests" "$INTEGRATION_RESULT" || print_status "Integration Tests" "skip"
+    [ -n "$TESTGEN_RESULT" ] && print_status "Generated Tests" "$TESTGEN_RESULT" || print_status "Generated Tests" "skip"
 
     echo ""
-
-    if $all_pass; then
-        echo -e "${GREEN}${BOLD}All tests passed!${NC}"
-        return 0
-    else
-        echo -e "${RED}${BOLD}Some tests failed.${NC}"
-        return 1
-    fi
+    $all_pass && echo -e "${GREEN}${BOLD}All tests passed!${NC}" || echo -e "${RED}${BOLD}Some tests failed.${NC}"
+    $all_pass && return 0 || return 1
 }
 
-# Main execution
 main() {
     local command="${1:-all}"
     shift || true
 
     case $command in
-        -h|--help|help)
-            show_help
-            exit 0
-            ;;
-        all)
-            run_unit_tests "$@"
-            run_integration_tests "$@"
-            run_testgen "$@"
-            print_summary
-            ;;
-        unit)
-            run_unit_tests "$@"
-            print_summary
-            ;;
-        integration)
-            run_integration_tests "$@"
-            print_summary
-            ;;
-        testgen)
-            run_testgen "$@"
-            print_summary
-            ;;
-        quick)
-            run_unit_tests "$@"
-            run_integration_tests "$@"
-            print_summary
-            ;;
-        *)
-            echo -e "${RED}Unknown command: $command${NC}"
-            echo ""
-            show_help
-            exit 1
-            ;;
+        -h|--help|help) show_help; exit 0 ;;
+        all) run_unit_tests "$@"; run_integration_tests "$@"; run_testgen "$@"; print_summary ;;
+        unit) run_unit_tests "$@"; print_summary ;;
+        integration) run_integration_tests "$@"; print_summary ;;
+        testgen) run_testgen "$@"; print_summary ;;
+        quick) run_unit_tests "$@"; run_integration_tests "$@"; print_summary ;;
+        *) echo -e "${RED}Unknown command: $command${NC}\n"; show_help; exit 1 ;;
     esac
 }
 

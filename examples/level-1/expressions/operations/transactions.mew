@@ -1,0 +1,147 @@
+-- ===========================================================================
+-- OPERATIONS: Transaction Control Tests
+-- Tests BEGIN, COMMIT, ROLLBACK, auto-commit mode
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- AUTO-COMMIT MODE (Default)
+-- Each statement is its own transaction
+-- ---------------------------------------------------------------------------
+
+--# auto_commit_spawn
+-- These should each commit immediately
+SPAWN r1: TxnRecord { name = "auto1", value = 1 }
+SPAWN r2: TxnRecord { name = "auto2", value = 2 }
+
+--# verify_auto_commit
+MATCH r: TxnRecord WHERE starts_with(r.name, "auto")
+RETURN COUNT(r) AS count
+
+-- ---------------------------------------------------------------------------
+-- EXPLICIT TRANSACTION: COMMIT
+-- ---------------------------------------------------------------------------
+
+--# explicit_commit_transaction
+BEGIN
+  SPAWN r3: TxnRecord { name = "txn1", value = 10 }
+  SPAWN r4: TxnRecord { name = "txn2", value = 20 }
+  SET #r3.status = "committed"
+  SET #r4.status = "committed"
+COMMIT
+
+--# verify_commit
+MATCH r: TxnRecord WHERE r.status = "committed"
+RETURN COUNT(r) AS count
+
+-- ---------------------------------------------------------------------------
+-- EXPLICIT TRANSACTION: ROLLBACK
+-- ---------------------------------------------------------------------------
+
+--# explicit_rollback_transaction
+BEGIN
+  SPAWN r5: TxnRecord { name = "rollback_test", value = 100 }
+  SET #r5.status = "should_not_exist"
+ROLLBACK
+
+--# verify_rollback
+MATCH r: TxnRecord WHERE r.name = "rollback_test"
+RETURN COUNT(r) AS count
+
+-- ---------------------------------------------------------------------------
+-- TRANSACTION WITH MULTIPLE OPERATIONS
+-- ---------------------------------------------------------------------------
+
+--# multi_op_transaction
+BEGIN
+  SPAWN r6: TxnRecord { name = "multi1", value = 1 }
+  SPAWN r7: TxnRecord { name = "multi2", value = 2 }
+  LINK follows(
+    SPAWN Measurement { name = "txn_m1", value = 1.0 },
+    SPAWN Measurement { name = "txn_m2", value = 2.0 }
+  )
+  SET #r6.value = 100
+  SET #r7.value = 200
+COMMIT
+
+--# verify_multi_op
+MATCH r: TxnRecord WHERE starts_with(r.name, "multi")
+RETURN COUNT(r) AS count, SUM(r.value) AS total
+
+-- ---------------------------------------------------------------------------
+-- TRANSACTION ATOMICITY: FAILURE ROLLBACK
+-- ---------------------------------------------------------------------------
+
+--# setup_for_failure_test
+SPAWN r8: TxnRecord { name = "failure_setup", value = 50, status = "original" }
+
+--# transaction_failure_rollback
+-- This transaction should fail and rollback completely
+BEGIN
+  SET #r8.value = 999
+  SET #r8.status = "modified"
+  -- This should fail (nonexistent node)
+  SET #nonexistent_node.value = 0
+COMMIT
+
+--# verify_failure_rollback
+-- r8 should still have original values
+MATCH r: TxnRecord WHERE r.name = "failure_setup"
+RETURN r.value, r.status
+
+-- ---------------------------------------------------------------------------
+-- NESTED OPERATIONS IN TRANSACTION
+-- ---------------------------------------------------------------------------
+
+--# nested_spawn_link_transaction
+BEGIN
+  SPAWN r9: TxnRecord { name = "nested1", value = 1 }
+  SPAWN r10: TxnRecord { name = "nested2", value = 2 }
+  -- Create measurements and link them
+  SPAWN m1: Measurement { name = "nested_m1", value = 10.0 }
+  SPAWN m2: Measurement { name = "nested_m2", value = 20.0 }
+  LINK follows(#m1, #m2)
+COMMIT
+
+--# verify_nested_transaction
+MATCH r: TxnRecord WHERE starts_with(r.name, "nested")
+RETURN COUNT(r) AS txn_count
+
+--# verify_nested_links
+MATCH m1: Measurement, m2: Measurement, follows(m1, m2)
+WHERE starts_with(m1.name, "nested")
+RETURN COUNT(m1) AS link_count
+
+-- ---------------------------------------------------------------------------
+-- READ COMMITTED ISOLATION (Default)
+-- ---------------------------------------------------------------------------
+
+--# read_committed_transaction
+BEGIN READ COMMITTED
+  SPAWN r11: TxnRecord { name = "read_committed", value = 42 }
+COMMIT
+
+--# verify_read_committed
+MATCH r: TxnRecord WHERE r.name = "read_committed"
+RETURN r.value
+
+-- ---------------------------------------------------------------------------
+-- SERIALIZABLE ISOLATION
+-- ---------------------------------------------------------------------------
+
+--# serializable_transaction
+BEGIN SERIALIZABLE
+  SPAWN r12: TxnRecord { name = "serializable", value = 99 }
+  SET #r12.status = "isolated"
+COMMIT
+
+--# verify_serializable
+MATCH r: TxnRecord WHERE r.name = "serializable"
+RETURN r.value, r.status
+
+-- ---------------------------------------------------------------------------
+-- FINAL COUNTS
+-- ---------------------------------------------------------------------------
+
+--# final_txn_record_count
+MATCH r: TxnRecord
+RETURN COUNT(r) AS total

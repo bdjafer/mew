@@ -1,0 +1,17 @@
+-- ===========================================================================
+-- SEED: Minimal
+-- Minimal data for basic expression tests
+-- ===========================================================================
+
+-- Single measurement for basic tests
+SPAWN m: Measurement {
+  name = "base",
+  value = 1.0,
+  count = 1,
+  unit = "unit"
+}
+
+-- Single text entry
+SPAWN t: TextEntry {
+  content = "test"
+}

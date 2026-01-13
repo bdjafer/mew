@@ -1,0 +1,272 @@
+-- ===========================================================================
+-- SCENARIO: WALK Traversal
+-- DESCRIPTION: Tests WALK with FOLLOW, UNTIL, RETURN NODES/EDGES/PATH/TERMINAL
+-- FOCUS: Level-2 WALK traversal (unique to this ontology)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create org hierarchy for traversal
+-- ---------------------------------------------------------------------------
+
+--# test_setup_ceo
+SPAWN walk_ceo: Executive {
+  first_name = "Walk",
+  last_name = "CEO",
+  email = "walk.ceo@company.com",
+  employee_id = "EMP900001",
+  hire_date = now(),
+  salary = 500000.0,
+  management_level = 5,
+  budget_authority = 10000000.0,
+  title = "Chief Executive Officer"
+}
+--@ expect:ok
+
+--# test_setup_vp1
+SPAWN walk_vp1: Manager {
+  first_name = "Walk",
+  last_name = "VP1",
+  email = "walk.vp1@company.com",
+  employee_id = "EMP900002",
+  hire_date = now(),
+  salary = 300000.0,
+  management_level = 4,
+  budget_authority = 2000000.0
+}
+--@ expect:ok
+
+--# test_setup_vp2
+SPAWN walk_vp2: Manager {
+  first_name = "Walk",
+  last_name = "VP2",
+  email = "walk.vp2@company.com",
+  employee_id = "EMP900003",
+  hire_date = now(),
+  salary = 300000.0,
+  management_level = 4,
+  budget_authority = 2000000.0
+}
+--@ expect:ok
+
+--# test_setup_dir1
+SPAWN walk_dir1: Manager {
+  first_name = "Walk",
+  last_name = "Dir1",
+  email = "walk.dir1@company.com",
+  employee_id = "EMP900004",
+  hire_date = now(),
+  salary = 200000.0,
+  management_level = 3,
+  budget_authority = 500000.0
+}
+--@ expect:ok
+
+--# test_setup_mgr1
+SPAWN walk_mgr1: Manager {
+  first_name = "Walk",
+  last_name = "Mgr1",
+  email = "walk.mgr1@company.com",
+  employee_id = "EMP900005",
+  hire_date = now(),
+  salary = 150000.0,
+  management_level = 2,
+  budget_authority = 100000.0
+}
+--@ expect:ok
+
+--# test_setup_emp1
+SPAWN walk_emp1: Employee {
+  first_name = "Walk",
+  last_name = "Emp1",
+  email = "walk.emp1@company.com",
+  employee_id = "EMP900006",
+  hire_date = now(),
+  salary = 80000.0
+}
+--@ expect:ok
+
+--# test_setup_emp2
+SPAWN walk_emp2: Employee {
+  first_name = "Walk",
+  last_name = "Emp2",
+  email = "walk.emp2@company.com",
+  employee_id = "EMP900007",
+  hire_date = now(),
+  salary = 75000.0
+}
+--@ expect:ok
+
+--# test_setup_reporting_hierarchy
+MATCH ceo: Executive, vp1: Manager, vp2: Manager, dir1: Manager, mgr1: Manager, emp1: Employee, emp2: Employee
+WHERE ceo.employee_id = "EMP900001" AND vp1.employee_id = "EMP900002" AND vp2.employee_id = "EMP900003"
+AND dir1.employee_id = "EMP900004" AND mgr1.employee_id = "EMP900005"
+AND emp1.employee_id = "EMP900006" AND emp2.employee_id = "EMP900007"
+LINK reports_to(vp1, ceo)
+LINK reports_to(vp2, ceo)
+LINK reports_to(dir1, vp1)
+LINK reports_to(mgr1, dir1)
+LINK reports_to(emp1, mgr1)
+LINK reports_to(emp2, mgr1)
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- WALK: Basic FOLLOW traversal
+-- ---------------------------------------------------------------------------
+
+--# test_walk_follow_reports_to_from_emp1
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+RETURN NODES AS chain
+--@ expect:rows >= 4
+
+-- ---------------------------------------------------------------------------
+-- WALK: With UNTIL termination
+-- ---------------------------------------------------------------------------
+
+--# test_walk_until_executive
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to UNTIL node:Executive
+RETURN TERMINAL AS executive
+--@ expect:rows = 1
+
+--# test_walk_until_management_level_4
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to UNTIL node.management_level >= 4
+RETURN TERMINAL AS vp
+--@ expect:rows = 1
+
+-- ---------------------------------------------------------------------------
+-- WALK: RETURN PATH
+-- ---------------------------------------------------------------------------
+
+--# test_walk_return_path
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+RETURN PATH AS reporting_path
+--@ expect:rows = 1
+
+-- ---------------------------------------------------------------------------
+-- WALK: RETURN EDGES
+-- ---------------------------------------------------------------------------
+
+--# test_walk_return_edges
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+RETURN EDGES AS reporting_edges
+--@ expect:rows >= 4
+
+-- ---------------------------------------------------------------------------
+-- WALK: With depth limit
+-- ---------------------------------------------------------------------------
+
+--# test_walk_max_depth_2
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to DEPTH 2
+RETURN NODES AS limited_chain
+--@ expect:rows >= 1
+
+--# test_walk_max_depth_1
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to DEPTH 1
+RETURN NODES AS immediate_manager
+--@ expect:rows = 1
+
+-- ---------------------------------------------------------------------------
+-- WALK: From top down (reverse direction)
+-- ---------------------------------------------------------------------------
+
+--# test_walk_reverse_from_ceo
+MATCH ceo: Executive
+WHERE ceo.employee_id = "EMP900001"
+WALK FROM ceo FOLLOW <-reports_to
+RETURN NODES AS all_reports
+--@ expect:rows >= 6
+
+-- ---------------------------------------------------------------------------
+-- WALK: Count nodes at each level
+-- ---------------------------------------------------------------------------
+
+--# test_walk_count_direct_reports
+MATCH mgr: Manager
+WHERE mgr.employee_id = "EMP900005"
+WALK FROM mgr FOLLOW <-reports_to DEPTH 1
+RETURN count(NODES) AS direct_report_count
+--@ expect:rows = 1
+--@ expect:has_row { direct_report_count = 2 }
+
+-- ---------------------------------------------------------------------------
+-- WALK: Find all managers in chain
+-- ---------------------------------------------------------------------------
+
+--# test_walk_managers_only_in_chain
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+RETURN NODES AS managers
+WHERE node:Manager
+--@ expect:rows >= 3
+
+-- ---------------------------------------------------------------------------
+-- WALK: Combined with filter on attributes
+-- ---------------------------------------------------------------------------
+
+--# test_walk_high_salary_in_chain
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+RETURN NODES AS high_earners
+WHERE node.salary > 200000.0
+--@ expect:rows >= 2
+
+-- ---------------------------------------------------------------------------
+-- WALK: Multiple starting points
+-- ---------------------------------------------------------------------------
+
+--# test_walk_from_multiple_employees
+MATCH e: Employee
+WHERE e.employee_id IN ["EMP900006", "EMP900007"]
+WALK FROM e FOLLOW reports_to DEPTH 1
+RETURN e.last_name AS employee, TERMINAL.last_name AS manager
+--@ expect:rows = 2
+
+-- ---------------------------------------------------------------------------
+-- WALK: With aggregation
+-- ---------------------------------------------------------------------------
+
+--# test_walk_avg_salary_in_chain
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+WITH collect(node.salary) AS salaries
+RETURN avg(salaries) AS avg_chain_salary
+--@ expect:rows = 1
+
+-- ---------------------------------------------------------------------------
+-- WALK: Detect cycles (org shouldn't have any, but test the capability)
+-- ---------------------------------------------------------------------------
+
+--# test_walk_detects_no_cycles
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to DETECT CYCLES
+RETURN NODES AS chain, HAS_CYCLE AS has_cycle
+--@ expect:rows = 1
+--@ expect:has_row { has_cycle = false }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_walk_employees
+MATCH e: Employee
+WHERE e.employee_id STARTS WITH "EMP9000"
+KILL e
+--@ expect:ok
+

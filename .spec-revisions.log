@@ -1,0 +1,16 @@
+---
+Date: 2026-01-13
+Document: specification/4_QUERIES.md
+Section: 20. MATCH Statement
+Problem: Specification states "RETURN clause is required" but implementation adds compound MATCH statements (MATCH...LINK/SET/KILL/UNLINK) that don't require RETURN because they perform mutations instead of returning query results
+Evidence: PR #25 implements MatchMutateStmt that allows MATCH followed by mutation keywords without RETURN clause. This is a legitimate language extension, not a specification error.
+
+Resolution:
+- Updated section 20.2 note to clarify RETURN is required for query MATCH but not for compound MATCH
+- Updated section 20.2.1 table to add "Compound Statement" context
+- Added new section 2.11 "Compound MATCH Statements" documenting syntax, semantics, examples, and differences from subquery mutations
+- Updated section 2.12 AST to include MatchMutateStmt interface
+
+Propagated to: specification/4_QUERIES.md (complete)
+Hierarchy check: 1_LANGUAGE.md does not specify MATCH/RETURN behavior - no higher-level changes needed
+---

@@ -1,0 +1,168 @@
+-- ===========================================================================
+-- SCENARIO: Edge Cases
+-- DESCRIPTION: Boundary conditions and unusual but valid library scenarios
+-- ===========================================================================
+
+-- ===========================================================================
+-- MINIMAL AND MAXIMAL BOOK METADATA
+-- ===========================================================================
+
+--# spawn_minimal_book_data
+SPAWN minimal: Book {
+  isbn = "978-0",
+  title = "X"
+}
+
+--# spawn_maximal_book_data
+SPAWN maximal: Book {
+  isbn = "978-1234567890123",
+  title = "Very Long Title That Goes On And On",
+  publication_year = 2024,
+  page_count = 9999,
+  language = "English"
+}
+
+--# query_metadata_extremes
+MATCH b: Book WHERE b.isbn = "978-0" OR b.isbn = "978-1234567890123"
+RETURN b.title, b.page_count
+
+-- ===========================================================================
+-- COLLABORATIVE AUTHORSHIP
+-- ===========================================================================
+
+--# spawn_book_six_authors
+SPAWN collab: Book { isbn = "978-COLLAB", title = "Collaborative Work" }
+SPAWN a1: Author { name = "Author 1" }
+SPAWN a2: Author { name = "Author 2" }
+SPAWN a3: Author { name = "Author 3" }
+SPAWN a4: Author { name = "Author 4" }
+SPAWN a5: Author { name = "Author 5" }
+SPAWN a6: Author { name = "Author 6" }
+
+LINK written_by(collab, a1)
+LINK written_by(collab, a2)
+LINK written_by(collab, a3)
+LINK written_by(collab, a4)
+LINK written_by(collab, a5)
+LINK written_by(collab, a6)
+
+--# query_many_authors
+MATCH b: Book, a: Author, written_by(b, a)
+WHERE b.isbn = "978-COLLAB"
+RETURN count(a)
+
+-- ===========================================================================
+-- COPY AVAILABILITY STATES
+-- ===========================================================================
+
+--# spawn_popular_book_ten_copies
+SPAWN popular: Book { isbn = "978-POPULAR", title = "Bestseller" }
+SPAWN c1: Copy { barcode = "C01", condition = "new", is_available = true }
+SPAWN c2: Copy { barcode = "C02", condition = "good", is_available = false }
+SPAWN c3: Copy { barcode = "C03", condition = "fair", is_available = true }
+SPAWN c4: Copy { barcode = "C04", condition = "poor", is_available = false }
+SPAWN c5: Copy { barcode = "C05", condition = "good", is_available = true }
+
+LINK copy_of(c1, popular)
+LINK copy_of(c2, popular)
+LINK copy_of(c3, popular)
+LINK copy_of(c4, popular)
+LINK copy_of(c5, popular)
+
+--# query_mixed_availability
+MATCH b: Book, c: Copy, copy_of(c, b)
+WHERE b.isbn = "978-POPULAR"
+RETURN count(c WHERE c.is_available = true), count(c WHERE c.is_available = false)
+
+-- ===========================================================================
+-- OVERDUE LOANS
+-- ===========================================================================
+
+--# spawn_very_overdue_loan
+SPAWN late: Member { member_id = "LATE-001", name = "Very Late" }
+SPAWN overdue_book: Book { isbn = "978-OVERDUE", title = "Overdue" }
+SPAWN overdue_copy: Copy { barcode = "OVERDUE-01", is_available = false }
+LINK copy_of(overdue_copy, overdue_book)
+
+LINK borrowed(late, overdue_copy) {
+  borrowed_at = 1609459200000,
+  due_at = 1612137600000
+}
+
+--# query_overdue_by_time
+MATCH m: Member, c: Copy, borrowed(m, c) AS loan
+WHERE loan.due_at < 1704067200000
+RETURN count(c)
+
+-- ===========================================================================
+-- SIMULTANEOUS BORROWING
+-- ===========================================================================
+
+--# spawn_member_borrows_three_simultaneously
+SPAWN prolific: Member { member_id = "PRO-001", name = "Prolific Reader" }
+SPAWN b1: Book { isbn = "978-B1", title = "Book 1" }
+SPAWN b2: Book { isbn = "978-B2", title = "Book 2" }
+SPAWN b3: Book { isbn = "978-B3", title = "Book 3" }
+SPAWN cp1: Copy { barcode = "CP1", is_available = false }
+SPAWN cp2: Copy { barcode = "CP2", is_available = false }
+SPAWN cp3: Copy { barcode = "CP3", is_available = false }
+
+LINK copy_of(cp1, b1)
+LINK copy_of(cp2, b2)
+LINK copy_of(cp3, b3)
+
+LINK borrowed(prolific, cp1) { borrowed_at = 1704067200000, due_at = 1706659200000 }
+LINK borrowed(prolific, cp2) { borrowed_at = 1704067200000, due_at = 1706659200000 }
+LINK borrowed(prolific, cp3) { borrowed_at = 1704067200000, due_at = 1706659200000 }
+
+--# query_simultaneous_loans
+MATCH m: Member, c: Copy, borrowed(m, c)
+WHERE m.member_id = "PRO-001"
+RETURN count(c)
+
+-- ===========================================================================
+-- ORPHANED ENTITIES
+-- ===========================================================================
+
+--# spawn_book_without_copies
+SPAWN nocopy: Book { isbn = "978-NOCOPY", title = "No Physical Copies" }
+
+--# query_books_without_copies
+MATCH b: Book
+WHERE NOT EXISTS(c: Copy, copy_of(c, b))
+RETURN count(b)
+
+--# create_copy_then_delete_book
+SPAWN temp_book: Book { isbn = "978-TEMP", title = "Temporary" }
+SPAWN orphan_copy: Copy { barcode = "ORPHAN-01" }
+LINK copy_of(orphan_copy, temp_book)
+KILL temp_book
+
+--# verify_orphaned_copy_remains
+MATCH c: Copy WHERE c.barcode = "ORPHAN-01"
+RETURN count(c)
+
+--# verify_copy_book_edge_removed
+MATCH c: Copy, b: Book, copy_of(c, b)
+WHERE c.barcode = "ORPHAN-01"
+RETURN count(b)
+
+-- ===========================================================================
+-- INACTIVE MEMBER WITH HISTORY
+-- ===========================================================================
+
+--# spawn_inactive_member_with_return_history
+SPAWN inactive: Member { member_id = "INACTIVE-01", name = "Former Member", active = false }
+SPAWN hist_book: Book { isbn = "978-HIST", title = "Historical" }
+SPAWN hist_copy: Copy { barcode = "HIST-01", is_available = true }
+LINK copy_of(hist_copy, hist_book)
+
+LINK returned(inactive, hist_copy) {
+  borrowed_at = 1609459200000,
+  returned_at = 1612137600000
+}
+
+--# query_inactive_members_with_history
+MATCH m: Member, c: Copy, returned(m, c)
+WHERE m.active = false
+RETURN count(c)

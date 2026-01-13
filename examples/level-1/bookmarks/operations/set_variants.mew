@@ -1,0 +1,42 @@
+-- ===========================================================================
+-- SCENARIO: Atomic Updates
+-- DESCRIPTION: Test single vs multi-attribute updates atomically
+-- ===========================================================================
+
+--# spawn_for_updates
+SPAWN b: Bookmark {
+  url = "https://test.com",
+  title = "Original",
+  description = "Original desc",
+  is_favorite = false,
+  visit_count = 0
+}
+
+--# single_field_update
+SET b { title = "Updated Title" }
+
+--# verify_single_unchanged
+MATCH b: Bookmark WHERE b.url = "https://test.com"
+RETURN b.title, b.description, b.is_favorite, b.visit_count
+
+--# multi_field_atomic_update
+SET b {
+  title = "Atomic Multi",
+  description = "All changed together",
+  is_favorite = true,
+  visit_count = 99
+}
+
+--# verify_all_changed
+MATCH b: Bookmark WHERE b.url = "https://test.com"
+RETURN b.title, b.description, b.is_favorite, b.visit_count
+
+--# overwrite_with_defaults
+SET b {
+  is_favorite = false,
+  visit_count = 0
+}
+
+--# verify_back_to_defaults
+MATCH b: Bookmark WHERE b.url = "https://test.com"
+RETURN b.is_favorite, b.visit_count

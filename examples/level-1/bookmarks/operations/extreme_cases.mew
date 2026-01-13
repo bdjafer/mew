@@ -1,0 +1,79 @@
+-- ===========================================================================
+-- SCENARIO: Edge Cases
+-- DESCRIPTION: Boundary conditions and unusual but valid inputs
+-- ===========================================================================
+
+-- ===========================================================================
+-- STRING BOUNDARY CONDITIONS
+-- ===========================================================================
+
+--# spawn_empty_strings
+SPAWN b1: Bookmark {
+  url = "https://empty.com",
+  title = "",
+  description = ""
+}
+
+--# verify_empty_strings_stored
+MATCH b: Bookmark WHERE b.url = "https://empty.com"
+RETURN b.title, b.description
+
+--# spawn_unicode_multilingual
+SPAWN b2: Bookmark {
+  url = "https://unicode.com",
+  title = "🔖 中文 العربية Русский ñ ü",
+  description = "Testing: <>&\"'`"
+}
+
+--# verify_unicode_preserved
+MATCH b: Bookmark WHERE b.url = "https://unicode.com"
+RETURN b.title
+
+--# spawn_url_protocols
+SPAWN http: Bookmark { url = "http://no-tls.com", title = "HTTP" }
+SPAWN ftp: Bookmark { url = "ftp://legacy.com", title = "FTP" }
+SPAWN complex: Bookmark { url = "https://sub.example.co.uk/path?q=1#anchor", title = "Complex" }
+
+--# query_protocol_variants
+MATCH b: Bookmark WHERE b.url = "http://no-tls.com" OR b.url = "ftp://legacy.com"
+RETURN count(b)
+
+-- ===========================================================================
+-- NUMERIC BOUNDARIES
+-- ===========================================================================
+
+--# spawn_boundary_integers
+SPAWN zero: Bookmark { url = "https://zero.com", title = "Zero", visit_count = 0 }
+SPAWN neg: Bookmark { url = "https://neg.com", title = "Negative", visit_count = -1 }
+SPAWN max: Bookmark { url = "https://max.com", title = "Max", visit_count = 2147483647 }
+
+--# query_numeric_extremes
+MATCH b: Bookmark WHERE b.visit_count = 0 OR b.visit_count = -1 OR b.visit_count = 2147483647
+RETURN count(b)
+
+-- ===========================================================================
+-- CASCADE BEHAVIOR ON KILL
+-- ===========================================================================
+
+--# spawn_then_kill_immediately
+SPAWN temp: Bookmark { url = "https://temp.com", title = "Temp" }
+KILL temp
+
+--# verify_killed_not_queryable
+MATCH b: Bookmark WHERE b.url = "https://temp.com"
+RETURN count(b)
+
+--# create_relationship_then_kill_source
+SPAWN source: Bookmark { url = "https://source.com", title = "Source" }
+SPAWN folder: Folder { name = "Orphaned Folder" }
+LINK in_folder(source, folder)
+KILL source
+
+--# verify_folder_remains
+MATCH f: Folder WHERE f.name = "Orphaned Folder"
+RETURN count(f)
+
+--# verify_edge_cascade_removed
+MATCH b: Bookmark, f: Folder, in_folder(b, f)
+WHERE f.name = "Orphaned Folder"
+RETURN count(b)

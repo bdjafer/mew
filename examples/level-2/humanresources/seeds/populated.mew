@@ -154,3 +154,132 @@ SPAWN rust_course: Course {
   name = "Introduction to Rust",
   duration_hours = 40
 }
+
+-- Contractors (Person but not Employee)
+--# seed_contractor_eve
+SPAWN eve: Contractor {
+  first_name = "Eve",
+  last_name = "Wilson",
+  email = "eve@contractor.com",
+  contractor_id = "CON000001",
+  contract_start = now(),
+  hourly_rate = 175.0
+}
+
+-- Additional skills for variety
+--# seed_skill_communication
+SPAWN communication: Skill {
+  name = "Communication",
+  category = "Soft Skills"
+}
+
+--# seed_skill_projectmgmt
+SPAWN projectmgmt: Skill {
+  name = "Project Management",
+  category = "Management"
+}
+
+-- ===========================================================================
+-- EDGE RELATIONSHIPS
+-- ===========================================================================
+
+-- Department hierarchy
+--# seed_link_sales_eng
+LINK parent_dept(sales, eng)
+
+-- Employees to departments
+--# seed_link_alice_eng
+LINK in_department(alice, eng) { is_primary = true }
+
+--# seed_link_bob_eng
+LINK in_department(bob, eng) { is_primary = true }
+
+--# seed_link_charlie_eng
+LINK in_department(charlie, eng) { is_primary = true }
+
+--# seed_link_diana_eng
+LINK in_department(diana, eng) { is_primary = true }
+
+-- Employees to offices
+--# seed_link_alice_hq
+LINK works_at(alice, hq)
+
+--# seed_link_bob_hq
+LINK works_at(bob, hq)
+
+--# seed_link_charlie_hq
+LINK works_at(charlie, hq)
+
+--# seed_link_diana_ny
+LINK works_at(diana, ny_office)
+
+-- Employees to roles
+--# seed_link_alice_swe
+LINK has_role(alice, swe_role)
+
+--# seed_link_bob_swe
+LINK has_role(bob, swe_role)
+
+--# seed_link_charlie_mgr
+LINK has_role(charlie, mgr_role)
+
+--# seed_link_diana_exec
+LINK has_role(diana, exec_role)
+
+-- Employees to skills
+--# seed_link_alice_rust
+LINK has_skill(alice, rust) { level = "expert", years_experience = 5 }
+
+--# seed_link_alice_python
+LINK has_skill(alice, python) { level = "advanced", years_experience = 3 }
+
+--# seed_link_bob_rust
+LINK has_skill(bob, rust) { level = "intermediate", years_experience = 1 }
+
+--# seed_link_charlie_leadership
+LINK has_skill(charlie, leadership) { level = "advanced", years_experience = 4 }
+
+--# seed_link_charlie_projectmgmt
+LINK has_skill(charlie, projectmgmt) { level = "expert", years_experience = 6 }
+
+--# seed_link_diana_leadership
+LINK has_skill(diana, leadership) { level = "expert", years_experience = 10 }
+
+-- Reporting relationships
+--# seed_link_alice_reports_charlie
+LINK reports_to(alice, charlie)
+
+--# seed_link_bob_reports_charlie
+LINK reports_to(bob, charlie)
+
+--# seed_link_charlie_reports_diana
+LINK reports_to(charlie, diana)
+
+-- Manager heads department
+--# seed_link_charlie_heads_eng
+LINK heads_department(charlie, eng)
+
+-- Role requirements
+--# seed_link_swe_requires_rust
+LINK requires_skill(swe_role, rust) { minimum_level = "intermediate" }
+
+--# seed_link_mgr_requires_leadership
+LINK requires_skill(mgr_role, leadership) { minimum_level = "advanced" }
+
+-- Course teaches skill
+--# seed_link_rustcourse_teaches_rust
+LINK teaches_skill(rust_course, rust) { target_level = "intermediate" }
+
+-- Course completion
+--# seed_link_alice_completed_rust
+LINK completed_course(alice, rust_course) {
+  completion_date = now(),
+  score = 95
+}
+
+-- Certification
+--# seed_link_alice_has_aws
+LINK has_certification(alice, aws_cert) {
+  earned_date = now(),
+  certificate_number = "AWS-2024-001"
+}

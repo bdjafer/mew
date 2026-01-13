@@ -1,0 +1,357 @@
+-- ===========================================================================
+-- SCENARIO: Format and Match Validation
+-- DESCRIPTION: Tests [match: "regex"], [in: [...]], and constraint validation
+-- FOCUS: Level-2 attribute validation (unique to this ontology)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SKU VALIDATION: [match: "^[A-Z]{2,4}-[0-9]{4,8}$"]
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_sku_short_prefix
+SPAWN valid_sku1: Product {
+  sku = "AB-1234",
+  name = "Valid SKU Short Prefix",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_spawn_valid_sku_long_prefix
+SPAWN valid_sku2: Product {
+  sku = "ABCD-12345678",
+  name = "Valid SKU Long Prefix",
+  price = 20.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_spawn_invalid_sku_lowercase_fails
+SPAWN invalid_sku1: Product {
+  sku = "ab-1234",
+  name = "Invalid SKU Lowercase",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_sku_no_numbers_fails
+SPAWN invalid_sku2: Product {
+  sku = "AB-",
+  name = "Invalid SKU No Numbers",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_sku_too_long_prefix_fails
+SPAWN invalid_sku3: Product {
+  sku = "ABCDE-1234",
+  name = "Invalid SKU Too Long Prefix",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_sku_single_char_prefix_fails
+SPAWN invalid_sku4: Product {
+  sku = "A-1234",
+  name = "Invalid SKU Single Char Prefix",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- CATEGORY SLUG VALIDATION: [match: "^[a-z0-9-]+$"]
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_slug_lowercase
+SPAWN valid_cat1: Category {
+  name = "Test Category",
+  slug = "test-category",
+  is_active = true
+}
+--@ expect:ok
+
+--# test_spawn_valid_slug_with_numbers
+SPAWN valid_cat2: Category {
+  name = "Category 2023",
+  slug = "category-2023",
+  is_active = true
+}
+--@ expect:ok
+
+--# test_spawn_invalid_slug_uppercase_fails
+SPAWN invalid_cat1: Category {
+  name = "Invalid Category",
+  slug = "Invalid-Category",
+  is_active = true
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_spaces_fails
+SPAWN invalid_cat2: Category {
+  name = "Invalid Category",
+  slug = "invalid category",
+  is_active = true
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_underscore_fails
+SPAWN invalid_cat3: Category {
+  name = "Invalid Category",
+  slug = "invalid_category",
+  is_active = true
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- EMAIL VALIDATION: [match: "^.+@.+\\..+$"]
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_email_simple
+SPAWN valid_cust1: Customer {
+  email = "test@example.com",
+  name = "Test Customer",
+  is_verified = false
+}
+--@ expect:ok
+
+--# test_spawn_valid_email_subdomain
+SPAWN valid_cust2: Customer {
+  email = "test@mail.example.com",
+  name = "Test Customer 2",
+  is_verified = false
+}
+--@ expect:ok
+
+--# test_spawn_invalid_email_no_at_fails
+SPAWN invalid_cust1: Customer {
+  email = "testexample.com",
+  name = "Invalid Customer",
+  is_verified = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_email_no_domain_fails
+SPAWN invalid_cust2: Customer {
+  email = "test@",
+  name = "Invalid Customer 2",
+  is_verified = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_email_no_tld_fails
+SPAWN invalid_cust3: Customer {
+  email = "test@example",
+  name = "Invalid Customer 3",
+  is_verified = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- ENUM VALIDATION: [in: ["draft", "active", "discontinued", "out_of_stock"]]
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_status_draft
+SPAWN status_test1: Product {
+  sku = "TST-0001",
+  name = "Status Test Draft",
+  price = 10.0,
+  status = "draft"
+}
+--@ expect:ok
+
+--# test_spawn_valid_status_active
+SPAWN status_test2: Product {
+  sku = "TST-0002",
+  name = "Status Test Active",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_spawn_valid_status_discontinued
+SPAWN status_test3: Product {
+  sku = "TST-0003",
+  name = "Status Test Discontinued",
+  price = 10.0,
+  status = "discontinued"
+}
+--@ expect:ok
+
+--# test_spawn_valid_status_out_of_stock
+SPAWN status_test4: Product {
+  sku = "TST-0004",
+  name = "Status Test Out of Stock",
+  price = 10.0,
+  status = "out_of_stock"
+}
+--@ expect:ok
+
+--# test_spawn_invalid_status_fails
+SPAWN invalid_status: Product {
+  sku = "TST-0005",
+  name = "Invalid Status",
+  price = 10.0,
+  status = "invalid_status"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_set_invalid_status_fails
+MATCH p: Product
+WHERE p.sku = "TST-0001"
+SET p { status = "not_a_status" }
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- RATING VALIDATION: [1..5]
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_rating_min
+SPAWN valid_review1: Review {
+  rating = 1,
+  title = "Minimum Rating",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_spawn_valid_rating_max
+SPAWN valid_review2: Review {
+  rating = 5,
+  title = "Maximum Rating",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_spawn_valid_rating_mid
+SPAWN valid_review3: Review {
+  rating = 3,
+  title = "Middle Rating",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_spawn_invalid_rating_zero_fails
+SPAWN invalid_review1: Review {
+  rating = 0,
+  title = "Zero Rating",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_rating_six_fails
+SPAWN invalid_review2: Review {
+  rating = 6,
+  title = "Six Rating",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_rating_negative_fails
+SPAWN invalid_review3: Review {
+  rating = -1,
+  title = "Negative Rating",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- PRICE VALIDATION: [>= 0]
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_price_zero
+SPAWN price_test1: Product {
+  sku = "PRCE-0001",
+  name = "Free Product",
+  price = 0.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_spawn_valid_price_positive
+SPAWN price_test2: Product {
+  sku = "PRCE-0002",
+  name = "Priced Product",
+  price = 99.99,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_spawn_invalid_price_negative_fails
+SPAWN invalid_price: Product {
+  sku = "PRCE-0003",
+  name = "Negative Price",
+  price = -10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- SET VALIDATION: Updating to invalid values should fail
+-- ---------------------------------------------------------------------------
+
+--# test_set_invalid_sku_format_fails
+MATCH p: Product
+WHERE p.sku = "TST-0001"
+SET p { sku = "invalid" }
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_set_valid_sku_format_succeeds
+MATCH p: Product
+WHERE p.sku = "TST-0001"
+SET p { sku = "NEW-9999" }
+--@ expect:ok
+
+--# test_verify_sku_updated
+MATCH p: Product
+WHERE p.name = "Status Test Draft"
+RETURN p.sku
+--@ expect:rows = 1
+--@ expect:has_row { sku = "NEW-9999" }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_format_validation
+MATCH p: Product
+WHERE p.sku IN ["AB-1234", "ABCD-12345678", "TST-0002", "TST-0003", "TST-0004", "NEW-9999", "PRCE-0001", "PRCE-0002"]
+KILL p
+--@ expect:ok
+
+--# test_cleanup_categories
+MATCH c: Category
+WHERE c.slug IN ["test-category", "category-2023"]
+KILL c
+--@ expect:ok
+
+--# test_cleanup_customers
+MATCH c: Customer
+WHERE c.email IN ["test@example.com", "test@mail.example.com"]
+KILL c
+--@ expect:ok
+
+--# test_cleanup_reviews
+MATCH r: Review
+WHERE r.title IN ["Minimum Rating", "Maximum Rating", "Middle Rating"]
+KILL r
+--@ expect:ok

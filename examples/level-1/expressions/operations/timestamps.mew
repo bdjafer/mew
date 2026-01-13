@@ -1,0 +1,165 @@
+-- ===========================================================================
+-- OPERATIONS: Timestamp and Duration Function Tests
+-- Tests now(), year(), month(), day(), timestamp arithmetic
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SEED DATA
+-- ---------------------------------------------------------------------------
+
+--# seed_timestamp_data
+-- Records with specific timestamps for extraction tests
+SPAWN t1: TimeRecord {
+  label = "new_year",
+  start_time = @2024-01-01T00:00:00Z,
+  year_value = 2024,
+  month_value = 1,
+  day_value = 1
+}
+SPAWN t2: TimeRecord {
+  label = "mid_year",
+  start_time = @2024-06-15T12:30:45Z,
+  year_value = 2024,
+  month_value = 6,
+  day_value = 15
+}
+SPAWN t3: TimeRecord {
+  label = "year_end",
+  start_time = @2024-12-31T23:59:59Z,
+  year_value = 2024,
+  month_value = 12,
+  day_value = 31
+}
+-- Record with end time for duration calculation
+SPAWN t4: TimeRecord {
+  label = "with_end",
+  start_time = @2024-01-01T10:00:00Z,
+  end_time = @2024-01-01T14:30:00Z
+}
+-- Future timestamp
+SPAWN t5: TimeRecord {
+  label = "future",
+  start_time = @2025-07-04T15:00:00Z,
+  scheduled_at = @2025-07-04T15:00:00Z
+}
+
+-- ---------------------------------------------------------------------------
+-- NOW() FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# spawn_with_now
+SPAWN t6: TimeRecord {
+  label = "current",
+  start_time = now()
+}
+
+--# query_now_comparison
+-- Records started before now
+MATCH t: TimeRecord WHERE t.start_time < now()
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- YEAR() FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_year_extraction
+MATCH t: TimeRecord WHERE t.label = "new_year"
+RETURN year(t.start_time) AS yr
+
+--# query_year_filter
+MATCH t: TimeRecord WHERE year(t.start_time) = 2024
+RETURN COUNT(t) AS count
+
+--# query_year_comparison
+MATCH t: TimeRecord WHERE year(t.start_time) >= 2025
+RETURN t.label
+
+-- ---------------------------------------------------------------------------
+-- MONTH() FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_month_extraction
+MATCH t: TimeRecord WHERE t.label = "mid_year"
+RETURN month(t.start_time) AS mo
+
+--# query_month_filter
+MATCH t: TimeRecord WHERE month(t.start_time) = 1
+RETURN COUNT(t) AS count
+
+--# query_month_range
+MATCH t: TimeRecord WHERE month(t.start_time) >= 6
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- DAY() FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_day_extraction
+MATCH t: TimeRecord WHERE t.label = "year_end"
+RETURN day(t.start_time) AS dy
+
+--# query_day_filter
+MATCH t: TimeRecord WHERE day(t.start_time) = 1
+RETURN COUNT(t) AS count
+
+--# query_day_mid_month
+MATCH t: TimeRecord WHERE day(t.start_time) = 15
+RETURN t.label
+
+-- ---------------------------------------------------------------------------
+-- HOUR/MINUTE/SECOND FUNCTIONS
+-- ---------------------------------------------------------------------------
+
+--# query_hour_extraction
+MATCH t: TimeRecord WHERE t.label = "mid_year"
+RETURN hour(t.start_time) AS hr
+
+--# query_minute_extraction
+MATCH t: TimeRecord WHERE t.label = "mid_year"
+RETURN minute(t.start_time) AS min
+
+--# query_second_extraction
+MATCH t: TimeRecord WHERE t.label = "mid_year"
+RETURN second(t.start_time) AS sec
+
+--# query_time_filter
+MATCH t: TimeRecord WHERE hour(t.start_time) >= 12
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- TIMESTAMP ARITHMETIC
+-- ---------------------------------------------------------------------------
+
+--# query_timestamp_plus_duration
+MATCH t: TimeRecord WHERE t.label = "new_year"
+RETURN t.start_time + 1.day AS next_day
+
+--# query_timestamp_minus_duration
+MATCH t: TimeRecord WHERE t.label = "year_end"
+RETURN t.start_time - 1.day AS prev_day
+
+--# query_timestamp_diff
+MATCH t: TimeRecord WHERE t.label = "with_end" AND t.end_time != null
+RETURN t.end_time - t.start_time AS elapsed
+
+-- ---------------------------------------------------------------------------
+-- COMBINED TIMESTAMP OPERATIONS
+-- ---------------------------------------------------------------------------
+
+--# query_date_parts_combined
+MATCH t: TimeRecord WHERE t.label = "mid_year"
+RETURN year(t.start_time) AS y,
+       month(t.start_time) AS m,
+       day(t.start_time) AS d,
+       hour(t.start_time) AS h,
+       minute(t.start_time) AS mi,
+       second(t.start_time) AS s
+
+--# query_timestamp_ordering
+MATCH t: TimeRecord
+RETURN t.label, t.start_time
+ORDER BY t.start_time ASC
+
+--# query_recent_records
+MATCH t: TimeRecord WHERE t.start_time > @2024-06-01
+RETURN COUNT(t) AS count

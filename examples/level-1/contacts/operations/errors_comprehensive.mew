@@ -1,0 +1,120 @@
+-- ===========================================================================
+-- SCENARIO: Comprehensive Contact Errors
+-- DESCRIPTION: Test error cases specific to contacts domain
+-- ===========================================================================
+
+-- ===========================================================================
+-- PERSON SPAWN ERRORS
+-- ===========================================================================
+
+--# missing_first_name
+SPAWN p: Person {
+  last_name = "Smith"
+}
+
+--# missing_last_name
+SPAWN p: Person {
+  first_name = "Alice"
+}
+
+--# type_error_boolean_name
+SPAWN p: Person {
+  first_name = true,
+  last_name = "Smith"
+}
+
+--# invalid_birthday_type
+SPAWN p: Person {
+  first_name = "Alice",
+  last_name = "Smith",
+  birthday = "not a timestamp"
+}
+
+-- ===========================================================================
+-- ORGANIZATION SPAWN ERRORS
+-- ===========================================================================
+
+--# org_missing_name
+SPAWN o: Organization {
+  industry = "Tech"
+}
+
+--# org_invalid_type
+SPAWN o: Organization {
+  name = 12345
+}
+
+-- ===========================================================================
+-- ADDRESS SPAWN ERRORS
+-- ===========================================================================
+
+--# addr_missing_street
+SPAWN a: Address {
+  city = "Springfield"
+}
+
+--# addr_missing_city
+SPAWN a: Address {
+  street1 = "123 Main St"
+}
+
+-- ===========================================================================
+-- PHONE/EMAIL SPAWN ERRORS
+-- ===========================================================================
+
+--# phone_missing_number
+SPAWN ph: Phone {
+  label = "mobile"
+}
+
+--# email_missing_address
+SPAWN e: Email {
+  label = "work"
+}
+
+-- ===========================================================================
+-- EDGE ATTRIBUTE ERRORS
+-- ===========================================================================
+
+--# edge_attr_wrong_type
+SPAWN p: Person { first_name = "Alice", last_name = "Smith" }
+SPAWN o: Organization { name = "TechCorp" }
+LINK works_at(p, o) {
+  is_current = "yes"
+}
+
+--# edge_attr_invalid_field
+SPAWN p2: Person { first_name = "Bob", last_name = "Jones" }
+SPAWN o2: Organization { name = "HealthCo" }
+LINK works_at(p2, o2) {
+  nonexistent_field = "value"
+}
+
+-- ===========================================================================
+-- RELATIONSHIP ERRORS
+-- ===========================================================================
+
+--# link_email_to_org_wrong_edge
+SPAWN p3: Person { first_name = "Charlie", last_name = "Brown" }
+SPAWN e2: Email { address = "test@example.com" }
+LINK org_email(p3, e2)
+
+--# link_person_email_wrong_target
+SPAWN p4: Person { first_name = "Diana", last_name = "Prince" }
+SPAWN o3: Organization { name = "Corp" }
+LINK has_email(p4, o3)
+
+-- ===========================================================================
+-- QUERY ERRORS
+-- ===========================================================================
+
+--# query_invalid_edge_attribute
+SPAWN p5: Person { first_name = "Eve", last_name = "Adams" }
+SPAWN o4: Organization { name = "TestCorp" }
+LINK works_at(p5, o4) { title = "Engineer" }
+MATCH p: Person, o: Organization, works_at(p, o) AS w
+RETURN w.nonexistent_attribute
+
+--# query_type_mismatch
+MATCH p: Person WHERE p.is_favorite = "true"
+RETURN p
