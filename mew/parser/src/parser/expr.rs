@@ -116,6 +116,52 @@ impl Parser {
             left = Expr::BinaryOp(op, Box::new(left), Box::new(right), span);
         }
 
+        // Handle string operators as contextual keywords.
+        // These parse to function calls: `a STARTS WITH b` -> starts_with(a, b)
+        let string_op = if self.check_ident("STARTS") {
+            self.advance();
+            if !self.check_ident("WITH") {
+                return Err(crate::ParseError::unexpected_token(
+                    self.peek().span,
+                    "WITH",
+                    self.peek().kind.name(),
+                ));
+            }
+            self.advance();
+            Some("starts_with")
+        } else if self.check_ident("ENDS") {
+            self.advance();
+            if !self.check_ident("WITH") {
+                return Err(crate::ParseError::unexpected_token(
+                    self.peek().span,
+                    "WITH",
+                    self.peek().kind.name(),
+                ));
+            }
+            self.advance();
+            Some("ends_with")
+        } else if self.check_ident("CONTAINS") {
+            self.advance();
+            Some("contains")
+        } else if self.check(&TokenKind::In) {
+            self.advance();
+            Some("in")
+        } else {
+            None
+        };
+
+        if let Some(fn_name) = string_op {
+            let start = left.span();
+            let right = self.parse_additive()?;
+            let span = self.span_from(start);
+            left = Expr::FnCall(FnCall {
+                name: fn_name.to_string(),
+                args: vec![left, right],
+                distinct: false,
+                span,
+            });
+        }
+
         Ok(left)
     }
 
@@ -349,6 +395,25 @@ impl Parser {
                 let expr = self.parse_expr()?;
                 self.expect(&TokenKind::RParen)?;
                 Ok(expr)
+            }
+
+            // List literal: [a, b, c]
+            TokenKind::LBracket => {
+                let start = self.advance().span;
+                let mut elements = Vec::new();
+                if !self.check(&TokenKind::RBracket) {
+                    elements.push(self.parse_expr()?);
+                    while self.check(&TokenKind::Comma) {
+                        self.advance();
+                        if self.check(&TokenKind::RBracket) {
+                            break; // trailing comma
+                        }
+                        elements.push(self.parse_expr()?);
+                    }
+                }
+                self.expect(&TokenKind::RBracket)?;
+                let span = self.span_from(start);
+                Ok(Expr::List(elements, span))
             }
 
             // Identifier (variable or function call)

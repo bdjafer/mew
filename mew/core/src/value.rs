@@ -28,6 +28,8 @@ pub enum Value {
     NodeRef(NodeId),
     /// Reference to an edge.
     EdgeRef(EdgeId),
+    /// List of values.
+    List(Vec<Value>),
 }
 
 impl Value {
@@ -152,6 +154,7 @@ impl Value {
             Value::Duration(_) => "Duration",
             Value::NodeRef(_) => "NodeRef",
             Value::EdgeRef(_) => "EdgeRef",
+            Value::List(_) => "List",
         }
     }
 
@@ -210,6 +213,16 @@ impl fmt::Display for Value {
             Value::Duration(d) => write!(f, "dur:{}", d),
             Value::NodeRef(id) => write!(f, "#{}", id),
             Value::EdgeRef(id) => write!(f, "#{}", id),
+            Value::List(items) => {
+                write!(f, "[")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }

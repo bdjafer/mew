@@ -330,6 +330,8 @@ pub enum Expr {
     Exists(Vec<PatternElem>, Option<Box<Expr>>, Span),
     /// NOT EXISTS subpattern
     NotExists(Vec<PatternElem>, Option<Box<Expr>>, Span),
+    /// List literal: [a, b, c]
+    List(Vec<Expr>, Span),
 }
 
 impl Expr {
@@ -345,6 +347,7 @@ impl Expr {
             Expr::Param(_, span) => *span,
             Expr::Exists(_, _, span) => *span,
             Expr::NotExists(_, _, span) => *span,
+            Expr::List(_, span) => *span,
         }
     }
 }
