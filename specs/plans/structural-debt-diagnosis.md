@@ -1,8 +1,36 @@
 # Structural Debt Diagnosis
 
 **Date:** 2026-01-13
-**Status:** Analysis Complete
+**Status:** Partial Remediation Complete
 **Scope:** Full MEW workspace (17 crates)
+
+## Completed Remediation
+
+### Phase 1: Type Renames ✓
+- `mutation::result::MutationResult` → `MutationOutcome`
+- `session::result::MutationResult` → `MutationSummary`
+- Removed confusing `MutationOutput` alias
+
+### Phase 1b: Error Message Constants ✓
+- Created `mew-core/src/messages.rs` with shared constants
+- Updated session and REPL to use shared constants
+- No more duplicated magic strings
+
+### Phase 2: Shared Target Resolution ✓
+- Created `mew-pattern/src/target.rs` with:
+  - `resolve_target()` - full resolution with edge patterns
+  - `resolve_target_ref()` - reference resolution
+  - `resolve_var_target()` - variable-only (for REPL)
+  - `TargetError` enum with Display impl
+- Session and REPL now use shared module
+- Reduced code duplication by ~100 lines
+
+### Phase 3 & 4: Deferred
+- `session.rs` and `query/executor.rs` have tight coupling
+- Further splitting requires significant architectural changes
+- Current file sizes (953 and 1063 lines) are acceptable
+
+---
 
 ---
 
