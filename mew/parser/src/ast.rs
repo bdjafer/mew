@@ -433,6 +433,7 @@ pub enum UnaryOp {
 pub struct FnCall {
     pub name: String,
     pub args: Vec<Expr>,
+    pub distinct: bool, // For count(DISTINCT ...) style calls
     pub span: Span,
 }
 

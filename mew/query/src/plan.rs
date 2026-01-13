@@ -63,7 +63,7 @@ pub enum PlanOp {
     Aggregate {
         input: Box<PlanOp>,
         group_by: Vec<Expr>,
-        aggregates: Vec<(String, AggregateKind, Expr)>,
+        aggregates: Vec<(String, AggregateKind, Expr, bool)>, // (name, kind, expr, distinct)
     },
 
     /// Cartesian product of two inputs.
@@ -81,6 +81,9 @@ pub enum PlanOp {
         max_depth: Option<i64>,
         direction: WalkDirection,
     },
+
+    /// Remove duplicate rows.
+    Distinct { input: Box<PlanOp> },
 
     /// Empty result (for patterns that can't match).
     Empty,
@@ -178,6 +181,13 @@ impl<'r> QueryPlanner<'r> {
             };
         }
 
+        // Add DISTINCT if requested
+        if stmt.return_clause.distinct {
+            plan = PlanOp::Distinct {
+                input: Box::new(plan),
+            };
+        }
+
         Ok(QueryPlan {
             root: plan,
             columns,
@@ -185,25 +195,28 @@ impl<'r> QueryPlanner<'r> {
     }
 
     /// Extract aggregate functions from projections.
-    fn extract_aggregates(&self, projections: &[Projection]) -> Vec<(String, AggregateKind, Expr)> {
+    fn extract_aggregates(
+        &self,
+        projections: &[Projection],
+    ) -> Vec<(String, AggregateKind, Expr, bool)> {
         let mut aggregates = Vec::new();
 
         for proj in projections {
-            if let Some((kind, arg)) = self.get_aggregate(&proj.expr) {
+            if let Some((kind, arg, distinct)) = self.get_aggregate(&proj.expr) {
                 let name = proj
                     .alias
                     .clone()
                     .unwrap_or_else(|| self.expr_to_name(&proj.expr));
-                aggregates.push((name, kind, arg));
+                aggregates.push((name, kind, arg, distinct));
             }
         }
 
         aggregates
     }
 
-    /// Check if an expression is an aggregate function and return its kind and argument.
+    /// Check if an expression is an aggregate function and return its kind, argument, and distinct flag.
     /// Note: min/max with 2 arguments are binary functions, not aggregates.
-    fn get_aggregate(&self, expr: &Expr) -> Option<(AggregateKind, Expr)> {
+    fn get_aggregate(&self, expr: &Expr) -> Option<(AggregateKind, Expr, bool)> {
         match expr {
             Expr::FnCall(fc) => {
                 let kind = match fc.name.to_lowercase().as_str() {
@@ -223,7 +236,7 @@ impl<'r> QueryPlanner<'r> {
                             span: fc.span,
                         })
                     });
-                    (k, arg)
+                    (k, arg, fc.distinct)
                 })
             }
             _ => None,

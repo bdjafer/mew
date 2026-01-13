@@ -316,7 +316,7 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 if group_by.is_empty() && results.is_empty() {
                     // Empty input with no grouping returns single row with defaults
                     let mut values = Vec::new();
-                    for (_, kind, _) in aggregates {
+                    for (_, kind, _, _) in aggregates {
                         values.push(match kind {
                             crate::plan::AggregateKind::Count => Value::Int(0),
                             _ => Value::Null,
@@ -352,8 +352,8 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                     let first_bindings = group.first().map(|(b, _)| b.clone()).unwrap_or_default();
                     let mut agg_values = Vec::new();
 
-                    for (_, kind, expr) in aggregates {
-                        let agg_val = self.compute_aggregate(*kind, &group, expr)?;
+                    for (_, kind, expr, distinct) in aggregates {
+                        let agg_val = self.compute_aggregate(*kind, &group, expr, *distinct)?;
                         agg_values.push(agg_val);
                     }
 
@@ -495,6 +495,22 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 Ok(results)
             }
 
+            PlanOp::Distinct { input } => {
+                let results = self.execute_op(input, initial_bindings)?;
+                let mut seen = std::collections::HashSet::new();
+                let mut distinct_results = Vec::new();
+
+                for (bindings, values) in results {
+                    // Use the values for deduplication (as a string for hashing)
+                    let key: Vec<String> = values.iter().map(|v| format!("{:?}", v)).collect();
+                    if seen.insert(key) {
+                        distinct_results.push((bindings, values));
+                    }
+                }
+
+                Ok(distinct_results)
+            }
+
             PlanOp::Empty => {
                 if let Some(initial) = initial_bindings {
                     Ok(vec![(initial.clone(), Vec::new())])
@@ -537,9 +553,24 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
         kind: crate::plan::AggregateKind,
         group: &[(Bindings, Vec<Value>)],
         expr: &mew_parser::Expr,
+        distinct: bool,
     ) -> QueryResult<Value> {
         match kind {
-            crate::plan::AggregateKind::Count => Ok(Value::Int(group.len() as i64)),
+            crate::plan::AggregateKind::Count => {
+                if distinct {
+                    // Count distinct values
+                    let mut seen = std::collections::HashSet::new();
+                    for (bindings, _) in group {
+                        if let Ok(val) = self.evaluator.eval(expr, bindings, self.graph) {
+                            // Use string representation for hashing
+                            seen.insert(format!("{:?}", val));
+                        }
+                    }
+                    Ok(Value::Int(seen.len() as i64))
+                } else {
+                    Ok(Value::Int(group.len() as i64))
+                }
+            }
 
             crate::plan::AggregateKind::Sum => {
                 let mut int_sum = 0i64;

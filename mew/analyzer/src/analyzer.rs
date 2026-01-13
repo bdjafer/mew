@@ -923,6 +923,7 @@ mod tests {
         let expr = Expr::FnCall(FnCall {
             name: "count".to_string(),
             args: vec![],
+            distinct: false,
             span: Span::default(),
         });
 
