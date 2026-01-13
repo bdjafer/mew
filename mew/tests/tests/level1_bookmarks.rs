@@ -51,12 +51,11 @@ mod attribute_fundamentals {
             .step("query_null_handling", |a| a.scalar("count", 2i64))
             .step("set_to_null_then_restore", |a| a.modified(1))
             .step("verify_null_to_value_transition", |a| {
-                a.first(row_str! { "b.description" => "Added later" })
+                a.first(row_str! { "b.description" => "Added later" }).modified(1)
             })
-            // Note: The SET in verify_null_to_value_transition step is not being executed
-            // by the runner, so description remains "Added later"
+            // The SET in verify_null_to_value_transition step sets description back to null
             .step("verify_value_to_null_transition", |a| {
-                a.first(row_str! { "b.description" => "Added later" })
+                a.first(row_str! { "b.description" => None::<String> })
             })
     }
 
