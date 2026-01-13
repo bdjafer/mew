@@ -60,5 +60,11 @@ impl SessionError {
     }
 }
 
+impl From<mew_pattern::TargetError> for SessionError {
+    fn from(err: mew_pattern::TargetError) -> Self {
+        SessionError::invalid_statement_type(err.to_string())
+    }
+}
+
 /// Result type for session operations.
 pub type SessionResult<T> = Result<T, SessionError>;

@@ -8,8 +8,10 @@
 //! - Execute plan and stream results
 //! - Handle aggregations and sorting
 
+mod aggregates;
 mod error;
 mod executor;
+mod operators;
 mod plan;
 mod result;
 

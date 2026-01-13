@@ -24,4 +24,4 @@ mod validation;
 
 pub use error::{MutationError, MutationResult};
 pub use executor::MutationExecutor;
-pub use result::MutationResult as MutationOutput;
+pub use result::MutationOutcome;

@@ -6,7 +6,7 @@ use mew_pattern::{Bindings, Evaluator};
 use mew_registry::Registry;
 
 use crate::error::{MutationError, MutationResult};
-use crate::result::{CreatedEntity, MutationResult as MutationOutput};
+use crate::result::{CreatedEntity, MutationOutcome};
 use crate::validation;
 
 /// Execute a SPAWN statement to create a new node.
@@ -16,7 +16,7 @@ pub fn execute_spawn(
     evaluator: &Evaluator,
     stmt: &SpawnStmt,
     bindings: &Bindings,
-) -> MutationResult<MutationOutput> {
+) -> MutationResult<MutationOutcome> {
     // Look up the type
     let type_id = registry
         .get_type_id(&stmt.type_name)
@@ -51,5 +51,5 @@ pub fn execute_spawn(
     // Create the node
     let node_id = graph.create_node(type_id, attrs);
 
-    Ok(MutationOutput::Created(CreatedEntity::node(node_id)))
+    Ok(MutationOutcome::Created(CreatedEntity::node(node_id)))
 }

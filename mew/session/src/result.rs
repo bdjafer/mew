@@ -8,7 +8,7 @@ pub enum StatementResult {
     /// Query result with rows.
     Query(QueryResult),
     /// Mutation result with affected counts.
-    Mutation(MutationResult),
+    Mutation(MutationSummary),
     /// Transaction control result.
     Transaction(TransactionResult),
     /// Empty result (for comments, etc.).
@@ -56,9 +56,9 @@ impl QueryResult {
     }
 }
 
-/// Result of a mutation execution.
+/// Summary of a mutation execution.
 #[derive(Debug, Clone)]
-pub struct MutationResult {
+pub struct MutationSummary {
     /// Number of nodes affected.
     pub nodes_affected: usize,
     /// Number of edges affected.
@@ -67,8 +67,8 @@ pub struct MutationResult {
     pub returned: Vec<Value>,
 }
 
-impl MutationResult {
-    /// Create a new mutation result.
+impl MutationSummary {
+    /// Create a new mutation summary.
     pub fn new(nodes_affected: usize, edges_affected: usize) -> Self {
         Self {
             nodes_affected,
@@ -121,9 +121,9 @@ mod tests {
     }
 
     #[test]
-    fn test_mutation_result() {
+    fn test_mutation_summary() {
         // GIVEN
-        let result = MutationResult::new(3, 5);
+        let result = MutationSummary::new(3, 5);
 
         // WHEN/THEN
         assert_eq!(result.total_affected(), 8);

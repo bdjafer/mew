@@ -1,7 +1,7 @@
 //! Assertion types and builders for verifying step results.
 
 use mew_core::Value;
-use mew_session::{MutationResult, QueryResult, StatementResult};
+use mew_session::{MutationSummary, QueryResult, StatementResult};
 use std::collections::HashMap;
 
 use crate::error::{ExampleError, ExampleResult};
@@ -153,7 +153,7 @@ impl Assertion {
         }
     }
 
-    fn verify_mutation(&self, step: &str, result: &MutationResult) -> ExampleResult<()> {
+    fn verify_mutation(&self, step: &str, result: &MutationSummary) -> ExampleResult<()> {
         if let Some(expected) = self.created {
             if result.nodes_affected != expected {
                 return Err(ExampleError::assertion_failed(
