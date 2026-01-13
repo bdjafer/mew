@@ -1,0 +1,91 @@
+-- ===========================================================================
+-- OPERATIONS: Data Type Tests
+-- Tests Float, Duration, Timestamp types and their operations
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- FLOAT TYPE TESTS
+-- ---------------------------------------------------------------------------
+
+--# spawn_float_values
+-- Test spawning with various Float values
+SPAWN m1: Measurement { name = "positive", value = 3.14159, tolerance = 0.001 }
+SPAWN m2: Measurement { name = "negative", value = -273.15, tolerance = 0.01 }
+SPAWN m3: Measurement { name = "zero", value = 0.0, tolerance = 0.0 }
+SPAWN m4: Measurement { name = "large", value = 1.23e10 }
+SPAWN m5: Measurement { name = "small", value = 1.5e-10 }
+
+--# query_float_values
+MATCH m: Measurement
+RETURN COUNT(m) AS count
+
+--# query_float_comparison_greater
+MATCH m: Measurement WHERE m.value > 0.0
+RETURN COUNT(m) AS count
+
+--# query_float_comparison_less
+MATCH m: Measurement WHERE m.value < 0.0
+RETURN COUNT(m) AS count
+
+--# query_float_equality
+MATCH m: Measurement WHERE m.value = 0.0
+RETURN m.name
+
+--# query_float_range
+MATCH m: Measurement WHERE m.value >= -300.0 AND m.value <= 300.0
+RETURN COUNT(m) AS count
+
+-- ---------------------------------------------------------------------------
+-- DURATION TYPE TESTS
+-- ---------------------------------------------------------------------------
+
+--# spawn_duration_values
+-- Test spawning with various Duration literals
+SPAWN t1: TimeRecord { label = "seconds", start_time = now(), timeout = 30.seconds }
+SPAWN t2: TimeRecord { label = "minutes", start_time = now(), timeout = 5.minutes }
+SPAWN t3: TimeRecord { label = "hours", start_time = now(), timeout = 2.hours }
+SPAWN t4: TimeRecord { label = "days", start_time = now(), timeout = 7.days }
+SPAWN t5: TimeRecord { label = "milliseconds", start_time = now(), timeout = 500.milliseconds }
+
+--# query_duration_records
+MATCH t: TimeRecord WHERE t.timeout != null
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- TIMESTAMP LITERAL TESTS
+-- ---------------------------------------------------------------------------
+
+--# spawn_timestamp_literals
+-- Test spawning with Timestamp literals
+SPAWN t6: TimeRecord { label = "date_only", start_time = @2024-01-15 }
+SPAWN t7: TimeRecord { label = "datetime_utc", start_time = @2024-06-20T14:30:00Z }
+SPAWN t8: TimeRecord { label = "datetime_offset", start_time = @2024-12-25T09:00:00+05:30 }
+
+--# query_timestamp_comparison
+MATCH t: TimeRecord WHERE t.start_time > @2024-01-01
+RETURN COUNT(t) AS count
+
+--# query_timestamp_range
+MATCH t: TimeRecord
+WHERE t.start_time >= @2024-01-01 AND t.start_time <= @2024-12-31
+RETURN COUNT(t) AS count
+
+-- ---------------------------------------------------------------------------
+-- MIXED TYPE OPERATIONS
+-- ---------------------------------------------------------------------------
+
+--# spawn_mixed_types
+SPAWN m6: Measurement {
+  name = "complete",
+  value = 42.5,
+  tolerance = 0.1,
+  count = 100,
+  is_valid = true,
+  unit = "meters",
+  description = "A complete measurement"
+}
+
+--# query_mixed_type_filters
+MATCH m: Measurement
+WHERE m.value > 0.0 AND m.count > 0 AND m.is_valid = true
+RETURN m.name, m.value, m.count

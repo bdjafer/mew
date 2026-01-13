@@ -1,0 +1,215 @@
+-- ===========================================================================
+-- SCENARIO: Anonymous Targets
+-- DESCRIPTION: Tests use of `_` (underscore) for anonymous pattern matching
+-- FOCUS: Level-2 anonymous targets (unique to this ontology)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create tasks and tags with relationships
+-- ---------------------------------------------------------------------------
+
+--# test_setup_task_alpha
+SPAWN alpha: Task {
+  title = "Alpha Task",
+  status = "todo",
+  priority = 5
+}
+--@ expect:ok
+
+--# test_setup_task_beta
+SPAWN beta: Task {
+  title = "Beta Task",
+  status = "in_progress",
+  priority = 3
+}
+--@ expect:ok
+
+--# test_setup_task_gamma
+SPAWN gamma: Task {
+  title = "Gamma Task",
+  status = "done",
+  priority = 1
+}
+--@ expect:ok
+
+--# test_setup_task_orphan
+SPAWN orphan: Task {
+  title = "Orphan Task",
+  status = "todo",
+  priority = 2
+}
+--@ expect:ok
+
+--# test_setup_tags
+SPAWN urgent_tag: Tag {
+  name = "urgent-anon",
+  color = "#FF0000"
+}
+SPAWN review_tag: Tag {
+  name = "review-anon",
+  color = "#00FF00"
+}
+--@ expect:ok
+
+--# test_setup_links
+MATCH a: Task, b: Task, g: Task, u: Tag, r: Tag
+WHERE a.title = "Alpha Task" AND b.title = "Beta Task" AND g.title = "Gamma Task" AND u.name = "urgent-anon" AND r.name = "review-anon"
+LINK tagged(a, u)
+LINK tagged(b, u)
+LINK tagged(b, r)
+LINK blocks(a, b)
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- ANONYMOUS TARGET: Find tasks with ANY tag
+-- ---------------------------------------------------------------------------
+
+--# test_tasks_with_any_tag
+MATCH t: Task, tagged(t, _)
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 2
+--@ expect:has_row { title = "Alpha Task" }
+--@ expect:has_row { title = "Beta Task" }
+
+--# test_tasks_with_any_tag_distinct
+MATCH t: Task, tagged(t, _)
+RETURN DISTINCT t.title
+ORDER BY t.title
+--@ expect:rows = 2
+--@ expect:has_row { title = "Alpha Task" }
+--@ expect:has_row { title = "Beta Task" }
+
+-- ---------------------------------------------------------------------------
+-- ANONYMOUS TARGET: Find tasks that block ANYTHING
+-- ---------------------------------------------------------------------------
+
+--# test_tasks_that_block_anything
+MATCH blocker: Task, blocks(blocker, _)
+RETURN blocker.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Alpha Task" }
+
+-- ---------------------------------------------------------------------------
+-- ANONYMOUS TARGET: Find tasks blocked by ANYTHING
+-- ---------------------------------------------------------------------------
+
+--# test_tasks_blocked_by_anything
+MATCH blocked: Task, blocks(_, blocked)
+RETURN blocked.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Beta Task" }
+
+-- ---------------------------------------------------------------------------
+-- ANONYMOUS TARGET: Find tags used by ANY task
+-- ---------------------------------------------------------------------------
+
+--# test_tags_used_by_any_task
+MATCH tag: Tag, tagged(_, tag)
+RETURN DISTINCT tag.name
+ORDER BY tag.name
+--@ expect:rows = 2
+--@ expect:has_row { name = "review-anon" }
+--@ expect:has_row { name = "urgent-anon" }
+
+-- ---------------------------------------------------------------------------
+-- NOT EXISTS WITH ANONYMOUS: Find tasks WITHOUT any tag
+-- ---------------------------------------------------------------------------
+
+--# test_tasks_without_any_tag
+MATCH t: Task
+WHERE NOT EXISTS(tagged(t, _))
+AND t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 2
+--@ expect:has_row { title = "Gamma Task" }
+--@ expect:has_row { title = "Orphan Task" }
+
+-- ---------------------------------------------------------------------------
+-- NOT EXISTS WITH ANONYMOUS: Find tasks that DON'T block anything
+-- ---------------------------------------------------------------------------
+
+--# test_tasks_that_dont_block_anything
+MATCH t: Task
+WHERE NOT EXISTS(blocks(t, _))
+AND t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 3
+--@ expect:has_row { title = "Beta Task" }
+--@ expect:has_row { title = "Gamma Task" }
+--@ expect:has_row { title = "Orphan Task" }
+
+-- ---------------------------------------------------------------------------
+-- NOT EXISTS WITH ANONYMOUS: Find tasks not blocked by anything
+-- ---------------------------------------------------------------------------
+
+--# test_tasks_not_blocked_by_anything
+MATCH t: Task
+WHERE NOT EXISTS(blocks(_, t))
+AND t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 3
+--@ expect:has_row { title = "Alpha Task" }
+--@ expect:has_row { title = "Gamma Task" }
+--@ expect:has_row { title = "Orphan Task" }
+
+-- ---------------------------------------------------------------------------
+-- COMBINED PATTERNS WITH ANONYMOUS
+-- ---------------------------------------------------------------------------
+
+--# test_tasks_with_tag_but_not_blocking
+MATCH t: Task
+WHERE EXISTS(tagged(t, _))
+AND NOT EXISTS(blocks(t, _))
+AND t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
+RETURN t.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Beta Task" }
+
+--# test_tasks_blocking_but_not_tagged_with_review
+MATCH t: Task, blocks(t, _)
+WHERE NOT EXISTS(tag: Tag, tagged(t, tag) AND tag.name = "review-anon")
+RETURN t.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Alpha Task" }
+
+-- ---------------------------------------------------------------------------
+-- COUNT WITH ANONYMOUS TARGET
+-- ---------------------------------------------------------------------------
+
+--# test_count_tasks_with_any_relationship
+MATCH t: Task
+WHERE EXISTS(tagged(t, _))
+OR EXISTS(blocks(t, _))
+OR EXISTS(blocks(_, t))
+RETURN count(t) AS connected_tasks
+--@ expect:rows = 1
+
+-- ---------------------------------------------------------------------------
+-- MULTIPLE ANONYMOUS TARGETS
+-- ---------------------------------------------------------------------------
+
+--# test_multiple_anonymous_in_path
+MATCH mid: Task, blocks(_, mid), tagged(mid, _)
+RETURN mid.title
+--@ expect:rows >= 1
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_anonymous_tasks
+MATCH t: Task
+WHERE t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
+KILL t
+--@ expect:ok
+
+--# test_cleanup_anonymous_tags
+MATCH t: Tag
+WHERE t.name IN ["urgent-anon", "review-anon"]
+KILL t
+--@ expect:ok
+

@@ -45,13 +45,13 @@ SPAWN block_d: Task {
 -- ---------------------------------------------------------------------------
 
 --# test_create_simple_block
-MATCH (a:Task), (b:Task)
+MATCH a: Task, b: Task
 WHERE a.title = "Blocking A" AND b.title = "Blocking B"
 LINK blocks(a, b)
 --@ expect:ok
 
 --# test_verify_block_created
-MATCH (a:Task)-[:blocks]->(b:Task)
+MATCH a: Task, b: Task, blocks(a, b)
 WHERE a.title = "Blocking A" AND b.title = "Blocking B"
 RETURN a.title, b.title
 --@ expect:rows = 1
@@ -62,15 +62,15 @@ RETURN a.title, b.title
 -- ---------------------------------------------------------------------------
 
 --# test_task_cannot_block_itself
-MATCH (a:Task)
+MATCH a: Task
 WHERE a.title = "Blocking A"
 LINK blocks(a, a)
 --@ expect:error = "NoSelfViolation"
 
 --# test_verify_no_self_block_created
-MATCH (a:Task)-[:blocks]->(a)
+MATCH a: Task, blocks(a, a)
 WHERE a.title = "Blocking A"
-RETURN COUNT(*) AS self_blocks
+RETURN count(*) AS self_blocks
 --@ expect:rows = 1
 --@ expect:has_row { self_blocks = 0 }
 
@@ -79,54 +79,50 @@ RETURN COUNT(*) AS self_blocks
 -- ---------------------------------------------------------------------------
 
 --# test_create_blocking_chain
-MATCH (b:Task), (c:Task), (d:Task)
+MATCH b: Task, c: Task, d: Task
 WHERE b.title = "Blocking B" AND c.title = "Blocking C" AND d.title = "Blocking D"
 LINK blocks(b, c)
 LINK blocks(c, d)
 --@ expect:ok
 
 --# test_verify_blocking_chain
-MATCH (a:Task)-[:blocks]->(b:Task)-[:blocks]->(c:Task)-[:blocks]->(d:Task)
+MATCH a: Task, b: Task, c: Task, d: Task, blocks(a, b), blocks(b, c), blocks(c, d)
 WHERE a.title = "Blocking A"
 RETURN a.title, b.title, c.title, d.title
 --@ expect:rows = 1
 --@ expect:has_row { a.title = "Blocking A", b.title = "Blocking B", c.title = "Blocking C", d.title = "Blocking D" }
 
 -- ---------------------------------------------------------------------------
--- QUERY BLOCKED TASKS
+-- QUERY BLOCKED TASKS (direct relationships only - Level 2)
 -- ---------------------------------------------------------------------------
 
 --# test_find_all_blocked_by_a
-MATCH (a:Task)-[:blocks]->(blocked:Task)
+MATCH a: Task, blocked: Task, blocks(a, blocked)
 WHERE a.title = "Blocking A"
 RETURN blocked.title
 --@ expect:rows = 1
 --@ expect:has_row { title = "Blocking B" }
 
 --# test_find_tasks_that_block_d
-MATCH (blocker:Task)-[:blocks]->(d:Task)
+MATCH blocker: Task, d: Task, blocks(blocker, d)
 WHERE d.title = "Blocking D"
 RETURN blocker.title
 --@ expect:rows = 1
 --@ expect:has_row { title = "Blocking C" }
 
 --# test_find_tasks_not_blocking_anything
-MATCH (t:Task)
-WHERE NOT EXISTS {
-  MATCH (t)-[:blocks]->(:Task)
-}
-AND t.title STARTS WITH "Blocking"
+MATCH t: Task
+WHERE t.title STARTS WITH "Blocking"
+AND NOT EXISTS(other: Task, blocks(t, other))
 RETURN t.title
 ORDER BY t.title
 --@ expect:rows = 1
 --@ expect:has_row { title = "Blocking D" }
 
 --# test_find_tasks_not_blocked
-MATCH (t:Task)
-WHERE NOT EXISTS {
-  MATCH (:Task)-[:blocks]->(t)
-}
-AND t.title STARTS WITH "Blocking"
+MATCH t: Task
+WHERE t.title STARTS WITH "Blocking"
+AND NOT EXISTS(other: Task, blocks(other, t))
 RETURN t.title
 ORDER BY t.title
 --@ expect:rows = 1
@@ -142,14 +138,14 @@ SPAWN circ_2: Task { title = "Circular 2", status = "todo", priority = 3 }
 --@ expect:ok
 
 --# test_create_circular_block
-MATCH (c1:Task), (c2:Task)
+MATCH c1: Task, c2: Task
 WHERE c1.title = "Circular 1" AND c2.title = "Circular 2"
 LINK blocks(c1, c2)
 LINK blocks(c2, c1)
 --@ expect:ok
 
 --# test_verify_circular_blocks
-MATCH (c1:Task)-[:blocks]->(c2:Task)-[:blocks]->(c1)
+MATCH c1: Task, c2: Task, blocks(c1, c2), blocks(c2, c1)
 WHERE c1.title = "Circular 1"
 RETURN c1.title, c2.title
 --@ expect:rows = 1
@@ -168,8 +164,8 @@ SPAWN multi_blocked: Task {
 --@ expect:ok
 
 --# test_create_multiple_blockers
-MATCH (a:Task), (b:Task), (c:Task), (target:Task)
-WHERE a.title = "Blocking A" AND b.title = "Blocking B" AND c.title = "Blocking C" 
+MATCH a: Task, b: Task, c: Task, target: Task
+WHERE a.title = "Blocking A" AND b.title = "Blocking B" AND c.title = "Blocking C"
 AND target.title = "Multi Blocked"
 LINK blocks(a, target)
 LINK blocks(b, target)
@@ -177,14 +173,14 @@ LINK blocks(c, target)
 --@ expect:ok
 
 --# test_verify_multiple_blockers
-MATCH (blocker:Task)-[:blocks]->(target:Task)
+MATCH blocker: Task, target: Task, blocks(blocker, target)
 WHERE target.title = "Multi Blocked"
-RETURN COUNT(blocker) AS blocker_count
+RETURN count(blocker) AS blocker_count
 --@ expect:rows = 1
 --@ expect:has_row { blocker_count = 3 }
 
 --# test_list_all_blockers
-MATCH (blocker:Task)-[:blocks]->(target:Task)
+MATCH blocker: Task, target: Task, blocks(blocker, target)
 WHERE target.title = "Multi Blocked"
 RETURN blocker.title
 ORDER BY blocker.title
@@ -198,20 +194,16 @@ ORDER BY blocker.title
 -- ---------------------------------------------------------------------------
 
 --# test_find_in_progress_blockers
-MATCH (blocker:Task)-[:blocks]->(blocked:Task)
+MATCH blocker: Task, blocked: Task, blocks(blocker, blocked)
 WHERE blocker.status = "in_progress"
 RETURN blocker.title, blocked.title
 ORDER BY blocked.title
 --@ expect:rows >= 2
 
 --# test_find_tasks_blocked_by_non_done
-MATCH (t:Task)
-WHERE EXISTS {
-  MATCH (blocker:Task)-[:blocks]->(t)
-  WHERE blocker.status != "done"
-}
-AND t.title STARTS WITH "Blocking"
-RETURN t.title
+MATCH blocker: Task, t: Task, blocks(blocker, t)
+WHERE blocker.status != "done" AND t.title STARTS WITH "Blocking"
+RETURN DISTINCT t.title
 ORDER BY t.title
 --@ expect:rows >= 3
 
@@ -220,54 +212,33 @@ ORDER BY t.title
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_one_blocker
-MATCH (a:Task)-[r:blocks]->(multi:Task)
+MATCH a: Task, multi: Task, blocks(a, multi) AS r
 WHERE a.title = "Blocking A" AND multi.title = "Multi Blocked"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_one_blocker_removed
-MATCH (blocker:Task)-[:blocks]->(target:Task)
+MATCH blocker: Task, target: Task, blocks(blocker, target)
 WHERE target.title = "Multi Blocked"
-RETURN COUNT(blocker) AS remaining_blockers
+RETURN count(blocker) AS remaining_blockers
 --@ expect:rows = 1
 --@ expect:has_row { remaining_blockers = 2 }
-
--- ---------------------------------------------------------------------------
--- TRANSITIVE BLOCKING QUERIES
--- ---------------------------------------------------------------------------
-
---# test_find_all_transitively_blocked
-MATCH (a:Task)-[:blocks+]->(blocked:Task)
-WHERE a.title = "Blocking A"
-RETURN blocked.title
-ORDER BY blocked.title
---@ expect:rows >= 3
-
---# test_find_root_blockers
-MATCH (root:Task)-[:blocks+]->(d:Task)
-WHERE d.title = "Blocking D"
-AND NOT EXISTS {
-  MATCH (:Task)-[:blocks]->(root)
-}
-RETURN root.title
---@ expect:rows = 1
---@ expect:has_row { title = "Blocking A" }
 
 -- ---------------------------------------------------------------------------
 -- BLOCKS WITH PRIORITY
 -- ---------------------------------------------------------------------------
 
 --# test_high_priority_blocked_by_low_priority
-MATCH (low:Task)-[:blocks]->(high:Task)
+MATCH low: Task, high: Task, blocks(low, high)
 WHERE low.priority < high.priority
 RETURN low.title, low.priority, high.title, high.priority
 ORDER BY low.priority
 --@ expect:rows >= 1
 
 --# test_count_blocking_relationships
-MATCH (a:Task)-[:blocks]->(b:Task)
+MATCH a: Task, b: Task, blocks(a, b)
 WHERE a.title STARTS WITH "Blocking" OR a.title STARTS WITH "Circular"
-RETURN COUNT(*) AS total_blocks
+RETURN count(*) AS total_blocks
 --@ expect:rows = 1
 --@ expect:has_row { total_blocks >= 5 }
 
@@ -276,7 +247,8 @@ RETURN COUNT(*) AS total_blocks
 -- ---------------------------------------------------------------------------
 
 --# test_cleanup_blocking_tasks
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title STARTS WITH "Blocking" OR t.title STARTS WITH "Circular" OR t.title = "Multi Blocked"
 KILL t
 --@ expect:ok
+

@@ -1,0 +1,151 @@
+-- ===========================================================================
+-- ONTOLOGY: Expressions
+-- LEVEL: 1 (Fundamentals)
+-- DOMAIN: Test ontology for expression features, data types, and functions
+-- PURPOSE: Comprehensive testing of Level 1 expression capabilities
+-- ===========================================================================
+
+ontology Expressions {
+
+  -- =========================================================================
+  -- NODE TYPES - Designed to test all scalar types and expressions
+  -- =========================================================================
+
+  --- A measurement with Float values for testing numeric expressions
+  node Measurement {
+    name: String [required],
+    --- Float value for testing Float type and arithmetic
+    value: Float [required],
+    --- Optional Float for null handling tests
+    tolerance: Float?,
+    --- Integer for mixed arithmetic
+    count: Int = 0,
+    --- Timestamp for time function tests
+    recorded_at: Timestamp = now(),
+    --- Duration for duration type tests
+    duration: Duration?,
+    --- Boolean for logical tests
+    is_valid: Bool = true,
+    --- String for string function tests
+    unit: String = "units",
+    description: String?
+  }
+
+  --- A text entry for testing string functions
+  node TextEntry {
+    --- Required text for string function tests
+    content: String [required],
+    --- Optional text for null coalescing tests
+    alt_content: String?,
+    --- For case conversion tests
+    mixed_case: String?,
+    --- For trim tests (may have whitespace)
+    raw_input: String?,
+    --- For substring tests
+    long_text: String?,
+    --- Length tracking for verification
+    char_count: Int?,
+    created_at: Timestamp = now()
+  }
+
+  --- A time record for testing timestamp and duration operations
+  node TimeRecord {
+    label: String [required],
+    --- Primary timestamp
+    start_time: Timestamp [required],
+    --- Optional end timestamp for duration calculations
+    end_time: Timestamp?,
+    --- Computed or specified duration
+    elapsed: Duration?,
+    --- For testing timestamp literals
+    scheduled_at: Timestamp?,
+    --- For testing duration literals
+    timeout: Duration?,
+    --- Year extraction test
+    year_value: Int?,
+    --- Month extraction test
+    month_value: Int?,
+    --- Day extraction test
+    day_value: Int?
+  }
+
+  --- A calculation record for testing arithmetic expressions
+  node Calculation {
+    name: String [required],
+    --- Operands for arithmetic
+    operand_a: Float [required],
+    operand_b: Float [required],
+    --- Integer operands for modulo
+    int_a: Int = 0,
+    int_b: Int = 1,
+    --- Results (can be computed)
+    sum_result: Float?,
+    diff_result: Float?,
+    product_result: Float?,
+    quotient_result: Float?,
+    modulo_result: Int?,
+    --- For unary minus tests
+    negated: Float?,
+    --- For abs() tests
+    absolute: Float?,
+    --- For min/max function tests
+    minimum: Float?,
+    maximum: Float?
+  }
+
+  --- A nullable record for testing null handling and coalescing
+  node NullableRecord {
+    id_label: String [required],
+    --- All nullable fields for testing
+    nullable_string: String?,
+    nullable_int: Int?,
+    nullable_float: Float?,
+    nullable_bool: Bool?,
+    nullable_timestamp: Timestamp?,
+    --- Default value for fallback tests
+    default_value: String = "default",
+    --- For chained coalesce tests
+    fallback1: String?,
+    fallback2: String?,
+    fallback3: String = "final_fallback"
+  }
+
+  --- An aggregation target for testing aggregation functions
+  node DataPoint {
+    category: String [required],
+    --- Float value for SUM/AVG with decimals
+    float_value: Float [required],
+    --- Int value for COUNT DISTINCT
+    int_value: Int [required],
+    --- String for MIN/MAX lexicographic
+    label: String [required],
+    --- Boolean for grouping tests
+    is_active: Bool = true,
+    created_at: Timestamp = now()
+  }
+
+  --- A transaction test record
+  node TxnRecord {
+    name: String [required],
+    value: Int = 0,
+    status: String = "pending",
+    created_at: Timestamp = now()
+  }
+
+  -- =========================================================================
+  -- EDGE TYPES
+  -- =========================================================================
+
+  --- Links measurements in a sequence
+  edge follows(prev: Measurement, next: Measurement)
+
+  --- Groups data points by category
+  edge in_category(point: DataPoint, category: TextEntry)
+
+  --- Links time records in order
+  edge precedes(earlier: TimeRecord, later: TimeRecord)
+
+  --- Associates calculation with its inputs
+  edge computed_from(calc: Calculation, source: Measurement)
+
+}

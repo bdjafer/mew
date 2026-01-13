@@ -1,0 +1,174 @@
+-- ===========================================================================
+-- OPERATIONS: Arithmetic Expression Tests
+-- Tests +, -, *, /, %, unary minus, abs, min, max, floor, ceil, round
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SEED DATA
+-- ---------------------------------------------------------------------------
+
+--# seed_arithmetic_data
+SPAWN c1: Calculation { name = "basic", operand_a = 10.0, operand_b = 3.0, int_a = 17, int_b = 5 }
+SPAWN c2: Calculation { name = "negative", operand_a = -5.0, operand_b = 2.0, int_a = -10, int_b = 3 }
+SPAWN c3: Calculation { name = "decimals", operand_a = 3.14159, operand_b = 2.71828 }
+SPAWN c4: Calculation { name = "zero_b", operand_a = 100.0, operand_b = 0.0 }
+SPAWN c5: Calculation { name = "large", operand_a = 1000000.0, operand_b = 0.001 }
+
+-- ---------------------------------------------------------------------------
+-- ADDITION
+-- ---------------------------------------------------------------------------
+
+--# query_addition_basic
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a + c.operand_b AS sum
+
+--# query_addition_negative
+MATCH c: Calculation WHERE c.name = "negative"
+RETURN c.operand_a + c.operand_b AS sum
+
+--# query_addition_with_literal
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a + 5.0 AS sum
+
+-- ---------------------------------------------------------------------------
+-- SUBTRACTION
+-- ---------------------------------------------------------------------------
+
+--# query_subtraction_basic
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a - c.operand_b AS diff
+
+--# query_subtraction_negative_result
+MATCH c: Calculation WHERE c.name = "negative"
+RETURN c.operand_a - c.operand_b AS diff
+
+-- ---------------------------------------------------------------------------
+-- MULTIPLICATION
+-- ---------------------------------------------------------------------------
+
+--# query_multiplication_basic
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a * c.operand_b AS product
+
+--# query_multiplication_decimals
+MATCH c: Calculation WHERE c.name = "decimals"
+RETURN c.operand_a * c.operand_b AS product
+
+--# query_multiplication_large
+MATCH c: Calculation WHERE c.name = "large"
+RETURN c.operand_a * c.operand_b AS product
+
+-- ---------------------------------------------------------------------------
+-- DIVISION
+-- ---------------------------------------------------------------------------
+
+--# query_division_basic
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a / c.operand_b AS quotient
+
+--# query_division_decimals
+MATCH c: Calculation WHERE c.name = "decimals"
+RETURN c.operand_a / c.operand_b AS quotient
+
+-- ---------------------------------------------------------------------------
+-- MODULO (Integer)
+-- ---------------------------------------------------------------------------
+
+--# query_modulo_basic
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.int_a % c.int_b AS remainder
+
+--# query_modulo_negative
+MATCH c: Calculation WHERE c.name = "negative"
+RETURN c.int_a % c.int_b AS remainder
+
+-- ---------------------------------------------------------------------------
+-- UNARY MINUS
+-- ---------------------------------------------------------------------------
+
+--# query_unary_minus_positive
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN -c.operand_a AS negated
+
+--# query_unary_minus_negative
+MATCH c: Calculation WHERE c.name = "negative"
+RETURN -c.operand_a AS negated
+
+--# query_unary_minus_in_expression
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a + (-c.operand_b) AS result
+
+-- ---------------------------------------------------------------------------
+-- ABS FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_abs_positive
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN abs(c.operand_a) AS absolute
+
+--# query_abs_negative
+MATCH c: Calculation WHERE c.name = "negative"
+RETURN abs(c.operand_a) AS absolute
+
+-- ---------------------------------------------------------------------------
+-- MIN/MAX FUNCTIONS (Binary, not aggregation)
+-- ---------------------------------------------------------------------------
+
+--# query_min_function
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN min(c.operand_a, c.operand_b) AS minimum
+
+--# query_max_function
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN max(c.operand_a, c.operand_b) AS maximum
+
+--# query_min_with_negative
+MATCH c: Calculation WHERE c.name = "negative"
+RETURN min(c.operand_a, c.operand_b) AS minimum
+
+-- ---------------------------------------------------------------------------
+-- FLOOR/CEIL/ROUND FUNCTIONS
+-- ---------------------------------------------------------------------------
+
+--# query_floor_function
+MATCH c: Calculation WHERE c.name = "decimals"
+RETURN floor(c.operand_a) AS floored
+
+--# query_ceil_function
+MATCH c: Calculation WHERE c.name = "decimals"
+RETURN ceil(c.operand_a) AS ceiled
+
+--# query_round_function
+MATCH c: Calculation WHERE c.name = "decimals"
+RETURN round(c.operand_a) AS rounded
+
+-- ---------------------------------------------------------------------------
+-- OPERATOR PRECEDENCE
+-- ---------------------------------------------------------------------------
+
+--# query_precedence_mul_over_add
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a + c.operand_b * 2.0 AS result
+-- Should be 10 + (3 * 2) = 16, not (10 + 3) * 2 = 26
+
+--# query_precedence_parentheses
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN (c.operand_a + c.operand_b) * 2.0 AS result
+-- Should be (10 + 3) * 2 = 26
+
+--# query_precedence_complex
+MATCH c: Calculation WHERE c.name = "basic"
+RETURN c.operand_a * c.operand_b + c.operand_a / c.operand_b AS result
+-- Should be (10 * 3) + (10 / 3) = 30 + 3.333... = 33.333...
+
+-- ---------------------------------------------------------------------------
+-- ARITHMETIC IN WHERE CLAUSE
+-- ---------------------------------------------------------------------------
+
+--# query_arithmetic_in_where
+MATCH c: Calculation WHERE c.operand_a + c.operand_b > 10.0
+RETURN c.name
+
+--# query_computed_comparison
+MATCH c: Calculation WHERE c.operand_a * 2.0 > 15.0
+RETURN COUNT(c) AS count

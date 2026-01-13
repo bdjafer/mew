@@ -9,19 +9,19 @@
 -- ---------------------------------------------------------------------------
 
 --# test_order_by_price_asc
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.status = "active"
 RETURN p.name, p.price
 ORDER BY p.price ASC
 
 --# test_order_by_price_desc
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.status = "active"
 RETURN p.name, p.price
 ORDER BY p.price DESC
 
 --# test_order_by_multiple_fields
-MATCH (p:Product)
+MATCH p: Product
 RETURN p.status, p.name
 ORDER BY p.status ASC, p.name DESC
 
@@ -30,14 +30,14 @@ ORDER BY p.status ASC, p.name DESC
 -- ---------------------------------------------------------------------------
 
 --# test_limit_top_3_expensive
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.status = "active"
 RETURN p.name, p.price
 ORDER BY p.price DESC
 LIMIT 3
 
 --# test_limit_1
-MATCH (p:Product)
+MATCH p: Product
 RETURN p.name
 LIMIT 1
 
@@ -46,7 +46,7 @@ LIMIT 1
 -- ---------------------------------------------------------------------------
 
 --# test_offset_skip_first_2
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.status = "active"
 RETURN p.name, p.price
 ORDER BY p.price ASC
@@ -57,21 +57,21 @@ OFFSET 2
 -- ---------------------------------------------------------------------------
 
 --# test_pagination_page_1
-MATCH (p:Product)
+MATCH p: Product
 RETURN p.sku
 ORDER BY p.sku
 LIMIT 2
 OFFSET 0
 
 --# test_pagination_page_2
-MATCH (p:Product)
+MATCH p: Product
 RETURN p.sku
 ORDER BY p.sku
 LIMIT 2
 OFFSET 2
 
 --# test_pagination_page_3
-MATCH (p:Product)
+MATCH p: Product
 RETURN p.sku
 ORDER BY p.sku
 LIMIT 2
@@ -82,12 +82,12 @@ OFFSET 4
 -- ---------------------------------------------------------------------------
 
 --# test_distinct_status_values
-MATCH (p:Product)
+MATCH p: Product
 RETURN DISTINCT p.status
 ORDER BY p.status
 
 --# test_distinct_with_multiple_fields
-MATCH (p:Product)-[in_category]->(c:Category)
+MATCH p: Product, c: Category, in_category(p, c)
 RETURN DISTINCT p.status, c.name
 ORDER BY p.status, c.name
 
@@ -96,22 +96,22 @@ ORDER BY p.status, c.name
 -- ---------------------------------------------------------------------------
 
 --# test_optional_match_products_with_or_without_reviews
-MATCH (p:Product)
-OPTIONAL MATCH (p)<-[review_of]-(r:Review)
+MATCH p: Product
+OPTIONAL MATCH r: Review, review_of(r, p)
 RETURN p.name, r.rating
 ORDER BY p.name
 
 --# test_optional_match_with_aggregation
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.status = "active"
-OPTIONAL MATCH (p)<-[review_of]-(r:Review)
-RETURN p.name, COUNT(r) AS review_count
+OPTIONAL MATCH r: Review, review_of(r, p)
+RETURN p.name, count(r) AS review_count
 ORDER BY review_count DESC, p.name
 
 --# test_optional_match_chained
-MATCH (p:Product)
-OPTIONAL MATCH (p)<-[review_of]-(r:Review)
-OPTIONAL MATCH (r)-[reviewed_by]->(c:Customer)
+MATCH p: Product
+OPTIONAL MATCH r: Review, review_of(r, p)
+OPTIONAL MATCH c: Customer, reviewed_by(r, c)
 RETURN p.name, r.rating, c.name
 ORDER BY p.name, r.rating DESC
 
@@ -120,26 +120,23 @@ ORDER BY p.name, r.rating DESC
 -- ---------------------------------------------------------------------------
 
 --# test_order_limit_offset_distinct_combined
-MATCH (p:Product)
+MATCH p: Product
 RETURN DISTINCT p.status
 ORDER BY p.status
 LIMIT 10
 OFFSET 0
 
 --# test_optional_match_with_order_limit
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.status = "active"
-OPTIONAL MATCH (p)<-[review_of]-(r:Review)
-RETURN p.name, COALESCE(r.rating, 0) AS rating
+OPTIONAL MATCH r: Review, review_of(r, p)
+RETURN p.name, coalesce(r.rating, 0) AS rating
 ORDER BY rating DESC, p.name
 LIMIT 2
 
 --# test_subquery_with_limit
-MATCH (c:Category)
-WHERE EXISTS {
-  MATCH (c)<-[in_category]-(p:Product)
-  WHERE p.status = "active"
-}
+MATCH c: Category
+WHERE EXISTS(p: Product, in_category(p, c) WHERE p.status = "active")
 RETURN c.name
 ORDER BY c.name
 LIMIT 3

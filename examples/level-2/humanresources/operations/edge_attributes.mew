@@ -42,7 +42,7 @@ LINK has_skill(test_emp, test_skill) {
 -- ---------------------------------------------------------------------------
 
 --# test_query_edge_attributes
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001"
 RETURN e.first_name, s.name, r.level, r.years_experience
 --@ expect:rows = 1
@@ -53,13 +53,13 @@ RETURN e.first_name, s.name, r.level, r.years_experience
 -- ---------------------------------------------------------------------------
 
 --# test_update_edge_attribute
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001" AND s.name = "Testing"
-SET r.level = "expert", r.years_experience = 5
+SET r { level = "expert", years_experience = 5 }
 --@ expect:ok
 
 --# test_verify_edge_attribute_updated
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001"
 RETURN r.level, r.years_experience
 --@ expect:rows = 1
@@ -70,7 +70,7 @@ RETURN r.level, r.years_experience
 -- ---------------------------------------------------------------------------
 
 --# test_filter_by_edge_attribute_level
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE r.level = "expert"
 RETURN e.first_name, s.name
 ORDER BY e.first_name, s.name
@@ -78,7 +78,7 @@ ORDER BY e.first_name, s.name
 --@ expect:has_row { first_name = "Test", name = "Testing" }
 
 --# test_filter_by_edge_attribute_numeric
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE r.years_experience >= 5
 RETURN e.first_name, s.name, r.years_experience
 ORDER BY r.years_experience DESC
@@ -89,15 +89,15 @@ ORDER BY r.years_experience DESC
 -- ---------------------------------------------------------------------------
 
 --# test_avg_years_experience_per_skill
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
-RETURN s.name, AVG(r.years_experience) AS avg_years
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
+RETURN s.name, avg(r.years_experience) AS avg_years
 ORDER BY avg_years DESC
 --@ expect:rows >= 1
 
 --# test_count_employees_by_skill_level
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE s.name = "Rust"
-RETURN r.level, COUNT(e) AS employee_count
+RETURN r.level, count(e) AS employee_count
 ORDER BY r.level
 --@ expect:rows >= 1
 
@@ -106,28 +106,28 @@ ORDER BY r.level
 -- ---------------------------------------------------------------------------
 
 --# test_department_edge_attributes
-MATCH (e:Employee)-[r:in_department]->(d:Department)
+MATCH e: Employee, d: Department, in_department(e, d) AS r
 WHERE e.first_name = "Alice"
 RETURN e.first_name, d.name, r.is_primary
 --@ expect:rows = 1
 --@ expect:has_row { first_name = "Alice", name = "Engineering", is_primary = true }
 
 --# test_role_requirement_edge_attributes
-MATCH (role:Role)-[r:requires_skill]->(s:Skill)
+MATCH role: Role, s: Skill, requires_skill(role, s) AS r
 WHERE role.code = "SWE"
 RETURN role.title, s.name, r.minimum_level
 --@ expect:rows = 1
 --@ expect:has_row { title = "Software Engineer", name = "Rust", minimum_level = "intermediate" }
 
 --# test_course_completion_edge_attributes
-MATCH (e:Employee)-[r:completed_course]->(c:Course)
+MATCH e: Employee, c: Course, completed_course(e, c) AS r
 WHERE e.first_name = "Alice"
 RETURN e.first_name, c.name, r.score
 --@ expect:rows = 1
 --@ expect:has_row { first_name = "Alice", name = "Introduction to Rust", score = 95 }
 
 --# test_certification_edge_attributes
-MATCH (e:Employee)-[r:has_certification]->(cert:Certification)
+MATCH e: Employee, cert: Certification, has_certification(e, cert) AS r
 WHERE e.first_name = "Alice"
 RETURN e.first_name, cert.name, r.certificate_number
 --@ expect:rows = 1
@@ -138,15 +138,15 @@ RETURN e.first_name, cert.name, r.certificate_number
 -- ---------------------------------------------------------------------------
 
 --# test_find_overqualified_employees
-MATCH (e:Employee)-[has_role]->(role:Role)
-MATCH (role)-[req:requires_skill]->(s:Skill)
-MATCH (e)-[emp_skill:has_skill]->(s)
+MATCH e: Employee, role: Role, has_role(e, role)
+MATCH s: Skill, requires_skill(role, s) AS req
+MATCH has_skill(e, s) AS emp_skill
 WHERE emp_skill.level > req.minimum_level
 RETURN e.first_name, role.title, s.name, emp_skill.level AS has, req.minimum_level AS required
 --@ expect:rows >= 0
 
 --# test_employees_with_multiple_edge_attribute_conditions
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE r.level IN ["expert", "advanced"] AND r.years_experience >= 3
 RETURN e.first_name, s.name, r.level, r.years_experience
 ORDER BY r.years_experience DESC
@@ -157,13 +157,13 @@ ORDER BY r.years_experience DESC
 -- ---------------------------------------------------------------------------
 
 --# test_set_edge_attribute_null
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001"
-SET r.years_experience = NULL
+SET r { years_experience = NULL }
 --@ expect:ok
 
 --# test_verify_edge_attribute_null
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001"
 RETURN r.years_experience
 --@ expect:rows = 1
@@ -174,15 +174,15 @@ RETURN r.years_experience
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_edge_with_attributes
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_edge_deleted
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001"
-RETURN COUNT(r) AS edge_count
+RETURN count(r) AS edge_count
 --@ expect:rows = 1
 --@ expect:has_row { edge_count = 0 }
 
@@ -197,7 +197,7 @@ LINK has_skill(test_emp, test_skill) {
 --@ expect:ok
 
 --# test_verify_partial_attributes
-MATCH (e:Employee)-[r:has_skill]->(s:Skill)
+MATCH e: Employee, s: Skill, has_skill(e, s) AS r
 WHERE e.employee_id = "TEST001"
 RETURN r.level, r.years_experience
 --@ expect:rows = 1
@@ -208,13 +208,14 @@ RETURN r.level, r.years_experience
 -- ---------------------------------------------------------------------------
 
 --# test_cleanup_test_entities
-MATCH (e:Employee)
+MATCH e: Employee
 WHERE e.employee_id = "TEST001"
 KILL e
 --@ expect:ok
 
 --# test_cleanup_test_skill
-MATCH (s:Skill)
+MATCH s: Skill
 WHERE s.name = "Testing"
 KILL s
 --@ expect:ok
+

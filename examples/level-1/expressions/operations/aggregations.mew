@@ -1,0 +1,168 @@
+-- ===========================================================================
+-- OPERATIONS: Advanced Aggregation Tests
+-- Tests COLLECT, COUNT DISTINCT, SUM/AVG with Float, MIN/MAX with String
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SEED DATA
+-- ---------------------------------------------------------------------------
+
+--# seed_aggregation_data
+-- Category A data points
+SPAWN d1: DataPoint { category = "alpha", float_value = 10.5, int_value = 1, label = "apple" }
+SPAWN d2: DataPoint { category = "alpha", float_value = 20.3, int_value = 2, label = "apricot" }
+SPAWN d3: DataPoint { category = "alpha", float_value = 15.7, int_value = 1, label = "avocado" }
+-- Category B data points
+SPAWN d4: DataPoint { category = "beta", float_value = 5.25, int_value = 3, label = "banana" }
+SPAWN d5: DataPoint { category = "beta", float_value = 8.75, int_value = 3, label = "blueberry" }
+-- Category C data point (single)
+SPAWN d6: DataPoint { category = "gamma", float_value = 100.0, int_value = 4, label = "cherry" }
+-- Inactive data points
+SPAWN d7: DataPoint { category = "alpha", float_value = 0.0, int_value = 5, label = "inactive_a", is_active = false }
+SPAWN d8: DataPoint { category = "beta", float_value = 0.0, int_value = 6, label = "inactive_b", is_active = false }
+
+-- ---------------------------------------------------------------------------
+-- COLLECT AGGREGATION
+-- ---------------------------------------------------------------------------
+
+--# query_collect_basic
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN COLLECT(d.label) AS labels
+
+--# query_collect_by_category
+MATCH d: DataPoint WHERE d.category = "alpha" AND d.is_active = true
+RETURN COLLECT(d.label) AS alpha_labels
+
+--# query_collect_with_limit
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN COLLECT(d.label) [limit: 3] AS limited_labels
+
+--# query_collect_float_values
+MATCH d: DataPoint WHERE d.category = "alpha" AND d.is_active = true
+RETURN COLLECT(d.float_value) AS values
+
+--# query_collect_grouped
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN d.category, COLLECT(d.label) AS labels
+ORDER BY d.category
+
+-- ---------------------------------------------------------------------------
+-- COUNT DISTINCT
+-- ---------------------------------------------------------------------------
+
+--# query_count_distinct_category
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN COUNT(DISTINCT d.category) AS unique_categories
+
+--# query_count_distinct_int
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN COUNT(DISTINCT d.int_value) AS unique_ints
+
+--# query_count_distinct_vs_count
+MATCH d: DataPoint WHERE d.category = "alpha" AND d.is_active = true
+RETURN COUNT(d) AS total, COUNT(DISTINCT d.int_value) AS unique_values
+
+-- ---------------------------------------------------------------------------
+-- SUM/AVG WITH FLOAT
+-- ---------------------------------------------------------------------------
+
+--# query_sum_float
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN SUM(d.float_value) AS total
+
+--# query_sum_float_by_category
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN d.category, SUM(d.float_value) AS total
+ORDER BY d.category
+
+--# query_avg_float
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN AVG(d.float_value) AS average
+
+--# query_avg_float_by_category
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN d.category, AVG(d.float_value) AS average
+ORDER BY d.category
+
+-- ---------------------------------------------------------------------------
+-- MIN/MAX WITH STRING (Lexicographic)
+-- ---------------------------------------------------------------------------
+
+--# query_min_string
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN MIN(d.label) AS first_label
+
+--# query_max_string
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN MAX(d.label) AS last_label
+
+--# query_min_max_string_by_category
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN d.category, MIN(d.label) AS first, MAX(d.label) AS last
+ORDER BY d.category
+
+-- ---------------------------------------------------------------------------
+-- MIN/MAX WITH FLOAT
+-- ---------------------------------------------------------------------------
+
+--# query_min_float
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN MIN(d.float_value) AS minimum
+
+--# query_max_float
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN MAX(d.float_value) AS maximum
+
+--# query_min_max_range
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN MIN(d.float_value) AS min_val, MAX(d.float_value) AS max_val,
+       MAX(d.float_value) - MIN(d.float_value) AS range
+
+-- ---------------------------------------------------------------------------
+-- AGGREGATION ON EMPTY SET
+-- ---------------------------------------------------------------------------
+
+--# query_count_empty
+MATCH d: DataPoint WHERE d.category = "nonexistent"
+RETURN COUNT(d) AS count
+
+--# query_sum_empty
+MATCH d: DataPoint WHERE d.category = "nonexistent"
+RETURN SUM(d.float_value) AS total
+
+--# query_avg_empty
+MATCH d: DataPoint WHERE d.category = "nonexistent"
+RETURN AVG(d.float_value) AS average
+
+--# query_min_empty
+MATCH d: DataPoint WHERE d.category = "nonexistent"
+RETURN MIN(d.float_value) AS minimum
+
+--# query_max_empty
+MATCH d: DataPoint WHERE d.category = "nonexistent"
+RETURN MAX(d.float_value) AS maximum
+
+--# query_collect_empty
+MATCH d: DataPoint WHERE d.category = "nonexistent"
+RETURN COLLECT(d.label) AS labels
+
+-- ---------------------------------------------------------------------------
+-- COMBINED AGGREGATIONS
+-- ---------------------------------------------------------------------------
+
+--# query_all_aggregations
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN COUNT(d) AS total,
+       COUNT(DISTINCT d.category) AS categories,
+       SUM(d.float_value) AS sum,
+       AVG(d.float_value) AS avg,
+       MIN(d.float_value) AS min,
+       MAX(d.float_value) AS max
+
+--# query_aggregations_with_grouping
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN d.category,
+       COUNT(d) AS count,
+       SUM(d.float_value) AS sum,
+       AVG(d.float_value) AS avg
+ORDER BY d.category

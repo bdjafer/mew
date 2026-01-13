@@ -1,0 +1,118 @@
+-- ===========================================================================
+-- OPERATIONS: String Function Tests for Bookmarks
+-- Tests string functions on bookmark data
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SEED DATA
+-- ---------------------------------------------------------------------------
+
+--# seed_string_test_data
+SPAWN b1: Bookmark {
+  url = "https://example.com/path",
+  title = "Example Website",
+  description = "A sample description"
+}
+SPAWN b2: Bookmark {
+  url = "https://github.com/user/repo",
+  title = "GitHub Repository",
+  description = "Source code repository"
+}
+SPAWN b3: Bookmark {
+  url = "ftp://files.example.com",
+  title = "FTP Server",
+  description = "File transfer server"
+}
+SPAWN b4: Bookmark {
+  url = "https://docs.example.com",
+  title = "  Untrimmed Title  ",
+  description = "Has whitespace"
+}
+
+-- ---------------------------------------------------------------------------
+-- LENGTH FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_title_length
+MATCH b: Bookmark WHERE b.title = "Example Website"
+RETURN length(b.title) AS len
+
+--# query_by_title_length
+MATCH b: Bookmark WHERE length(b.title) > 15
+RETURN COUNT(b) AS count
+
+-- ---------------------------------------------------------------------------
+-- STARTS_WITH FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_https_urls
+MATCH b: Bookmark WHERE starts_with(b.url, "https://")
+RETURN COUNT(b) AS count
+
+--# query_non_https_urls
+MATCH b: Bookmark WHERE NOT starts_with(b.url, "https://")
+RETURN COUNT(b) AS count
+
+-- ---------------------------------------------------------------------------
+-- ENDS_WITH FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_urls_with_repo
+MATCH b: Bookmark WHERE ends_with(b.url, "/repo")
+RETURN b.title
+
+--# query_urls_ending_com
+MATCH b: Bookmark WHERE ends_with(b.url, ".com")
+RETURN COUNT(b) AS count
+
+-- ---------------------------------------------------------------------------
+-- CONTAINS FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_urls_containing_example
+MATCH b: Bookmark WHERE contains(b.url, "example")
+RETURN COUNT(b) AS count
+
+--# query_titles_containing_server
+MATCH b: Bookmark WHERE contains(b.title, "Server")
+RETURN COUNT(b) AS count
+
+-- ---------------------------------------------------------------------------
+-- LOWER/UPPER FUNCTIONS
+-- ---------------------------------------------------------------------------
+
+--# query_lower_title
+MATCH b: Bookmark WHERE b.title = "GitHub Repository"
+RETURN lower(b.title) AS lowered
+
+--# query_upper_title
+MATCH b: Bookmark WHERE b.title = "GitHub Repository"
+RETURN upper(b.title) AS uppered
+
+--# query_case_insensitive_search
+MATCH b: Bookmark WHERE lower(b.title) = "github repository"
+RETURN COUNT(b) AS count
+
+-- ---------------------------------------------------------------------------
+-- TRIM FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_trim_title
+MATCH b: Bookmark WHERE contains(b.title, "Untrimmed")
+RETURN trim(b.title) AS trimmed
+
+--# query_trimmed_length
+MATCH b: Bookmark WHERE contains(b.title, "Untrimmed")
+RETURN length(trim(b.title)) AS len
+
+-- ---------------------------------------------------------------------------
+-- STRING CONCATENATION
+-- ---------------------------------------------------------------------------
+
+--# query_concat_title_desc
+MATCH b: Bookmark WHERE b.title = "Example Website"
+RETURN b.title ++ " - " ++ b.description AS combined
+
+--# query_build_full_reference
+MATCH b: Bookmark WHERE b.title = "GitHub Repository"
+RETURN "[" ++ b.title ++ "](" ++ b.url ++ ")" AS markdown_link

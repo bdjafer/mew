@@ -1,127 +1,18 @@
 //! Level 2 - Tasks integration tests.
 //!
 //! These tests run against the tasks ontology with various scenarios.
-//! Focus areas: Transitive patterns (+/*), NOT EXISTS, UNLINK operations,
-//! bulk KILL, SPAWN RETURNING, SET multiple attributes, blocking semantics
+//! Focus areas: UNLINK operations, bulk KILL, SPAWN RETURNING, SET multiple
+//! attributes, blocking semantics with [no_self]
+//!
+//! Test modules:
+//! - unlink: UNLINK operations for removing edges without deleting nodes
+//! - bulk_mutations: SPAWN RETURNING, SET multiple attributes, bulk KILL
+//! - blocking: [no_self] constraint on blocks edge, blocking chains
+//! - anonymous_targets: Use of `_` for anonymous pattern matching
+//! - link_if_not_exists: Idempotent edge creation with LINK IF NOT EXISTS
+//! - parameterized_queries: $param syntax, PREPARE/EXECUTE statements
 
 use mew_tests::prelude::*;
-
-mod transitive {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("transitive")
-            .ontology("level-2/tasks/ontology.mew")
-            .seed("level-2/tasks/seeds/populated.mew")
-            .operations("level-2/tasks/operations/transitive.mew")
-            // Setup chain: A -> B -> C -> D -> E
-            .step("test_setup_trans_task_a", |a| a.created(1))
-            .step("test_setup_trans_task_b", |a| a.created(1))
-            .step("test_setup_trans_task_c", |a| a.created(1))
-            .step("test_setup_trans_task_d", |a| a.created(1))
-            .step("test_setup_trans_task_e", |a| a.created(1))
-            .step("test_setup_chain_links", |a| a.linked(4))
-            // Transitive closure (+): A blocks B, C, D, E = 4
-            .step("test_transitive_one_hop", |a| a.rows(4))
-            // From middle: C blocks D, E = 2
-            .step("test_transitive_from_middle", |a| a.rows(2))
-            // Reverse: who blocks E? A, B, C, D = 4
-            .step("test_transitive_reverse_find_all_blockers", |a| a.rows(4))
-            // Reflexive transitive (*): A + B, C, D, E = 5
-            .step("test_reflexive_transitive_includes_self", |a| a.rows(5))
-            // From leaf: E only = 1
-            .step("test_reflexive_from_leaf", |a| a.rows(1))
-            // Transitive with status filter: todo tasks blocked by A = 3 (C, D, E)
-            .step("test_transitive_with_status_filter", |a| a.rows(3))
-            // Transitive with priority filter: done blockers of E = 1 (A)
-            .step("test_transitive_with_priority_filter", |a| a.rows(1))
-            // Count all blocked by A = 4
-            .step("test_count_all_blocked_tasks", |a| a.scalar("blocked_count", 4i64))
-            // Count blockers per task
-            .step("test_count_blockers_per_task", |a| a.rows_gte(4))
-            // Setup branch task
-            .step("test_setup_branch_task", |a| a.created(1))
-            .step("test_setup_branch_link", |a| a.linked(1))
-            // Transitive with branch: A blocks B, C, D, E, Branch = 5
-            .step("test_transitive_with_branch", |a| a.rows(5))
-            // Find longest chain
-            .step("test_find_longest_blocking_chain", |a| a.rows_gte(1))
-            // Tasks with no transitive blockers
-            .step("test_tasks_with_no_transitive_blockers", |a| a.rows_gte(1))
-            // Cleanup
-            .step("test_cleanup_transitive_tasks", |a| a.deleted(6))
-    }
-
-    #[test]
-    fn test_transitive_patterns() {
-        scenario().run().unwrap();
-    }
-}
-
-mod not_exists {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("not_exists")
-            .ontology("level-2/tasks/ontology.mew")
-            .seed("level-2/tasks/seeds/populated.mew")
-            .operations("level-2/tasks/operations/not_exists.mew")
-            // Setup untagged tasks
-            .step("test_setup_untagged_task", |a| a.created(1))
-            .step("test_setup_orphan_task", |a| a.created(1))
-            .step("test_setup_isolated_task", |a| a.created(1))
-            // Tasks without tags: untagged, orphan, isolated + done_task, review_task >= 3
-            .step("test_tasks_without_tags", |a| a.rows_gte(3))
-            // Tasks without subtasks >= 5
-            .step("test_tasks_without_subtasks", |a| a.rows_gte(5))
-            // Tasks not blocking anything >= 5
-            .step("test_tasks_not_blocking_others", |a| a.rows_gte(5))
-            // Tasks not blocked >= 4
-            .step("test_tasks_not_blocked", |a| a.rows_gte(4))
-            // Todo tasks without tags >= 3
-            .step("test_todo_tasks_without_tags", |a| a.rows_gte(3))
-            // High priority without blockers >= 1
-            .step("test_high_priority_tasks_without_blockers", |a| a.rows_gte(1))
-            // Tasks without urgent tags >= 5
-            .step("test_tasks_without_urgent_tags", |a| a.rows_gte(5))
-            // Tasks without completed subtasks >= 1
-            .step("test_tasks_without_completed_subtasks", |a| a.rows_gte(1))
-            // Tasks with no transitive dependencies >= 3
-            .step("test_tasks_with_no_transitive_dependencies", |a| a.rows_gte(3))
-            // Setup unused tag
-            .step("test_setup_unused_tag", |a| a.created(1))
-            // Unused tags >= 1
-            .step("test_unused_tags", |a| a.rows_gte(1))
-            // Tasks without tags or subtasks >= 3
-            .step("test_tasks_without_tags_or_subtasks", |a| a.rows_gte(3))
-            // Tasks not related to API task >= 3
-            .step("test_tasks_not_related_to_api_task", |a| a.rows_gte(3))
-            // Setup subtasks with attributes
-            .step("test_setup_blocking_subtask", |a| a.created(1))
-            .step("test_setup_nonblocking_subtask", |a| a.created(1))
-            // Non-blocking subtasks >= 2
-            .step("test_subtasks_that_are_not_blocking", |a| a.rows_gte(2))
-            // Truly isolated tasks >= 3
-            .step("test_truly_isolated_tasks", |a| a.rows_gte(3))
-            // Development tasks without dev tag >= 0
-            .step("test_development_tasks_without_dev_tag", |a| a.rows_gte(0))
-            // Urgent priority without urgent tag >= 1
-            .step("test_urgent_priority_without_urgent_tag", |a| a.rows_gte(1))
-            // Count untagged tasks >= 3
-            .step("test_count_untagged_tasks", |a| a.rows(1))
-            // Count orphaned subtasks >= 2
-            .step("test_count_orphaned_subtasks", |a| a.rows(1))
-            // Cleanup
-            .step("test_cleanup_test_entities", |a| a.deleted(3))
-            .step("test_cleanup_test_subtasks", |a| a.deleted(2))
-            .step("test_cleanup_unused_tag", |a| a.deleted(1))
-    }
-
-    #[test]
-    fn test_not_exists_patterns() {
-        scenario().run().unwrap();
-    }
-}
 
 mod unlink {
     use super::*;
@@ -285,10 +176,10 @@ mod blocking {
             .step("test_create_simple_block", |a| a.linked(1))
             // Verify block created
             .step("test_verify_block_created", |a| a.rows(1))
-            // Task cannot block itself
+            // Task cannot block itself (no_self constraint)
             .step("test_task_cannot_block_itself", |a| a.error("self"))
             // Verify no self block = 0
-            .step("test_verify_no_self_block_created", |a| a.scalar("block_count", 0i64))
+            .step("test_verify_no_self_block_created", |a| a.scalar("self_blocks", 0i64))
             // Create blocking chain
             .step("test_create_blocking_chain", |a| a.linked(2))
             // Verify blocking chain
@@ -297,9 +188,9 @@ mod blocking {
             .step("test_find_all_blocked_by_a", |a| a.rows(1))
             // Find tasks that block D = 1 (C)
             .step("test_find_tasks_that_block_d", |a| a.rows(1))
-            // Tasks not blocking anything = 1 (D)
+            // Tasks not blocking anything = 1 (D) - using OPTIONAL MATCH
             .step("test_find_tasks_not_blocking_anything", |a| a.rows(1))
-            // Tasks not blocked = 1 (A)
+            // Tasks not blocked = 1 (A) - using OPTIONAL MATCH
             .step("test_find_tasks_not_blocked", |a| a.rows(1))
             // Setup circular tasks
             .step("test_setup_circular_tasks", |a| a.created(2))
@@ -322,11 +213,7 @@ mod blocking {
             // Unlink one blocker
             .step("test_unlink_one_blocker", |a| a.unlinked(1))
             // Verify one blocker removed = 2
-            .step("test_verify_one_blocker_removed", |a| a.scalar("blocker_count", 2i64))
-            // Find all transitively blocked >= 3
-            .step("test_find_all_transitively_blocked", |a| a.rows_gte(3))
-            // Find root blockers = 1 (A)
-            .step("test_find_root_blockers", |a| a.rows(1))
+            .step("test_verify_one_blocker_removed", |a| a.scalar("remaining_blockers", 2i64))
             // High priority blocked by low priority >= 1
             .step("test_high_priority_blocked_by_low_priority", |a| a.rows_gte(1))
             // Count blocking relationships >= 5
@@ -337,6 +224,175 @@ mod blocking {
 
     #[test]
     fn test_blocking_edge_semantics() {
+        scenario().run().unwrap();
+    }
+}
+
+mod anonymous_targets {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("anonymous_targets")
+            .ontology("level-2/tasks/ontology.mew")
+            .seed("level-2/tasks/seeds/populated.mew")
+            .operations("level-2/tasks/operations/anonymous_targets.mew")
+            // Setup tasks and tags
+            .step("test_setup_task_alpha", |a| a.created(1))
+            .step("test_setup_task_beta", |a| a.created(1))
+            .step("test_setup_task_gamma", |a| a.created(1))
+            .step("test_setup_task_orphan", |a| a.created(1))
+            .step("test_setup_tags", |a| a.created(2))
+            .step("test_setup_links", |a| a.linked(4))
+            // Anonymous target: Find tasks with ANY tag
+            .step("test_tasks_with_any_tag", |a| a.rows(2))
+            .step("test_tasks_with_any_tag_distinct", |a| a.rows(2))
+            // Anonymous target: Find tasks that block ANYTHING
+            .step("test_tasks_that_block_anything", |a| a.rows(1))
+            // Anonymous target: Find tasks blocked by ANYTHING
+            .step("test_tasks_blocked_by_anything", |a| a.rows(1))
+            // Anonymous target: Find tags used by ANY task
+            .step("test_tags_used_by_any_task", |a| a.rows(2))
+            // NOT EXISTS with anonymous: Find tasks WITHOUT any tag
+            .step("test_tasks_without_any_tag", |a| a.rows(2))
+            // NOT EXISTS with anonymous: Find tasks that DON'T block anything
+            .step("test_tasks_that_dont_block_anything", |a| a.rows(3))
+            // NOT EXISTS with anonymous: Find tasks not blocked by anything
+            .step("test_tasks_not_blocked_by_anything", |a| a.rows(3))
+            // Combined patterns with anonymous
+            .step("test_tasks_with_tag_but_not_blocking", |a| a.rows(1))
+            .step("test_tasks_blocking_but_not_tagged_with_review", |a| a.rows(1))
+            // Count with anonymous target
+            .step("test_count_tasks_with_any_relationship", |a| a.rows(1))
+            // Multiple anonymous targets
+            .step("test_multiple_anonymous_in_path", |a| a.rows_gte(1))
+            // Cleanup
+            .step("test_cleanup_anonymous_tasks", |a| a.deleted(4))
+            .step("test_cleanup_anonymous_tags", |a| a.deleted(2))
+    }
+
+    #[test]
+    fn test_anonymous_target_patterns() {
+        scenario().run().unwrap();
+    }
+}
+
+mod link_if_not_exists {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("link_if_not_exists")
+            .ontology("level-2/tasks/ontology.mew")
+            .seed("level-2/tasks/seeds/populated.mew")
+            .operations("level-2/tasks/operations/link_if_not_exists.mew")
+            // Setup
+            .step("test_setup_task_parent", |a| a.created(1))
+            .step("test_setup_task_child", |a| a.created(1))
+            .step("test_setup_link_tag", |a| a.created(1))
+            .step("test_setup_link_subtask", |a| a.created(1))
+            // Basic LINK IF NOT EXISTS: Creates edge when none exists
+            .step("test_link_if_not_exists_creates_edge", |a| a.linked(1))
+            .step("test_verify_edge_created", |a| a.scalar("edge_count", 1i64))
+            // Idempotency: Second LINK IF NOT EXISTS is no-op
+            .step("test_link_if_not_exists_idempotent", |a| a.linked(0))
+            .step("test_verify_still_one_edge", |a| a.scalar("edge_count", 1i64))
+            // LINK IF NOT EXISTS: Multiple different targets
+            .step("test_setup_second_tag", |a| a.created(1))
+            .step("test_link_if_not_exists_different_target", |a| a.linked(1))
+            .step("test_verify_two_different_edges", |a| a.scalar("tag_count", 2i64))
+            // LINK IF NOT EXISTS: On blocks edge
+            .step("test_link_blocks_if_not_exists", |a| a.linked(1))
+            .step("test_verify_blocks_created", |a| a.scalar("block_count", 1i64))
+            .step("test_blocks_idempotent", |a| a.linked(0))
+            .step("test_verify_still_one_block", |a| a.scalar("block_count", 1i64))
+            // LINK IF NOT EXISTS: With subtask_of edge
+            .step("test_link_subtask_if_not_exists", |a| a.linked(1))
+            .step("test_verify_subtask_linked", |a| a.scalar("subtask_count", 1i64))
+            .step("test_subtask_idempotent", |a| a.linked(0))
+            .step("test_verify_still_one_subtask_link", |a| a.scalar("subtask_count", 1i64))
+            // LINK IF NOT EXISTS: Multiple sources to same target
+            .step("test_link_child_to_same_tag", |a| a.linked(1))
+            .step("test_verify_multiple_sources_to_tag", |a| a.scalar("task_count", 2i64))
+            // LINK IF NOT EXISTS vs regular LINK
+            .step("test_setup_new_tag_for_comparison", |a| a.created(1))
+            .step("test_regular_link_first", |a| a.linked(1))
+            .step("test_link_if_not_exists_after_regular_link", |a| a.linked(0))
+            .step("test_verify_still_one_comparison_edge", |a| a.scalar("edge_count", 1i64))
+            // LINK IF NOT EXISTS: In a loop (multiple invocations)
+            .step("test_setup_loop_task", |a| a.created(1))
+            .step("test_link_loop_iteration_1", |a| a.linked(1))
+            .step("test_link_loop_iteration_2", |a| a.linked(0))
+            .step("test_link_loop_iteration_3", |a| a.linked(0))
+            .step("test_verify_only_one_edge_after_loop", |a| a.scalar("edge_count", 1i64))
+            // Cleanup
+            .step("test_cleanup_tasks", |a| a.deleted(3))
+            .step("test_cleanup_subtask", |a| a.deleted(1))
+            .step("test_cleanup_tags", |a| a.deleted(3))
+    }
+
+    #[test]
+    fn test_link_if_not_exists_operations() {
+        scenario().run().unwrap();
+    }
+}
+
+mod parameterized_queries {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("parameterized_queries")
+            .ontology("level-2/tasks/ontology.mew")
+            .seed("level-2/tasks/seeds/populated.mew")
+            .operations("level-2/tasks/operations/parameterized_queries.mew")
+            // Setup
+            .step("test_setup_param_tasks", |a| a.created(5))
+            .step("test_setup_param_tags", |a| a.created(2))
+            .step("test_setup_param_links", |a| a.linked(4))
+            // Basic $param in WHERE clause
+            .step("test_param_in_where_string", |a| a.rows(2))
+            .step("test_param_in_where_int", |a| a.rows(3))
+            .step("test_param_in_where_multiple", |a| a.rows(2))
+            // $param in pattern matching
+            .step("test_param_in_tag_filter", |a| a.rows(2))
+            // $param in SPAWN
+            .step("test_param_in_spawn", |a| a.created(1))
+            .step("test_verify_param_spawn", |a| a.rows(1))
+            // $param in SET
+            .step("test_param_in_set", |a| a.modified(1))
+            .step("test_verify_param_set", |a| a.rows(1))
+            // $param in list operations
+            .step("test_param_in_list", |a| a.rows(4))
+            .step("test_param_in_list_titles", |a| a.rows(3))
+            // $param type inference
+            .step("test_param_string_type", |a| a.rows(1))
+            .step("test_param_bool_type", |a| a.created(1))
+            .step("test_verify_param_bool", |a| a.rows(1))
+            // PREPARE / EXECUTE
+            .step("test_prepare_basic_query", |a| a.rows(0))
+            .step("test_execute_prepared_todo", |a| a.rows(2))
+            .step("test_execute_prepared_done", |a| a.rows(1))
+            .step("test_execute_prepared_in_progress", |a| a.rows(2))
+            // PREPARE with multiple parameters
+            .step("test_prepare_multi_param", |a| a.rows(0))
+            .step("test_execute_multi_param_1", |a| a.rows(2))
+            .step("test_execute_multi_param_2", |a| a.rows(1))
+            // PREPARE for mutations
+            .step("test_prepare_update_status", |a| a.rows(0))
+            .step("test_execute_update_status", |a| a.modified(1))
+            .step("test_verify_executed_update", |a| a.rows(1))
+            // DROP PREPARED STATEMENT
+            .step("test_drop_prepared", |a| a.rows(0))
+            .step("test_execute_dropped_should_fail", |a| a.error("not_found"))
+            // Missing parameter error
+            .step("test_missing_param_error", |a| a.error("missing_parameter"))
+            // Cleanup
+            .step("test_cleanup_param_tasks", |a| a.deleted(6))
+            .step("test_cleanup_param_subtask", |a| a.deleted(1))
+            .step("test_cleanup_param_tags", |a| a.deleted(2))
+            .step("test_drop_remaining_prepared", |a| a.rows(0))
+    }
+
+    #[test]
+    fn test_parameterized_query_operations() {
         scenario().run().unwrap();
     }
 }

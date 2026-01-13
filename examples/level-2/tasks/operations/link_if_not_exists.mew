@@ -1,0 +1,265 @@
+-- ===========================================================================
+-- SCENARIO: LINK IF NOT EXISTS
+-- DESCRIPTION: Tests idempotent edge creation with LINK IF NOT EXISTS
+-- FOCUS: Level-2 idempotent linking (unique to this ontology)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP
+-- ---------------------------------------------------------------------------
+
+--# test_setup_task_parent
+SPAWN parent_task: Task {
+  title = "Link Parent Task",
+  status = "todo",
+  priority = 5
+}
+--@ expect:ok
+
+--# test_setup_task_child
+SPAWN child_task: Task {
+  title = "Link Child Task",
+  status = "todo",
+  priority = 3
+}
+--@ expect:ok
+
+--# test_setup_link_tag
+SPAWN link_tag: Tag {
+  name = "link-test-tag",
+  color = "#00FF00"
+}
+--@ expect:ok
+
+--# test_setup_link_subtask
+SPAWN link_subtask: SubTask {
+  title = "Link Test SubTask",
+  priority = 4,
+  is_blocking = true
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- BASIC LINK IF NOT EXISTS: Creates edge when none exists
+-- ---------------------------------------------------------------------------
+
+--# test_link_if_not_exists_creates_edge
+MATCH t: Task, tag: Tag
+WHERE t.title = "Link Parent Task" AND tag.name = "link-test-tag"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_verify_edge_created
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE t.title = "Link Parent Task" AND tag.name = "link-test-tag"
+RETURN count(*) AS edge_count
+--@ expect:rows = 1
+--@ expect:has_row { edge_count = 1 }
+
+-- ---------------------------------------------------------------------------
+-- IDEMPOTENCY: Second LINK IF NOT EXISTS is no-op
+-- ---------------------------------------------------------------------------
+
+--# test_link_if_not_exists_idempotent
+MATCH t: Task, tag: Tag
+WHERE t.title = "Link Parent Task" AND tag.name = "link-test-tag"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_verify_still_one_edge
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE t.title = "Link Parent Task" AND tag.name = "link-test-tag"
+RETURN count(*) AS edge_count
+--@ expect:rows = 1
+--@ expect:has_row { edge_count = 1 }
+
+-- ---------------------------------------------------------------------------
+-- LINK IF NOT EXISTS: Multiple different targets
+-- ---------------------------------------------------------------------------
+
+--# test_setup_second_tag
+SPAWN second_tag: Tag {
+  name = "link-test-tag-2",
+  color = "#FF0000"
+}
+--@ expect:ok
+
+--# test_link_if_not_exists_different_target
+MATCH t: Task, tag: Tag
+WHERE t.title = "Link Parent Task" AND tag.name = "link-test-tag-2"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_verify_two_different_edges
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE t.title = "Link Parent Task"
+RETURN count(tag) AS tag_count
+--@ expect:rows = 1
+--@ expect:has_row { tag_count = 2 }
+
+-- ---------------------------------------------------------------------------
+-- LINK IF NOT EXISTS: On blocks edge
+-- ---------------------------------------------------------------------------
+
+--# test_link_blocks_if_not_exists
+MATCH p: Task, c: Task
+WHERE p.title = "Link Parent Task" AND c.title = "Link Child Task"
+LINK IF NOT EXISTS blocks(p, c)
+--@ expect:ok
+
+--# test_verify_blocks_created
+MATCH p: Task, c: Task, blocks(p, c)
+WHERE p.title = "Link Parent Task" AND c.title = "Link Child Task"
+RETURN count(*) AS block_count
+--@ expect:rows = 1
+--@ expect:has_row { block_count = 1 }
+
+--# test_blocks_idempotent
+MATCH p: Task, c: Task
+WHERE p.title = "Link Parent Task" AND c.title = "Link Child Task"
+LINK IF NOT EXISTS blocks(p, c)
+--@ expect:ok
+
+--# test_verify_still_one_block
+MATCH p: Task, c: Task, blocks(p, c)
+WHERE p.title = "Link Parent Task" AND c.title = "Link Child Task"
+RETURN count(*) AS block_count
+--@ expect:rows = 1
+--@ expect:has_row { block_count = 1 }
+
+-- ---------------------------------------------------------------------------
+-- LINK IF NOT EXISTS: With subtask_of edge
+-- ---------------------------------------------------------------------------
+
+--# test_link_subtask_if_not_exists
+MATCH st: SubTask, t: Task
+WHERE st.title = "Link Test SubTask" AND t.title = "Link Parent Task"
+LINK IF NOT EXISTS subtask_of(st, t)
+--@ expect:ok
+
+--# test_verify_subtask_linked
+MATCH st: SubTask, t: Task, subtask_of(st, t)
+WHERE st.title = "Link Test SubTask" AND t.title = "Link Parent Task"
+RETURN count(*) AS subtask_count
+--@ expect:rows = 1
+--@ expect:has_row { subtask_count = 1 }
+
+--# test_subtask_idempotent
+MATCH st: SubTask, t: Task
+WHERE st.title = "Link Test SubTask" AND t.title = "Link Parent Task"
+LINK IF NOT EXISTS subtask_of(st, t)
+--@ expect:ok
+
+--# test_verify_still_one_subtask_link
+MATCH st: SubTask, t: Task, subtask_of(st, t)
+WHERE st.title = "Link Test SubTask" AND t.title = "Link Parent Task"
+RETURN count(*) AS subtask_count
+--@ expect:rows = 1
+--@ expect:has_row { subtask_count = 1 }
+
+-- ---------------------------------------------------------------------------
+-- LINK IF NOT EXISTS: Multiple sources to same target
+-- ---------------------------------------------------------------------------
+
+--# test_link_child_to_same_tag
+MATCH t: Task, tag: Tag
+WHERE t.title = "Link Child Task" AND tag.name = "link-test-tag"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_verify_multiple_sources_to_tag
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE tag.name = "link-test-tag"
+RETURN count(t) AS task_count
+--@ expect:rows = 1
+--@ expect:has_row { task_count = 2 }
+
+-- ---------------------------------------------------------------------------
+-- LINK IF NOT EXISTS vs regular LINK
+-- ---------------------------------------------------------------------------
+
+--# test_setup_new_tag_for_comparison
+SPAWN comparison_tag: Tag {
+  name = "comparison-tag",
+  color = "#0000FF"
+}
+--@ expect:ok
+
+--# test_regular_link_first
+MATCH t: Task, tag: Tag
+WHERE t.title = "Link Parent Task" AND tag.name = "comparison-tag"
+LINK tagged(t, tag)
+--@ expect:ok
+
+--# test_link_if_not_exists_after_regular_link
+MATCH t: Task, tag: Tag
+WHERE t.title = "Link Parent Task" AND tag.name = "comparison-tag"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_verify_still_one_comparison_edge
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE t.title = "Link Parent Task" AND tag.name = "comparison-tag"
+RETURN count(*) AS edge_count
+--@ expect:rows = 1
+--@ expect:has_row { edge_count = 1 }
+
+-- ---------------------------------------------------------------------------
+-- LINK IF NOT EXISTS: In a loop (multiple invocations)
+-- ---------------------------------------------------------------------------
+
+--# test_setup_loop_task
+SPAWN loop_task: Task {
+  title = "Loop Task",
+  status = "todo",
+  priority = 2
+}
+--@ expect:ok
+
+--# test_link_loop_iteration_1
+MATCH t: Task, tag: Tag
+WHERE t.title = "Loop Task" AND tag.name = "link-test-tag"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_link_loop_iteration_2
+MATCH t: Task, tag: Tag
+WHERE t.title = "Loop Task" AND tag.name = "link-test-tag"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_link_loop_iteration_3
+MATCH t: Task, tag: Tag
+WHERE t.title = "Loop Task" AND tag.name = "link-test-tag"
+LINK IF NOT EXISTS tagged(t, tag)
+--@ expect:ok
+
+--# test_verify_only_one_edge_after_loop
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE t.title = "Loop Task" AND tag.name = "link-test-tag"
+RETURN count(*) AS edge_count
+--@ expect:rows = 1
+--@ expect:has_row { edge_count = 1 }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_tasks
+MATCH t: Task
+WHERE t.title IN ["Link Parent Task", "Link Child Task", "Loop Task"]
+KILL t
+--@ expect:ok
+
+--# test_cleanup_subtask
+MATCH st: SubTask
+WHERE st.title = "Link Test SubTask"
+KILL st
+--@ expect:ok
+
+--# test_cleanup_tags
+MATCH tag: Tag
+WHERE tag.name IN ["link-test-tag", "link-test-tag-2", "comparison-tag"]
+KILL tag
+--@ expect:ok
+

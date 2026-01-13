@@ -2,7 +2,8 @@
 //!
 //! These tests run against the ecommerce ontology with various scenarios.
 //! Focus areas: Inheritance polymorphism, aggregations, uniqueness constraints,
-//! ORDER BY, LIMIT/OFFSET, DISTINCT, OPTIONAL MATCH
+//! ORDER BY, LIMIT/OFFSET, DISTINCT, OPTIONAL MATCH, type aliases, format validation,
+//! inline SPAWN in LINK
 
 use mew_tests::prelude::*;
 
@@ -178,6 +179,196 @@ mod advanced_queries {
 
     #[test]
     fn test_advanced_query_features() {
+        scenario().run().unwrap();
+    }
+}
+
+mod format_validation {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("format_validation")
+            .ontology("level-2/ecommerce/ontology.mew")
+            .operations("level-2/ecommerce/operations/format_validation.mew")
+            // SKU validation tests
+            .step("test_spawn_valid_sku_short_prefix", |a| a.created(1))
+            .step("test_spawn_valid_sku_long_prefix", |a| a.created(1))
+            .step("test_spawn_invalid_sku_lowercase_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_sku_no_numbers_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_sku_too_long_prefix_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_sku_single_char_prefix_fails", |a| a.error("constraint"))
+            // Slug validation tests
+            .step("test_spawn_valid_slug_lowercase", |a| a.created(1))
+            .step("test_spawn_valid_slug_with_numbers", |a| a.created(1))
+            .step("test_spawn_invalid_slug_uppercase_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_spaces_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_underscore_fails", |a| a.error("constraint"))
+            // Email validation tests
+            .step("test_spawn_valid_email_simple", |a| a.created(1))
+            .step("test_spawn_valid_email_subdomain", |a| a.created(1))
+            .step("test_spawn_invalid_email_no_at_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_email_no_domain_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_email_no_tld_fails", |a| a.error("constraint"))
+            // Enum validation tests
+            .step("test_spawn_valid_status_draft", |a| a.created(1))
+            .step("test_spawn_valid_status_active", |a| a.created(1))
+            .step("test_spawn_valid_status_discontinued", |a| a.created(1))
+            .step("test_spawn_valid_status_out_of_stock", |a| a.created(1))
+            .step("test_spawn_invalid_status_fails", |a| a.error("constraint"))
+            .step("test_set_invalid_status_fails", |a| a.error("constraint"))
+            // Rating validation tests
+            .step("test_spawn_valid_rating_min", |a| a.created(1))
+            .step("test_spawn_valid_rating_max", |a| a.created(1))
+            .step("test_spawn_valid_rating_mid", |a| a.created(1))
+            .step("test_spawn_invalid_rating_zero_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_rating_six_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_rating_negative_fails", |a| a.error("constraint"))
+            // Price validation tests
+            .step("test_spawn_valid_price_zero", |a| a.created(1))
+            .step("test_spawn_valid_price_positive", |a| a.created(1))
+            .step("test_spawn_invalid_price_negative_fails", |a| a.error("constraint"))
+            // SET validation tests
+            .step("test_set_invalid_sku_format_fails", |a| a.error("constraint"))
+            .step("test_set_valid_sku_format_succeeds", |a| a.modified(1))
+            .step("test_verify_sku_updated", |a| a.rows(1))
+            // Cleanup - use rows_gte since we may have partial products created
+            .step("test_cleanup_format_validation", |a| a.rows_gte(0))
+            .step("test_cleanup_categories", |a| a.deleted(2))
+            .step("test_cleanup_customers", |a| a.deleted(2))
+            .step("test_cleanup_reviews", |a| a.deleted(3))
+    }
+
+    #[test]
+    fn test_format_and_constraint_validation() {
+        scenario().run().unwrap();
+    }
+}
+
+mod inline_spawn_link {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("inline_spawn_link")
+            .ontology("level-2/ecommerce/ontology.mew")
+            .operations("level-2/ecommerce/operations/inline_spawn_link.mew")
+            // Setup
+            .step("test_setup_base_product", |a| a.created(1))
+            .step("test_setup_base_category", |a| a.created(1))
+            .step("test_setup_base_customer", |a| a.created(1))
+            // Inline spawn review
+            .step("test_inline_spawn_review_in_link", |a| a.created(1).linked(2))
+            .step("test_verify_inline_review_created", |a| a.rows(1))
+            .step("test_verify_inline_review_linked_to_customer", |a| a.rows(1))
+            // Inline spawn image
+            .step("test_inline_spawn_image_in_link", |a| a.created(1).linked(1))
+            .step("test_verify_inline_image_created", |a| a.rows(1))
+            // Inline spawn category
+            .step("test_inline_spawn_category_in_link", |a| a.created(1).linked(1))
+            .step("test_verify_inline_category_created", |a| a.rows(1))
+            // Multiple inline spawns
+            .step("test_setup_product_for_multiple_inline", |a| a.created(1))
+            .step("test_multiple_inline_spawns", |a| a.created(3).linked(3))
+            .step("test_verify_multiple_inline_images", |a| a.scalar("image_count", 3i64))
+            .step("test_verify_multiple_inline_positions", |a| a.rows(3))
+            // Inline spawn with existing target
+            .step("test_inline_spawn_link_to_existing_category", |a| a.created(1).linked(1))
+            .step("test_verify_inline_product_linked_to_existing", |a| a.rows(1))
+            // Chained operations
+            .step("test_inline_spawn_with_chain", |a| a.created(3).linked(3))
+            .step("test_verify_chained_operations", |a| a.rows(1))
+            // Related products
+            .step("test_inline_spawn_related_product", |a| a.created(1).linked(1))
+            .step("test_verify_related_product_created", |a| a.rows(1))
+            // Subtypes
+            .step("test_inline_spawn_physical_product_in_link", |a| a.created(1).linked(1))
+            .step("test_verify_inline_physical_product", |a| a.rows(1))
+            .step("test_inline_spawn_digital_product_in_link", |a| a.created(1).linked(1))
+            .step("test_verify_inline_digital_product", |a| a.rows(1))
+            // Cleanup
+            .step("test_cleanup_inline_products", |a| a.rows_gte(0))
+            .step("test_cleanup_inline_categories", |a| a.deleted(2))
+            .step("test_cleanup_inline_customer", |a| a.deleted(1))
+    }
+
+    #[test]
+    fn test_inline_spawn_in_link() {
+        scenario().run().unwrap();
+    }
+}
+
+mod type_aliases {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("type_aliases")
+            .ontology("level-2/ecommerce/ontology.mew")
+            .operations("level-2/ecommerce/operations/type_aliases.mew")
+            // SKU alias tests
+            .step("test_sku_alias_valid_short", |a| a.created(1))
+            .step("test_sku_alias_valid_long", |a| a.created(1))
+            .step("test_sku_alias_rejects_lowercase", |a| a.error("constraint"))
+            .step("test_sku_alias_rejects_no_dash", |a| a.error("constraint"))
+            .step("test_sku_alias_rejects_too_few_numbers", |a| a.error("constraint"))
+            // Price alias tests
+            .step("test_price_alias_valid_zero", |a| a.created(1))
+            .step("test_price_alias_valid_positive", |a| a.created(1))
+            .step("test_price_alias_rejects_negative", |a| a.error("constraint"))
+            .step("test_price_alias_in_subtype", |a| a.created(1))
+            .step("test_price_alias_subtype_negative_fails", |a| a.error("constraint"))
+            // Rating alias tests
+            .step("test_setup_product_for_rating", |a| a.created(1))
+            .step("test_rating_alias_valid_min", |a| a.created(1))
+            .step("test_rating_alias_valid_max", |a| a.created(1))
+            .step("test_rating_alias_valid_mid", |a| a.created(1))
+            .step("test_rating_alias_rejects_zero", |a| a.error("constraint"))
+            .step("test_rating_alias_rejects_six", |a| a.error("constraint"))
+            .step("test_rating_alias_rejects_negative", |a| a.error("constraint"))
+            // Status alias tests
+            .step("test_status_alias_valid_draft", |a| a.created(1))
+            .step("test_status_alias_valid_active", |a| a.created(1))
+            .step("test_status_alias_valid_discontinued", |a| a.created(1))
+            .step("test_status_alias_valid_out_of_stock", |a| a.created(1))
+            .step("test_status_alias_rejects_invalid", |a| a.error("constraint"))
+            .step("test_status_alias_rejects_empty", |a| a.error("constraint"))
+            // Update operations
+            .step("test_set_valid_status", |a| a.modified(1))
+            .step("test_verify_status_updated", |a| a.rows(1))
+            .step("test_set_invalid_status_fails", |a| a.error("constraint"))
+            .step("test_set_valid_price", |a| a.modified(1))
+            .step("test_set_invalid_price_fails", |a| a.error("constraint"))
+            // Query tests
+            .step("test_query_by_status_alias", |a| a.rows_gte(1))
+            .step("test_query_by_price_range", |a| a.rows_gte(2))
+            .step("test_query_reviews_by_rating", |a| a.rows_gte(2))
+            // Inheritance tests
+            .step("test_physical_product_inherits_price_alias", |a| a.created(1))
+            .step("test_digital_product_inherits_price_alias", |a| a.created(1))
+            .step("test_physical_product_price_constraint_enforced", |a| a.error("constraint"))
+            .step("test_digital_product_status_constraint_enforced", |a| a.error("constraint"))
+            // Length constraint tests
+            .step("test_name_length_valid_short", |a| a.created(1))
+            .step("test_name_length_valid_medium", |a| a.created(1))
+            .step("test_name_length_empty_fails", |a| a.error("constraint"))
+            .step("test_name_length_too_long_fails", |a| a.error("constraint"))
+            // Review title length tests
+            .step("test_review_title_valid_min", |a| a.created(1))
+            .step("test_review_title_valid_max", |a| a.created(1))
+            .step("test_review_title_too_short_fails", |a| a.error("constraint"))
+            .step("test_review_title_too_long_fails", |a| a.error("constraint"))
+            .step("test_review_title_null_allowed", |a| a.created(1))
+            // Cleanup
+            .step("test_cleanup_sku_products", |a| a.deleted(2))
+            .step("test_cleanup_price_products", |a| a.rows_gte(0))
+            .step("test_cleanup_rating_products", |a| a.deleted(1))
+            .step("test_cleanup_status_products", |a| a.deleted(4))
+            .step("test_cleanup_physical_products", |a| a.deleted(1))
+            .step("test_cleanup_digital_products", |a| a.deleted(1))
+            .step("test_cleanup_length_products", |a| a.deleted(2))
+            .step("test_cleanup_reviews", |a| a.rows_gte(0))
+    }
+
+    #[test]
+    fn test_type_alias_constraints() {
         scenario().run().unwrap();
     }
 }

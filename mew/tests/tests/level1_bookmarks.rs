@@ -259,6 +259,45 @@ mod queries {
 }
 
 
+mod string_functions {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("string_functions")
+            .ontology("level-1/bookmarks/ontology.mew")
+            .operations("level-1/bookmarks/operations/string_functions.mew")
+            // Seed data
+            .step("seed_string_test_data", |a| a.created(4))
+            // length() tests
+            .step("query_title_length", |a| a.scalar("len", 15i64))
+            .step("query_by_title_length", |a| a.scalar("count", 2i64))
+            // starts_with() tests
+            .step("query_https_urls", |a| a.scalar("count", 3i64))
+            .step("query_non_https_urls", |a| a.scalar("count", 1i64))
+            // ends_with() tests
+            .step("query_urls_with_repo", |a| a.rows(1))
+            .step("query_urls_ending_com", |a| a.scalar("count", 2i64))
+            // contains() tests
+            .step("query_urls_containing_example", |a| a.scalar("count", 3i64))
+            .step("query_titles_containing_server", |a| a.scalar("count", 1i64))
+            // lower/upper tests
+            .step("query_lower_title", |a| a.first(row_str! { "lowered" => "github repository" }))
+            .step("query_upper_title", |a| a.first(row_str! { "uppered" => "GITHUB REPOSITORY" }))
+            .step("query_case_insensitive_search", |a| a.scalar("count", 1i64))
+            // trim() tests
+            .step("query_trim_title", |a| a.first(row_str! { "trimmed" => "Untrimmed Title" }))
+            .step("query_trimmed_length", |a| a.scalar("len", 15i64))
+            // Concatenation tests
+            .step("query_concat_title_desc", |a| a.rows(1))
+            .step("query_build_full_reference", |a| a.rows(1))
+    }
+
+    #[test]
+    fn test_string_functions_on_bookmarks() {
+        scenario().run().unwrap();
+    }
+}
+
 mod errors_comprehensive {
     use super::*;
 

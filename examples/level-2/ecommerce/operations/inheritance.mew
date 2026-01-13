@@ -9,7 +9,7 @@
 -- ---------------------------------------------------------------------------
 
 --# test_query_all_products
-MATCH (p:Product)
+MATCH p: Product
 RETURN p.sku, p.name, p.price
 ORDER BY p.sku
 
@@ -18,12 +18,12 @@ ORDER BY p.sku
 -- ---------------------------------------------------------------------------
 
 --# test_query_physical_products_only
-MATCH (p:PhysicalProduct)
+MATCH p: PhysicalProduct
 RETURN p.sku, p.name, p.weight_kg
 ORDER BY p.sku
 
 --# test_query_digital_products_only
-MATCH (d:DigitalProduct)
+MATCH d: DigitalProduct
 RETURN d.sku, d.name, d.file_size_mb
 
 -- ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ RETURN d.sku, d.name, d.file_size_mb
 -- ---------------------------------------------------------------------------
 
 --# test_inherited_attributes_on_subtypes
-MATCH (p:PhysicalProduct)
+MATCH p: PhysicalProduct
 WHERE p.price > 200.0
 RETURN p.sku, p.name, p.price, p.weight_kg
 ORDER BY p.price DESC
@@ -50,12 +50,12 @@ SPAWN tablet: PhysicalProduct {
 }
 
 --# test_verify_spawned_subtype_queryable_as_base
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.sku = "COMP-0002"
 RETURN p.name, p.price
 
 --# test_verify_spawned_subtype_queryable_as_subtype
-MATCH (p:PhysicalProduct)
+MATCH p: PhysicalProduct
 WHERE p.sku = "COMP-0002"
 RETURN p.name, p.weight_kg
 
@@ -64,12 +64,12 @@ RETURN p.name, p.weight_kg
 -- ---------------------------------------------------------------------------
 
 --# test_set_inherited_attribute_via_subtype
-MATCH (p:PhysicalProduct)
+MATCH p: PhysicalProduct
 WHERE p.sku = "COMP-0002"
-SET p.price = 449.99
+SET p { price = 449.99 }
 
 --# test_verify_inherited_attribute_updated
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.sku = "COMP-0002"
 RETURN p.price
 
@@ -78,8 +78,8 @@ RETURN p.price
 -- ---------------------------------------------------------------------------
 
 --# test_where_clause_on_subtype_attribute
-MATCH (p:Product)
-WHERE p.weight_kg IS NOT NULL AND p.weight_kg < 1.0
+MATCH p: Product
+WHERE p.weight_kg != null AND p.weight_kg < 1.0
 RETURN p.sku, p.name, p.weight_kg
 ORDER BY p.weight_kg
 
@@ -88,6 +88,6 @@ ORDER BY p.weight_kg
 -- ---------------------------------------------------------------------------
 
 --# test_cleanup_tablet
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.sku = "COMP-0002"
 KILL p

@@ -24,7 +24,7 @@ SPAWN self_test_emp: Employee {
 -- ---------------------------------------------------------------------------
 
 --# test_reports_to_self_should_fail
-MATCH (e:Employee)
+MATCH e: Employee
 WHERE e.employee_id = "SELF001"
 LINK reports_to(e, e)
 --@ expect:error = "NoSelfViolation"
@@ -34,9 +34,9 @@ LINK reports_to(e, e)
 -- ---------------------------------------------------------------------------
 
 --# test_verify_no_self_edge_created
-MATCH (e:Employee)-[r:reports_to]->(e)
+MATCH e: Employee, reports_to(e, e) AS r
 WHERE e.employee_id = "SELF001"
-RETURN COUNT(r) AS self_edges
+RETURN count(r) AS self_edges
 --@ expect:rows = 1
 --@ expect:has_row { self_edges = 0 }
 
@@ -45,13 +45,13 @@ RETURN COUNT(r) AS self_edges
 -- ---------------------------------------------------------------------------
 
 --# test_reports_to_different_employee_succeeds
-MATCH (e:Employee), (m:Manager)
+MATCH e: Employee, m: Manager
 WHERE e.employee_id = "SELF001" AND m.first_name = "Charlie"
 LINK reports_to(e, m)
 --@ expect:ok
 
 --# test_verify_valid_link_created
-MATCH (e:Employee)-[r:reports_to]->(m:Employee)
+MATCH e: Employee, m: Employee, reports_to(e, m)
 WHERE e.employee_id = "SELF001"
 RETURN e.first_name, m.first_name
 --@ expect:rows = 1
@@ -70,15 +70,15 @@ SPAWN self_dept: Department {
 --@ expect:ok
 
 --# test_parent_dept_self_should_fail
-MATCH (d:Department)
+MATCH d: Department
 WHERE d.code = "SELF"
 LINK parent_dept(d, d)
 --@ expect:error = "NoSelfViolation"
 
 --# test_verify_no_parent_dept_self_edge
-MATCH (d:Department)-[r:parent_dept]->(d)
+MATCH d: Department, parent_dept(d, d) AS r
 WHERE d.code = "SELF"
-RETURN COUNT(r) AS self_edges
+RETURN count(r) AS self_edges
 --@ expect:rows = 1
 --@ expect:has_row { self_edges = 0 }
 
@@ -95,15 +95,15 @@ SPAWN self_task: Task {
 --@ expect:ok
 
 --# test_task_blocks_self_should_fail
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title = "Self blocking task"
 LINK blocks(t, t)
 --@ expect:error = "NoSelfViolation"
 
 --# test_verify_no_self_block_edge
-MATCH (t:Task)-[r:blocks]->(t)
+MATCH t: Task, blocks(t, t) AS r
 WHERE t.title = "Self blocking task"
-RETURN COUNT(r) AS self_edges
+RETURN count(r) AS self_edges
 --@ expect:rows = 1
 --@ expect:has_row { self_edges = 0 }
 
@@ -112,9 +112,9 @@ RETURN COUNT(r) AS self_edges
 -- ---------------------------------------------------------------------------
 
 --# test_update_to_create_self_link_should_fail
-MATCH (e1:Employee), (e2:Employee), (m:Manager)
+MATCH e1: Employee, e2: Employee, m: Manager
 WHERE e1.employee_id = "SELF001" AND e2.employee_id = "SELF001" AND m.first_name = "Charlie"
-MATCH (e1)-[r:reports_to]->(m)
+MATCH reports_to(e1, m)
 -- Attempting to change the target to self should fail
 -- Note: This might not be directly testable depending on SET semantics
 -- This is a conceptual test - actual implementation may vary
@@ -125,12 +125,11 @@ MATCH (e1)-[r:reports_to]->(m)
 -- ---------------------------------------------------------------------------
 
 --# test_multiple_employees_reporting_to_same_manager
-MATCH (e1:Employee), (e2:Employee), (m:Manager)
+MATCH e1: Employee, e2: Employee, m: Manager
 WHERE e1.first_name = "Alice" AND e2.first_name = "Bob" AND m.first_name = "Charlie"
-WITH e1, e2, m
-MATCH (e1)-[r1:reports_to]->(m)
-MATCH (e2)-[r2:reports_to]->(m)
-RETURN COUNT(r1) + COUNT(r2) AS total_reports
+MATCH r1: reports_to(e1, m)
+MATCH r2: reports_to(e2, m)
+RETURN count(r1) + count(r2) AS total_reports
 --@ expect:rows = 1
 --@ expect:has_row { total_reports = 2 }
 
@@ -161,19 +160,19 @@ SPAWN circ_emp2: Employee {
 --@ expect:ok
 
 --# test_circular_dependency_allowed
-MATCH (e1:Employee), (e2:Employee)
+MATCH e1: Employee, e2: Employee
 WHERE e1.employee_id = "CIRC001" AND e2.employee_id = "CIRC002"
 LINK reports_to(e1, e2)
 --@ expect:ok
 
 --# test_circular_dependency_reverse_allowed
-MATCH (e1:Employee), (e2:Employee)
+MATCH e1: Employee, e2: Employee
 WHERE e1.employee_id = "CIRC001" AND e2.employee_id = "CIRC002"
 LINK reports_to(e2, e1)
 --@ expect:ok
 
 --# test_verify_circular_dependency_exists
-MATCH (e1:Employee)-[:reports_to]->(e2:Employee)-[:reports_to]->(e1)
+MATCH e1: Employee, e2: Employee, reports_to(e1, e2), reports_to(e2, e1)
 WHERE e1.employee_id = "CIRC001"
 RETURN e1.first_name, e2.first_name
 --@ expect:rows = 1
@@ -184,19 +183,20 @@ RETURN e1.first_name, e2.first_name
 -- ---------------------------------------------------------------------------
 
 --# test_cleanup_self_test_entities
-MATCH (e:Employee)
+MATCH e: Employee
 WHERE e.employee_id IN ["SELF001", "CIRC001", "CIRC002"]
 KILL e
 --@ expect:ok
 
 --# test_cleanup_self_dept
-MATCH (d:Department)
+MATCH d: Department
 WHERE d.code = "SELF"
 KILL d
 --@ expect:ok
 
 --# test_cleanup_self_task
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title = "Self blocking task"
 KILL t
 --@ expect:ok
+

@@ -61,6 +61,19 @@ ontology HumanResources {
     hourly_rate: Float [>= 0]
   }
 
+  --- Mentorship mixin for employees who can mentor others
+  node Mentorship {
+    can_mentor: Bool = true,
+    max_mentees: Int [1..10] = 3,
+    mentoring_areas: String?
+  }
+
+  --- Team lead: employee with mentoring capabilities (multiple inheritance)
+  node TeamLead : Employee, Mentorship {
+    technical_specialty: String [required],
+    team_size: Int [1..20] = 5
+  }
+
   --- A department in the organization
   node Department {
     code: String [required, unique, match: "^[A-Z]{2,5}$"],
@@ -183,6 +196,12 @@ ontology HumanResources {
   --- Course teaches skill
   edge teaches_skill(course: Course, skill: Skill) {
     target_level: SkillLevel = "intermediate"
+  }
+
+  --- Mentoring relationship
+  edge mentors(mentor: TeamLead, mentee: Employee) [no_self] {
+    start_date: Timestamp = now(),
+    focus_area: String?
   }
 
 }

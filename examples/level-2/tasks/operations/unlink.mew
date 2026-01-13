@@ -48,7 +48,7 @@ SPAWN unlink_st: SubTask {
 --@ expect:ok
 
 --# test_setup_create_links
-MATCH (t1:Task), (t2:Task), (t3:Task), (tag:Tag), (st:SubTask)
+MATCH t1: Task, t2: Task, t3: Task, tag: Tag, st: SubTask
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2" AND t3.title = "Unlink Task 3"
 AND tag.name = "unlink_test" AND st.title = "Unlink SubTask"
 LINK tagged(t1, tag)
@@ -64,16 +64,16 @@ LINK subtask_of(st, t1)
 -- ---------------------------------------------------------------------------
 
 --# test_verify_tagged_links_exist
-MATCH (t:Task)-[:tagged]->(tag:Tag)
+MATCH t: Task, tag: Tag, tagged(t, tag)
 WHERE tag.name = "unlink_test"
-RETURN COUNT(t) AS tagged_count
+RETURN count(t) AS tagged_count
 --@ expect:rows = 1
 --@ expect:has_row { tagged_count = 3 }
 
 --# test_verify_blocking_links_exist
-MATCH (t1:Task)-[:blocks]->(t2:Task)
+MATCH t1: Task, t2: Task, blocks(t1, t2)
 WHERE t1.title = "Unlink Task 1" OR t1.title = "Unlink Task 2"
-RETURN COUNT(*) AS blocking_count
+RETURN count(*) AS blocking_count
 --@ expect:rows = 1
 --@ expect:has_row { blocking_count = 2 }
 
@@ -82,22 +82,22 @@ RETURN COUNT(*) AS blocking_count
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_single_tag
-MATCH (t:Task)-[r:tagged]->(tag:Tag)
+MATCH t: Task, tag: Tag, tagged(t, tag) AS r
 WHERE t.title = "Unlink Task 1" AND tag.name = "unlink_test"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_single_unlink
-MATCH (t:Task)-[:tagged]->(tag:Tag)
+MATCH t: Task, tag: Tag, tagged(t, tag)
 WHERE t.title = "Unlink Task 1" AND tag.name = "unlink_test"
-RETURN COUNT(*) AS still_linked
+RETURN count(*) AS still_linked
 --@ expect:rows = 1
 --@ expect:has_row { still_linked = 0 }
 
 --# test_verify_other_links_remain
-MATCH (t:Task)-[:tagged]->(tag:Tag)
+MATCH t: Task, tag: Tag, tagged(t, tag)
 WHERE tag.name = "unlink_test"
-RETURN COUNT(t) AS remaining_count
+RETURN count(t) AS remaining_count
 --@ expect:rows = 1
 --@ expect:has_row { remaining_count = 2 }
 
@@ -106,15 +106,15 @@ RETURN COUNT(t) AS remaining_count
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_all_tags_from_specific_task
-MATCH (t:Task)-[r:tagged]->(:Tag)
+MATCH t: Task, tagged(t, _) AS r
 WHERE t.title = "Unlink Task 2"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_all_tags_unlinked
-MATCH (t:Task)-[:tagged]->(:Tag)
+MATCH t: Task, tagged(t, _)
 WHERE t.title = "Unlink Task 2"
-RETURN COUNT(*) AS tag_count
+RETURN count(*) AS tag_count
 --@ expect:rows = 1
 --@ expect:has_row { tag_count = 0 }
 
@@ -123,22 +123,22 @@ RETURN COUNT(*) AS tag_count
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_blocking_edge
-MATCH (t1:Task)-[r:blocks]->(t2:Task)
+MATCH t1: Task, t2: Task, blocks(t1, t2) AS r
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_blocking_unlinked
-MATCH (t1:Task)-[:blocks]->(t2:Task)
+MATCH t1: Task, t2: Task, blocks(t1, t2)
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2"
-RETURN COUNT(*) AS block_count
+RETURN count(*) AS block_count
 --@ expect:rows = 1
 --@ expect:has_row { block_count = 0 }
 
 --# test_verify_other_blocking_remains
-MATCH (t2:Task)-[:blocks]->(t3:Task)
+MATCH t2: Task, t3: Task, blocks(t2, t3)
 WHERE t2.title = "Unlink Task 2" AND t3.title = "Unlink Task 3"
-RETURN COUNT(*) AS block_count
+RETURN count(*) AS block_count
 --@ expect:rows = 1
 --@ expect:has_row { block_count = 1 }
 
@@ -147,15 +147,15 @@ RETURN COUNT(*) AS block_count
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_subtask
-MATCH (st:SubTask)-[r:subtask_of]->(t:Task)
+MATCH st: SubTask, t: Task, subtask_of(st, t) AS r
 WHERE st.title = "Unlink SubTask"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_subtask_unlinked
-MATCH (st:SubTask)-[:subtask_of]->(:Task)
+MATCH st: SubTask, subtask_of(st, _)
 WHERE st.title = "Unlink SubTask"
-RETURN COUNT(*) AS link_count
+RETURN count(*) AS link_count
 --@ expect:rows = 1
 --@ expect:has_row { link_count = 0 }
 
@@ -164,22 +164,22 @@ RETURN COUNT(*) AS link_count
 -- ---------------------------------------------------------------------------
 
 --# test_recreate_some_tags
-MATCH (t1:Task), (t2:Task), (tag:Tag)
+MATCH t1: Task, t2: Task, tag: Tag
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2" AND tag.name = "unlink_test"
 LINK tagged(t1, tag)
 LINK tagged(t2, tag)
 --@ expect:ok
 
 --# test_unlink_all_tags_from_tag
-MATCH (t:Task)-[r:tagged]->(tag:Tag)
+MATCH t: Task, tag: Tag, tagged(t, tag) AS r
 WHERE tag.name = "unlink_test"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_all_unlinked
-MATCH (t:Task)-[:tagged]->(tag:Tag)
+MATCH t: Task, tag: Tag, tagged(t, tag)
 WHERE tag.name = "unlink_test"
-RETURN COUNT(*) AS remaining
+RETURN count(*) AS remaining
 --@ expect:rows = 1
 --@ expect:has_row { remaining = 0 }
 
@@ -188,16 +188,16 @@ RETURN COUNT(*) AS remaining
 -- ---------------------------------------------------------------------------
 
 --# test_tasks_still_exist_after_unlink
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title IN ["Unlink Task 1", "Unlink Task 2", "Unlink Task 3"]
-RETURN COUNT(t) AS task_count
+RETURN count(t) AS task_count
 --@ expect:rows = 1
 --@ expect:has_row { task_count = 3 }
 
 --# test_tag_still_exists_after_unlink
-MATCH (tag:Tag)
+MATCH tag: Tag
 WHERE tag.name = "unlink_test"
-RETURN COUNT(tag) AS tag_count
+RETURN count(tag) AS tag_count
 --@ expect:rows = 1
 --@ expect:has_row { tag_count = 1 }
 
@@ -238,20 +238,20 @@ SPAWN attr_st2: SubTask {
 --@ expect:ok
 
 --# test_setup_link_subtasks_to_task
-MATCH (t:Task), (st1:SubTask), (st2:SubTask)
+MATCH t: Task, st1: SubTask, st2: SubTask
 WHERE t.title = "Attr Task 1" AND st1.title = "Attr SubTask 1" AND st2.title = "Attr SubTask 2"
 LINK subtask_of(st1, t)
 LINK subtask_of(st2, t)
 --@ expect:ok
 
 --# test_unlink_only_blocking_subtasks
-MATCH (st:SubTask)-[r:subtask_of]->(t:Task)
+MATCH st: SubTask, t: Task, subtask_of(st, t) AS r
 WHERE t.title = "Attr Task 1" AND st.is_blocking = true
 UNLINK r
 --@ expect:ok
 
 --# test_verify_selective_unlink
-MATCH (st:SubTask)-[:subtask_of]->(t:Task)
+MATCH st: SubTask, t: Task, subtask_of(st, t)
 WHERE t.title = "Attr Task 1"
 RETURN st.title, st.is_blocking
 --@ expect:rows = 1
@@ -262,17 +262,17 @@ RETURN st.title, st.is_blocking
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_and_relink
-MATCH (t1:Task), (t2:Task)
+MATCH t1: Task, t2: Task
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2"
-MATCH (t1)-[r:blocks]->(old:Task)
+MATCH old: Task, blocks(t1, old) AS r
 UNLINK r
 LINK blocks(t1, t2)
 --@ expect:ok
 
 --# test_verify_relink
-MATCH (t1:Task)-[:blocks]->(t2:Task)
+MATCH t1: Task, t2: Task, blocks(t1, t2)
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2"
-RETURN COUNT(*) AS new_link_count
+RETURN count(*) AS new_link_count
 --@ expect:rows = 1
 --@ expect:has_row { new_link_count = 1 }
 
@@ -281,9 +281,9 @@ RETURN COUNT(*) AS new_link_count
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_nonexistent_edge
-MATCH (t1:Task), (t2:Task)
+MATCH t1: Task, t2: Task
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 3"
-OPTIONAL MATCH (t1)-[r:blocks]->(t2)
+OPTIONAL MATCH blocks(t1, t2) AS r
 UNLINK r
 --@ expect:ok
 
@@ -292,19 +292,20 @@ UNLINK r
 -- ---------------------------------------------------------------------------
 
 --# test_cleanup_unlink_tasks
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title IN ["Unlink Task 1", "Unlink Task 2", "Unlink Task 3", "Attr Task 1", "Attr Task 2"]
 KILL t
 --@ expect:ok
 
 --# test_cleanup_unlink_subtasks
-MATCH (st:SubTask)
+MATCH st: SubTask
 WHERE st.title IN ["Unlink SubTask", "Attr SubTask 1", "Attr SubTask 2"]
 KILL st
 --@ expect:ok
 
 --# test_cleanup_unlink_tag
-MATCH (tag:Tag)
+MATCH tag: Tag
 WHERE tag.name = "unlink_test"
 KILL tag
 --@ expect:ok
+

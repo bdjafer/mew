@@ -41,26 +41,26 @@ SPAWN ret_task: Task {
 -- ---------------------------------------------------------------------------
 
 --# test_set_multiple_attributes_single_entity
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title = "Returned Task"
-SET t.status = "in_progress", t.priority = 5
+SET t { status = "in_progress", priority = 5 }
 --@ expect:ok
 
 --# test_verify_bulk_set
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title = "Returned Task"
 RETURN t.status, t.priority
 --@ expect:rows = 1
 --@ expect:has_row { status = "in_progress", priority = 5 }
 
 --# test_set_multiple_entities
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title IN ["Bulk 1", "Bulk 2", "Bulk 3"]
-SET t.status = "done"
+SET t { status = "done" }
 --@ expect:ok
 
 --# test_verify_bulk_entity_set
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title IN ["Bulk 1", "Bulk 2", "Bulk 3"]
 RETURN t.title, t.status
 ORDER BY t.title
@@ -70,13 +70,13 @@ ORDER BY t.title
 --@ expect:has_row { title = "Bulk 3", status = "done" }
 
 --# test_set_with_computed_values
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title STARTS WITH "Bulk"
-SET t.priority = t.priority + 1
+SET t { priority = t.priority + 1 }
 --@ expect:ok
 
 --# test_verify_computed_set
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title IN ["Bulk 1", "Bulk 2", "Bulk 3"]
 RETURN t.title, t.priority
 ORDER BY t.title
@@ -98,15 +98,15 @@ SPAWN kill5: Task { title = "Kill 5", status = "done", priority = 1 }
 --@ expect:ok
 
 --# test_bulk_kill_by_status
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title STARTS WITH "Kill" AND t.status = "done"
 KILL t
 --@ expect:ok
 
 --# test_verify_bulk_kill
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title STARTS WITH "Kill"
-RETURN COUNT(t) AS remaining
+RETURN count(t) AS remaining
 --@ expect:rows = 1
 --@ expect:has_row { remaining = 0 }
 
@@ -125,10 +125,10 @@ SPAWN child_kill3: SubTask { title = "Child Kill 3", priority = 3, is_blocking =
 --@ expect:ok
 
 --# test_setup_kill_rels
-MATCH (p:Task), (c1:SubTask), (c2:SubTask), (c3:SubTask)
-WHERE p.title = "Parent Kill" 
-AND c1.title = "Child Kill 1" 
-AND c2.title = "Child Kill 2" 
+MATCH p: Task, c1: SubTask, c2: SubTask, c3: SubTask
+WHERE p.title = "Parent Kill"
+AND c1.title = "Child Kill 1"
+AND c2.title = "Child Kill 2"
 AND c3.title = "Child Kill 3"
 LINK subtask_of(c1, p)
 LINK subtask_of(c2, p)
@@ -136,22 +136,22 @@ LINK subtask_of(c3, p)
 --@ expect:ok
 
 --# test_bulk_kill_children_only
-MATCH (st:SubTask)-[:subtask_of]->(t:Task)
+MATCH st: SubTask, t: Task, subtask_of(st, t)
 WHERE t.title = "Parent Kill"
 KILL st
 --@ expect:ok
 
 --# test_verify_children_killed
-MATCH (st:SubTask)
+MATCH st: SubTask
 WHERE st.title STARTS WITH "Child Kill"
-RETURN COUNT(st) AS remaining
+RETURN count(st) AS remaining
 --@ expect:rows = 1
 --@ expect:has_row { remaining = 0 }
 
 --# test_verify_parent_remains
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title = "Parent Kill"
-RETURN COUNT(t) AS remaining
+RETURN count(t) AS remaining
 --@ expect:rows = 1
 --@ expect:has_row { remaining = 1 }
 
@@ -168,9 +168,9 @@ LINK subtask_of(batch_st2, batch_task)
 --@ expect:ok
 
 --# test_verify_bulk_spawn_and_link
-MATCH (t:Task)<-[:subtask_of]-(st:SubTask)
+MATCH t: Task, st: SubTask, subtask_of(st, t)
 WHERE t.title = "Batch Task"
-RETURN COUNT(st) AS subtask_count
+RETURN count(st) AS subtask_count
 --@ expect:rows = 1
 --@ expect:has_row { subtask_count = 2 }
 
@@ -179,9 +179,9 @@ RETURN COUNT(st) AS subtask_count
 -- ---------------------------------------------------------------------------
 
 --# test_bulk_set_returning
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title IN ["Bulk 1", "Bulk 2", "Bulk 3"]
-SET t.status = "archived"
+SET t { status = "archived" }
 RETURNING t.title, t.status
 ORDER BY t.title
 --@ expect:ok
@@ -199,13 +199,13 @@ SPAWN cond3: Task { title = "Conditional 3", status = "done", priority = 5 }
 --@ expect:ok
 
 --# test_bulk_set_with_condition
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title STARTS WITH "Conditional" AND t.priority < 5
-SET t.status = "cancelled"
+SET t { status = "cancelled" }
 --@ expect:ok
 
 --# test_verify_conditional_bulk_set
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title STARTS WITH "Conditional"
 RETURN t.title, t.status
 ORDER BY t.title
@@ -219,10 +219,10 @@ ORDER BY t.title
 -- ---------------------------------------------------------------------------
 
 --# test_count_affected_by_bulk_set
-MATCH (t:Task)
+MATCH t: Task
 WHERE t.title STARTS WITH "Conditional"
-SET t.priority = 2
-RETURNING COUNT(t) AS updated_count
+SET t { priority = 2 }
+RETURNING count(t) AS updated_count
 --@ expect:ok
 --@ expect:rows = 1
 --@ expect:has_row { updated_count = 3 }
@@ -232,14 +232,15 @@ RETURNING COUNT(t) AS updated_count
 -- ---------------------------------------------------------------------------
 
 --# test_cleanup_all_test_tasks
-MATCH (t:Task)
-WHERE t.title IN ["Returned Task", "Bulk 1", "Bulk 2", "Bulk 3", "Return Fields Task", 
+MATCH t: Task
+WHERE t.title IN ["Returned Task", "Bulk 1", "Bulk 2", "Bulk 3", "Return Fields Task",
                    "Parent Kill", "Batch Task", "Conditional 1", "Conditional 2", "Conditional 3"]
 KILL t
 --@ expect:ok
 
 --# test_cleanup_all_test_subtasks
-MATCH (st:SubTask)
+MATCH st: SubTask
 WHERE st.title STARTS WITH "Batch ST"
 KILL st
 --@ expect:ok
+

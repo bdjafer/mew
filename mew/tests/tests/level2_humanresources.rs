@@ -2,7 +2,15 @@
 //!
 //! These tests run against the humanresources ontology with various scenarios.
 //! Focus areas: Deep inheritance (4 levels), edge attributes, no_self constraint,
-//! complex multi-hop joins, EXISTS patterns
+//! complex multi-hop joins, WALK traversal, multiple inheritance
+//!
+//! Test modules:
+//! - deep_inheritance: Person -> Employee -> Manager -> Executive (4-level hierarchy)
+//! - edge_attributes: CRUD operations on edge attributes (level, years_experience, etc.)
+//! - no_self: [no_self] constraint prevents self-referential edges
+//! - complex_joins: Multi-hop joins across 2-4 relationships
+//! - walk_traversal: WALK FOLLOW/UNTIL/DEPTH with RETURN NODES/EDGES/PATH/TERMINAL
+//! - multiple_inheritance: TeamLead : Employee, Mentorship (node inherits from 2+ types)
 
 use mew_tests::prelude::*;
 
@@ -241,60 +249,113 @@ mod complex_joins {
     }
 }
 
-mod exists_patterns {
+mod walk_traversal {
     use super::*;
 
     pub fn scenario() -> Scenario {
-        Scenario::new("exists_patterns")
+        Scenario::new("walk_traversal")
             .ontology("level-2/humanresources/ontology.mew")
             .seed("level-2/humanresources/seeds/populated.mew")
-            .operations("level-2/humanresources/operations/exists_patterns.mew")
-            // EXISTS: employees with skills (alice, bob, charlie, diana have skills) >= 3
-            .step("test_employees_with_skills", |a| a.rows_gte(3))
-            // NOT EXISTS: employees without certifications >= 3
-            .step("test_employees_without_certifications", |a| a.rows_gte(3))
-            // EXISTS with filter: employees with expert skills (alice, charlie, diana) >= 2
-            .step("test_employees_with_expert_level_skills", |a| a.rows_gte(2))
-            // EXISTS with filter: employees with programming skills (alice, bob) >= 2
-            .step("test_employees_with_programming_skills", |a| a.rows_gte(2))
-            // Nested EXISTS: employees with role requiring skill they have >= 1
-            .step("test_employees_with_role_requiring_skill_they_have", |a| a.rows_gte(1))
-            // EXISTS with multiple conditions: engineering + rust >= 2
-            .step("test_employees_in_engineering_with_rust_skill", |a| a.rows_gte(2))
-            // NOT EXISTS: skills without employees >= 0
-            .step("test_skills_without_employees", |a| a.rows_gte(0))
-            // NOT EXISTS: departments without managers >= 2
-            .step("test_departments_without_managers", |a| a.rows_gte(2))
-            // NOT EXISTS: employees not completed any course >= 3
-            .step("test_employees_not_completed_any_course", |a| a.rows_gte(3))
-            // EXISTS AND NOT EXISTS: skills but no certifications >= 2
-            .step("test_employees_with_skills_but_no_certifications", |a| a.rows_gte(2))
-            // EXISTS with aggregation: employees with multiple skills (alice) >= 1
-            .step("test_employees_with_multiple_skills", |a| a.rows_gte(1))
-            // EXISTS with aggregation: managers with multiple reports (charlie) >= 1
-            .step("test_managers_with_multiple_reports", |a| a.rows_gte(1))
-            // EXISTS with edge attribute: high years experience >= 2
-            .step("test_employees_with_high_years_experience_in_any_skill", |a| a.rows_gte(2))
-            // EXISTS with edge attribute: primary department >= 4
-            .step("test_employees_with_primary_department_assignment", |a| a.rows_gte(4))
-            // Complex EXISTS: departments with management skills >= 1
-            .step("test_departments_with_employees_having_management_skills", |a| a.rows_gte(1))
-            // Complex EXISTS: roles with unfilled requirements >= 0
-            .step("test_roles_with_unfilled_skill_requirements", |a| a.rows_gte(0))
-            // EXISTS with path: employees with direct or indirect reports >= 2
-            .step("test_employees_with_direct_or_indirect_reports", |a| a.rows_gte(2))
-            // NOT EXISTS complex: employees without matching skills >= 0
-            .step("test_employees_without_skills_matching_role_requirements", |a| a.rows_gte(0))
-            // NOT EXISTS: courses not completed by anyone >= 0
-            .step("test_courses_not_completed_by_anyone", |a| a.rows_gte(0))
-            // EXISTS with arithmetic: high total skill experience >= 1
-            .step("test_employees_with_high_total_skill_experience", |a| a.rows_gte(1))
-            // EXISTS with arithmetic: departments over budget threshold >= 0
-            .step("test_departments_over_budget_threshold", |a| a.rows_gte(0))
+            .operations("level-2/humanresources/operations/walk_traversal.mew")
+            // Setup org hierarchy
+            .step("test_setup_ceo", |a| a.created(1))
+            .step("test_setup_vp1", |a| a.created(1))
+            .step("test_setup_vp2", |a| a.created(1))
+            .step("test_setup_dir1", |a| a.created(1))
+            .step("test_setup_mgr1", |a| a.created(1))
+            .step("test_setup_emp1", |a| a.created(1))
+            .step("test_setup_emp2", |a| a.created(1))
+            .step("test_setup_reporting_hierarchy", |a| a.linked(6))
+            // WALK: Basic FOLLOW traversal (emp1 -> mgr1 -> dir1 -> vp1 -> ceo = 4 nodes)
+            .step("test_walk_follow_reports_to_from_emp1", |a| a.rows_gte(4))
+            // WALK: With UNTIL termination
+            .step("test_walk_until_executive", |a| a.rows(1))
+            .step("test_walk_until_management_level_4", |a| a.rows(1))
+            // WALK: RETURN PATH
+            .step("test_walk_return_path", |a| a.rows(1))
+            // WALK: RETURN EDGES
+            .step("test_walk_return_edges", |a| a.rows_gte(4))
+            // WALK: With depth limit
+            .step("test_walk_max_depth_2", |a| a.rows_gte(1))
+            .step("test_walk_max_depth_1", |a| a.rows(1))
+            // WALK: From top down (reverse direction)
+            .step("test_walk_reverse_from_ceo", |a| a.rows_gte(6))
+            // WALK: Count nodes at each level
+            .step("test_walk_count_direct_reports", |a| a.scalar("direct_report_count", 2i64))
+            // WALK: Find all managers in chain
+            .step("test_walk_managers_only_in_chain", |a| a.rows_gte(3))
+            // WALK: Combined with filter on attributes
+            .step("test_walk_high_salary_in_chain", |a| a.rows_gte(2))
+            // WALK: Multiple starting points
+            .step("test_walk_from_multiple_employees", |a| a.rows(2))
+            // WALK: With aggregation
+            .step("test_walk_avg_salary_in_chain", |a| a.rows(1))
+            // WALK: Detect cycles
+            .step("test_walk_detects_no_cycles", |a| a.rows(1))
+            // Cleanup
+            .step("test_cleanup_walk_employees", |a| a.deleted(7))
     }
 
     #[test]
-    fn test_exists_patterns_and_aggregates() {
+    fn test_walk_traversal_operations() {
         scenario().run().unwrap();
     }
 }
+
+mod multiple_inheritance {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("multiple_inheritance")
+            .ontology("level-2/humanresources/ontology.mew")
+            .seed("level-2/humanresources/seeds/populated.mew")
+            .operations("level-2/humanresources/operations/multiple_inheritance.mew")
+            // Setup: Create base entities
+            .step("test_setup_team_lead", |a| a.created(1))
+            .step("test_setup_mentee_1", |a| a.created(1))
+            .step("test_setup_mentee_2", |a| a.created(1))
+            .step("test_setup_second_team_lead", |a| a.created(1))
+            // Query as each parent type
+            .step("test_query_as_team_lead", |a| a.rows(1))
+            .step("test_query_as_employee", |a| a.rows(1))
+            .step("test_query_as_person", |a| a.rows(1))
+            .step("test_query_as_mentorship", |a| a.rows_gte(1))
+            // Polymorphic queries across multiple inheritance
+            .step("test_count_all_employees_includes_team_leads", |a| a.scalar("employee_count", 4i64))
+            .step("test_count_all_team_leads", |a| a.scalar("team_lead_count", 2i64))
+            .step("test_count_all_mentorship_capable", |a| a.rows(1))
+            // Access attributes from each parent
+            .step("test_access_all_parent_attributes", |a| a.rows(1))
+            // Update attributes from different parents
+            .step("test_update_person_attribute", |a| a.modified(1))
+            .step("test_verify_person_update", |a| a.rows(1))
+            .step("test_update_employee_attribute", |a| a.modified(1))
+            .step("test_verify_employee_update", |a| a.rows(1))
+            .step("test_update_mentorship_attribute", |a| a.modified(1))
+            .step("test_verify_mentorship_update", |a| a.rows_gte(1))
+            .step("test_update_team_lead_attribute", |a| a.modified(1))
+            .step("test_verify_team_lead_update", |a| a.rows(1))
+            // Mentoring relationships
+            .step("test_create_mentoring_relationships", |a| a.linked(2))
+            .step("test_verify_mentoring_relationships", |a| a.rows(2))
+            .step("test_count_mentees", |a| a.scalar("mentee_count", 2i64))
+            // Query mentors by mentorship attributes
+            .step("test_find_mentors_with_capacity", |a| a.rows(1))
+            .step("test_find_mentors_by_area", |a| a.rows_gte(1))
+            // Filter by attributes from different parents
+            .step("test_filter_high_salary_mentors", |a| a.rows_gte(1))
+            .step("test_filter_large_team_backend_leads", |a| a.rows_gte(1))
+            // Spawn new team lead with all attributes
+            .step("test_spawn_new_team_lead", |a| a.created(1))
+            .step("test_verify_new_lead_as_all_types", |a| a.rows(1))
+            // Cleanup
+            .step("test_cleanup_team_leads", |a| a.deleted(3))
+            .step("test_cleanup_mentees", |a| a.deleted(2))
+    }
+
+    #[test]
+    fn test_multiple_inheritance_operations() {
+        scenario().run().unwrap();
+    }
+}
+

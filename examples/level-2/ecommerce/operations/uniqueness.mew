@@ -63,31 +63,31 @@ SPAWN duplicate_category: Category {
 -- ---------------------------------------------------------------------------
 
 --# test_set_to_duplicate_sku_should_fail
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.sku = "TEST-0001"
-SET p.sku = "COMP-0001"
+SET p { sku = "COMP-0001" }
 
 --# test_verify_sku_unchanged_after_failed_set
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.name = "Test Product"
 RETURN p.sku
 
 --# test_set_to_duplicate_email_should_fail
-MATCH (c:Customer)
+MATCH c: Customer
 WHERE c.email = "charlie@example.com"
-SET c.email = "alice@example.com"
+SET c { email = "alice@example.com" }
 
 -- ---------------------------------------------------------------------------
 -- VALID UPDATES: Setting to unique values should succeed
 -- ---------------------------------------------------------------------------
 
 --# test_set_to_new_unique_sku_should_succeed
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.sku = "TEST-0001"
-SET p.sku = "TEST-0002"
+SET p { sku = "TEST-0002" }
 
 --# test_verify_sku_changed
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.name = "Test Product"
 RETURN p.sku
 
@@ -126,6 +126,6 @@ SPAWN duplicate_digital: DigitalProduct {
 -- ---------------------------------------------------------------------------
 
 --# test_cleanup_test_products
-MATCH (p:Product)
+MATCH p: Product
 WHERE p.sku IN ["TEST-0001", "TEST-0002"]
 KILL p
