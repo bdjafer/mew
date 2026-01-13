@@ -9,51 +9,45 @@ use mew_core::EntityId;
 use mew_graph::Graph;
 use mew_parser::{Target, TargetRef};
 use mew_registry::Registry;
+use thiserror::Error;
 
 /// Error returned when target resolution fails.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum TargetError {
     /// Variable not found in bindings.
-    UnknownVariable(String),
+    #[error("Unknown variable: {name}")]
+    UnknownVariable { name: String },
+
     /// Target type not supported (Id, Pattern).
-    UnsupportedTarget,
+    #[error("Unsupported target type: {target_type}")]
+    UnsupportedTarget { target_type: String },
+
     /// Edge type not found in registry.
-    UnknownEdgeType(String),
+    #[error("Unknown edge type: {name}")]
+    UnknownEdgeType { name: String },
+
     /// Edge pattern requires at least 2 targets.
-    InsufficientTargets,
+    #[error("Edge pattern requires at least 2 targets, got {actual}")]
+    InsufficientTargets { actual: usize },
+
     /// Source in edge pattern must be a node.
-    SourceNotNode,
+    #[error("Source at position {position} must be a node, got {actual_type}")]
+    SourceNotNode {
+        position: usize,
+        actual_type: String,
+    },
+
     /// Target in edge pattern must be a node.
-    TargetNotNode,
+    #[error("Target at position {position} must be a node, got {actual_type}")]
+    TargetNotNode {
+        position: usize,
+        actual_type: String,
+    },
+
     /// No edge found matching the pattern.
-    EdgeNotFound(String),
+    #[error("No edge of type '{edge_type}' found between specified nodes")]
+    EdgeNotFound { edge_type: String },
 }
-
-impl std::fmt::Display for TargetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TargetError::UnknownVariable(name) => write!(f, "Unknown variable: {}", name),
-            TargetError::UnsupportedTarget => {
-                write!(f, "Only variable targets are supported")
-            }
-            TargetError::UnknownEdgeType(name) => write!(f, "Unknown edge type: {}", name),
-            TargetError::InsufficientTargets => {
-                write!(f, "Edge pattern requires at least 2 targets")
-            }
-            TargetError::SourceNotNode => write!(f, "Source must be a node"),
-            TargetError::TargetNotNode => write!(f, "Target must be a node"),
-            TargetError::EdgeNotFound(edge_type) => {
-                write!(
-                    f,
-                    "No edge of type '{}' found between specified nodes",
-                    edge_type
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for TargetError {}
 
 /// Resolve a target to an EntityId.
 ///
@@ -69,9 +63,17 @@ pub fn resolve_target(
         Target::Var(var_name) => bindings
             .get(var_name)
             .copied()
-            .ok_or_else(|| TargetError::UnknownVariable(var_name.clone())),
+            .ok_or_else(|| TargetError::UnknownVariable {
+                name: var_name.clone(),
+            }),
 
-        Target::Id(_) | Target::Pattern(_) => Err(TargetError::UnsupportedTarget),
+        Target::Id(_) => Err(TargetError::UnsupportedTarget {
+            target_type: "Id".to_string(),
+        }),
+
+        Target::Pattern(_) => Err(TargetError::UnsupportedTarget {
+            target_type: "Pattern".to_string(),
+        }),
 
         Target::EdgePattern { edge_type, targets } => {
             resolve_edge_pattern(edge_type, targets, bindings, registry, graph)
@@ -90,9 +92,17 @@ pub fn resolve_target_ref(
         TargetRef::Var(var_name) => bindings
             .get(var_name)
             .copied()
-            .ok_or_else(|| TargetError::UnknownVariable(var_name.clone())),
+            .ok_or_else(|| TargetError::UnknownVariable {
+                name: var_name.clone(),
+            }),
 
-        TargetRef::Id(_) | TargetRef::Pattern(_) => Err(TargetError::UnsupportedTarget),
+        TargetRef::Id(_) => Err(TargetError::UnsupportedTarget {
+            target_type: "Id".to_string(),
+        }),
+
+        TargetRef::Pattern(_) => Err(TargetError::UnsupportedTarget {
+            target_type: "Pattern".to_string(),
+        }),
     }
 }
 
@@ -107,11 +117,21 @@ pub fn resolve_var_target(
         Target::Var(var_name) => bindings
             .get(var_name)
             .copied()
-            .ok_or_else(|| TargetError::UnknownVariable(var_name.clone())),
+            .ok_or_else(|| TargetError::UnknownVariable {
+                name: var_name.clone(),
+            }),
 
-        Target::Id(_) | Target::Pattern(_) | Target::EdgePattern { .. } => {
-            Err(TargetError::UnsupportedTarget)
-        }
+        Target::Id(_) => Err(TargetError::UnsupportedTarget {
+            target_type: "Id".to_string(),
+        }),
+
+        Target::Pattern(_) => Err(TargetError::UnsupportedTarget {
+            target_type: "Pattern".to_string(),
+        }),
+
+        Target::EdgePattern { .. } => Err(TargetError::UnsupportedTarget {
+            target_type: "EdgePattern".to_string(),
+        }),
     }
 }
 
@@ -129,26 +149,38 @@ fn resolve_edge_pattern(
         let id = bindings
             .get(target_var)
             .copied()
-            .ok_or_else(|| TargetError::UnknownVariable(target_var.clone()))?;
+            .ok_or_else(|| TargetError::UnknownVariable {
+                name: target_var.clone(),
+            })?;
         target_ids.push(id);
     }
 
     // Find edge type ID
     let edge_type_id = registry
         .get_edge_type_id(edge_type)
-        .ok_or_else(|| TargetError::UnknownEdgeType(edge_type.to_string()))?;
+        .ok_or_else(|| TargetError::UnknownEdgeType {
+            name: edge_type.to_string(),
+        })?;
 
     // Need at least 2 targets
     if target_ids.len() < 2 {
-        return Err(TargetError::InsufficientTargets);
+        return Err(TargetError::InsufficientTargets {
+            actual: target_ids.len(),
+        });
     }
 
-    let source_node_id = target_ids[0]
-        .as_node()
-        .ok_or(TargetError::SourceNotNode)?;
-    let target_node_id = target_ids[1]
-        .as_node()
-        .ok_or(TargetError::TargetNotNode)?;
+    let source_node_id = target_ids[0].as_node().ok_or_else(|| {
+        TargetError::SourceNotNode {
+            position: 0,
+            actual_type: format!("{:?}", target_ids[0]),
+        }
+    })?;
+    let target_node_id = target_ids[1].as_node().ok_or_else(|| {
+        TargetError::TargetNotNode {
+            position: 1,
+            actual_type: format!("{:?}", target_ids[1]),
+        }
+    })?;
 
     // Search for matching edge
     for edge_id in graph.edges_from(source_node_id, None) {
@@ -165,7 +197,9 @@ fn resolve_edge_pattern(
         }
     }
 
-    Err(TargetError::EdgeNotFound(edge_type.to_string()))
+    Err(TargetError::EdgeNotFound {
+        edge_type: edge_type.to_string(),
+    })
 }
 
 #[cfg(test)]

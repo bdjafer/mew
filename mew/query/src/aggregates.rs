@@ -171,6 +171,7 @@ mod tests {
 
     #[test]
     fn test_count_empty() {
+        // GIVEN
         let evaluator = test_evaluator();
         let graph = Graph::new();
         let agg = AggregateSpec {
@@ -180,12 +181,16 @@ mod tests {
             distinct: false,
         };
 
+        // WHEN
         let result = compute_aggregate(&agg, &[], &evaluator, &graph).unwrap();
+
+        // THEN
         assert_eq!(result, Value::Int(0));
     }
 
     #[test]
     fn test_count_rows() {
+        // GIVEN
         let evaluator = test_evaluator();
         let graph = Graph::new();
         let agg = AggregateSpec {
@@ -201,12 +206,16 @@ mod tests {
             (Bindings::new(), vec![]),
         ];
 
+        // WHEN
         let result = compute_aggregate(&agg, &group, &evaluator, &graph).unwrap();
+
+        // THEN
         assert_eq!(result, Value::Int(3));
     }
 
     #[test]
     fn test_sum_integers() {
+        // GIVEN
         let evaluator = test_evaluator();
         let graph = Graph::new();
 
@@ -224,12 +233,16 @@ mod tests {
             (Bindings::new(), vec![]),
         ];
 
+        // WHEN
         let result = compute_aggregate(&agg, &group, &evaluator, &graph).unwrap();
+
+        // THEN
         assert_eq!(result, Value::Int(15));
     }
 
     #[test]
     fn test_avg_integers() {
+        // GIVEN
         let evaluator = test_evaluator();
         let graph = Graph::new();
 
@@ -247,7 +260,10 @@ mod tests {
             (Bindings::new(), vec![]),
         ];
 
+        // WHEN
         let result = compute_aggregate(&agg, &group, &evaluator, &graph).unwrap();
+
+        // THEN
         assert_eq!(result, Value::Float(6.0));
     }
 }
