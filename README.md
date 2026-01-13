@@ -32,12 +32,6 @@ edge knows: Person -> Person {
 }
 ```
 
-**Query**:
-```gql
-MATCH (p:Person)-[:knows]->(friend:Person)
-RETURN p.name, friend.name
-```
-
 ## Development
 
 ```bash

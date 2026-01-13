@@ -186,17 +186,6 @@ fn test_name_matches_acceptance_test() {
 
 ---
 
-## Terminal Condition
-
-**Done when ALL true:**
-
-1. All 158 acceptance tests pass (`./test.sh`)
-2. Terminal session in `specs/meta-roadmap.md` section 1 runs without error
-3. REPL loads any ontology from `examples/`
-4. System recovers correctly after kill -9
-
----
-
 ## Modifying Specifications
 
 Specifications can contain errors discovered during implementation.
@@ -212,13 +201,4 @@ Specifications can contain errors discovered during implementation.
 
 ---
 
-## Commit Messages
-
-```
-component: what changed
-
-- detail 1
-- detail 2
-
-Tests: X/Y passing
-```
+## Commit Messages (unspecified)
