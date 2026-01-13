@@ -122,10 +122,11 @@ run_cargo_tests() {
     if [ -n "$verbose" ]; then
         $cmd -- $verbose 2>&1 && eval "$result_var=pass" || eval "$result_var=fail"
     else
-        local output=$($cmd 2>&1)
+        local output
+        output=$($cmd 2>&1) && local exit_code=0 || local exit_code=$?
         local total=$(echo "$output" | grep -E "^test result:" | awk '{sum+=$4} END {print sum}')
         
-        if [ $? -eq 0 ]; then
+        if [ $exit_code -eq 0 ]; then
             echo -e "${GREEN}✓${NC} All tests passed ($total tests)"
             eval "$result_var=pass"
         else
@@ -148,8 +149,8 @@ run_unit_tests() {
         esac
     done
 
-    local cmd="cargo test --workspace"
-    [ -n "$package" ] && cmd="cargo test -p $package"
+    local cmd="cargo test --workspace --lib"
+    [ -n "$package" ] && cmd="cargo test -p $package --lib"
     
     run_cargo_tests "Unit Tests" "$cmd" UNIT_RESULT "$verbose"
 }
