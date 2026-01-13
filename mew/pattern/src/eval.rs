@@ -192,6 +192,7 @@ impl<'r> Evaluator<'r> {
             },
             UnaryOp::Not => match val {
                 Value::Bool(b) => Ok(Value::Bool(!b)),
+                Value::Null => Ok(Value::Null), // NOT NULL = NULL
                 _ => Err(PatternError::type_error(format!(
                     "cannot apply NOT to {:?}",
                     val
@@ -669,75 +670,75 @@ impl<'r> Evaluator<'r> {
     }
 
     fn eval_lt(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a < b,
-            (Value::Float(a), Value::Float(b)) => a < b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) < *b,
-            (Value::Float(a), Value::Int(b)) => *a < (*b as f64),
-            (Value::String(a), Value::String(b)) => a < b,
-            (Value::Timestamp(a), Value::Timestamp(b)) => a < b,
-            (Value::Duration(a), Value::Duration(b)) => a < b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} < {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation - comparison with null returns null
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a < b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a < b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) < *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a < (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a < b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a < b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a < b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} < {:?}",
+                left, right
+            ))),
+        }
     }
 
     fn eval_lte(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a <= b,
-            (Value::Float(a), Value::Float(b)) => a <= b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) <= *b,
-            (Value::Float(a), Value::Int(b)) => *a <= (*b as f64),
-            (Value::String(a), Value::String(b)) => a <= b,
-            (Value::Timestamp(a), Value::Timestamp(b)) => a <= b,
-            (Value::Duration(a), Value::Duration(b)) => a <= b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} <= {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) <= *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a <= (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a <= b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a <= b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} <= {:?}",
+                left, right
+            ))),
+        }
     }
 
     fn eval_gt(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a > b,
-            (Value::Float(a), Value::Float(b)) => a > b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) > *b,
-            (Value::Float(a), Value::Int(b)) => *a > (*b as f64),
-            (Value::String(a), Value::String(b)) => a > b,
-            (Value::Timestamp(a), Value::Timestamp(b)) => a > b,
-            (Value::Duration(a), Value::Duration(b)) => a > b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} > {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a > b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a > b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) > *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a > (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a > b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a > b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a > b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} > {:?}",
+                left, right
+            ))),
+        }
     }
 
     fn eval_gte(&self, left: &Value, right: &Value) -> PatternResult<Value> {
-        Ok(Value::Bool(match (left, right) {
-            (Value::Int(a), Value::Int(b)) => a >= b,
-            (Value::Float(a), Value::Float(b)) => a >= b,
-            (Value::Int(a), Value::Float(b)) => (*a as f64) >= *b,
-            (Value::Float(a), Value::Int(b)) => *a >= (*b as f64),
-            (Value::String(a), Value::String(b)) => a >= b,
-            (Value::Timestamp(a), Value::Timestamp(b)) => a >= b,
-            (Value::Duration(a), Value::Duration(b)) => a >= b,
-            _ => {
-                return Err(PatternError::type_error(format!(
-                    "cannot compare {:?} >= {:?}",
-                    left, right
-                )))
-            }
-        }))
+        match (left, right) {
+            // Null propagation
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) >= *b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(*a >= (*b as f64))),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a >= b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a >= b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} >= {:?}",
+                left, right
+            ))),
+        }
     }
 
     // ========== Logical helpers ==========
@@ -745,6 +746,16 @@ impl<'r> Evaluator<'r> {
     fn eval_and(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(*a && *b)),
+            // SQL three-valued logic for AND:
+            // NULL AND true = NULL, NULL AND false = false
+            (Value::Null, Value::Bool(b)) | (Value::Bool(b), Value::Null) => {
+                if *b {
+                    Ok(Value::Null)
+                } else {
+                    Ok(Value::Bool(false))
+                }
+            }
+            (Value::Null, Value::Null) => Ok(Value::Null),
             _ => Err(PatternError::type_error(format!(
                 "cannot AND {:?} and {:?}",
                 left, right
@@ -755,6 +766,16 @@ impl<'r> Evaluator<'r> {
     fn eval_or(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(*a || *b)),
+            // SQL three-valued logic for OR:
+            // NULL OR true = true, NULL OR false = NULL
+            (Value::Null, Value::Bool(b)) | (Value::Bool(b), Value::Null) => {
+                if *b {
+                    Ok(Value::Bool(true))
+                } else {
+                    Ok(Value::Null)
+                }
+            }
+            (Value::Null, Value::Null) => Ok(Value::Null),
             _ => Err(PatternError::type_error(format!(
                 "cannot OR {:?} and {:?}",
                 left, right
