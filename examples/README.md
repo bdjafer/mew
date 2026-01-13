@@ -1,81 +1,73 @@
 # MEW Integration Test Examples
 
-This directory contains test data (ontologies, seeds, operations) organized by complexity level and domain. The actual test scenarios (Rust code) live in `mew/mew-examples/tests/`.
+Test data (ontologies, seeds, operations) organized by complexity level. Test scenarios (Rust code) live in `mew/tests/tests/`.
 
 ## Structure
 
 ```
-examples/                           # Test data (MEW files only)
+examples/
 ├── level-1/                        # Fundamentals: basic CRUD, simple types
 │   ├── bookmarks/
-│   │   ├── ontology.mew           # Type definitions
-│   │   ├── seeds/                 # Reusable starting states
-│   │   │   ├── empty.mew
-│   │   │   ├── minimal.mew
-│   │   │   └── populated.mew
-│   │   └── operations/            # Reusable operation sequences
-│   │       ├── crud.mew
-│   │       ├── queries.mew
-│   │       └── errors.mew
+│   │   ├── ontology.mew            # Type definitions
+│   │   ├── seeds/
+│   │   │   ├── minimal.mew         # Minimal starting state
+│   │   │   └── populated.mew       # Rich starting state
+│   │   └── operations/
+│   │       ├── queries.mew         # Query operations
+│   │       ├── edge_operations.mew # Link/unlink operations
+│   │       └── ...
 │   ├── contacts/
 │   └── library/
 ├── level-2/                        # Structure: inheritance, validation
+│   ├── ecommerce/
+│   ├── humanresources/
+│   └── tasks/
 ├── level-3/                        # Dynamics: constraints, rules
 ├── level-4/                        # Higher-order: edges about edges
 └── level-5/                        # Meta-systems: self-reference
 
-mew/mew-examples/tests/             # Test scenarios (Rust code)
-└── level1_bookmarks.rs            # Scenarios: seed + operations + assertions
+mew/tests/tests/                    # Test scenarios (Rust code)
+├── level1_bookmarks.rs
+├── level1_contacts.rs
+├── level1_library.rs
+├── level2_ecommerce.rs
+├── level2_humanresources.rs
+└── level2_tasks.rs
 ```
-
-## Concepts
-
-| Component | Location | Format | Purpose |
-|-----------|----------|--------|---------|
-| **ontology** | `examples/` | MEW | Type definitions for the domain |
-| **seeds** | `examples/` | MEW | Reusable starting states (data fixtures) |
-| **operations** | `examples/` | MEW | Reusable operation sequences with step markers |
-| **scenarios** | `mew/mew-examples/tests/` | Rust | Test orchestration: seed + operations + assertions |
 
 ## Running Tests
 
 ```bash
-# Run all integration tests
-cargo test -p mew-examples
+./test.sh                    # All tests (unit + integration + testgen)
+./test.sh integration        # Integration tests only
+./test.sh integration -v     # Verbose output
 
-# Run specific level
-cargo test -p mew-examples level_1
-
-# Run specific ontology
-cargo test -p mew-examples bookmarks
-
-# Run specific scenario
-cargo test -p mew-examples crud
+# Filter by name
+cargo test -p mew-tests bookmarks
+cargo test -p mew-tests level1
 ```
 
 ## Writing Tests
 
-### 1. Create operations file (`examples/.../operations/my_ops.mew`)
+### 1. Create operations file
 
-Operations are pure MEW statements with step markers:
+Operations are MEW statements with step markers (`--# step_name`):
 
 ```mew
 --# spawn_item
 SPAWN item: Item { name = "Test" }
 
 --# query_count
-MATCH i: Item RETURN count(i)
+MATCH i: Item RETURN count(i) AS total
 
 --# delete_item
 KILL item
 ```
 
-### 2. Create scenario in test file (`mew/mew-examples/tests/`)
-
-Scenarios orchestrate seeds + operations + assertions:
+### 2. Create scenario in Rust
 
 ```rust
-use mew_examples::prelude::*;
+use mew_tests::prelude::*;
 
 mod my_test {
     use super::*;
@@ -86,7 +78,7 @@ mod my_test {
             .seed("level-1/domain/seeds/minimal.mew")      // Optional
             .operations("level-1/domain/operations/my_ops.mew")
             .step("spawn_item", |a| a.created(1))
-            .step("query_count", |a| a.value(1))
+            .step("query_count", |a| a.scalar("total", 1i64))
             .step("delete_item", |a| a.deleted(1))
     }
 
@@ -97,7 +89,7 @@ mod my_test {
 }
 ```
 
-### 3. Optionally create/reuse a seed (`examples/.../seeds/my_seed.mew`)
+### 3. Create seed file (optional)
 
 Seeds set up initial state:
 
@@ -110,36 +102,95 @@ SPAWN item1: Item { name = "First" }
 SPAWN item2: Item { name = "Second" }
 ```
 
-## Design Principles
-
-- **Full decoupling**: Data (examples/) and code (mew/mew-examples/) are separated
-- **Operations in `.mew`**: Native syntax, editor support, reusable across scenarios
-- **Seeds are composable**: Multiple scenarios can share the same starting state
-- **Scenarios in Rust**: Type-safe assertions, IDE support, complex logic
-- **Chaining**: A scenario can use multiple operations files (future)
-
 ## Assertion API
 
+### Mutations
+
 ```rust
-// Mutations
 .step("spawn", |a| a.created(1))
 .step("update", |a| a.modified(1))
 .step("delete", |a| a.deleted(1))
 .step("link", |a| a.linked(1))
+.step("unlink", |a| a.unlinked(1))
 
-// Queries - single value
+// Combined
+.step("complex", |a| a.created(2).linked(1).deleted(1))
+```
+
+### Queries - Single Value
+
+```rust
+// Strict: verifies column name + value
+.step("count", |a| a.scalar("total", 42i64))
+.step("avg", |a| a.scalar("average", 3.14))
+
+// Legacy: value only (no column verification)
 .step("count", |a| a.value(42))
 .step("range", |a| a.value_min(0).value_max(100))
+```
 
-// Queries - rows
+### Queries - Rows
+
+```rust
+// Row count
 .step("all", |a| a.rows(5))
 .step("some", |a| a.rows_min(1))
+.step("bounded", |a| a.rows_min(1).rows_max(10))
 .step("none", |a| a.empty())
+.step("exists", |a| a.not_empty())
 
-// Errors
-.step("invalid", |a| a.error("required"))
+// Column verification
+.step("select", |a| a.columns(&["id", "name", "email"]).rows(5))
+```
+
+### Queries - Row Matching
+
+```rust
+// First/last row (partial match)
+.step("first", |a| a.first(row!{ name: "Alice" }))
+.step("last", |a| a.last(row!{ name: "Zoe" }))
+
+// Exact rows (unordered by default)
+.step("all_users", |a| a.returns(vec![
+    row!{ name: "Alice", age: 30i64 },
+    row!{ name: "Bob", age: 25i64 },
+]))
+
+// Ordered rows
+.step("sorted", |a| a
+    .returns(vec![row!{ name: "Alice" }, row!{ name: "Bob" }])
+    .ordered()
+)
+```
+
+### Errors
+
+```rust
+.step("missing_required", |a| a.error("required"))
+.step("type_mismatch", |a| a.error("type"))
 .step("pattern", |a| a.error_matches(".*missing.*"))
 
-// Custom
-.step("complex", |a| a.assert_fn(|result| { /* custom logic */ true }))
+// Error after partial success
+.step("spawn_then_fail", |a| a.created(1).error("constraint"))
 ```
+
+### Custom Assertions
+
+```rust
+.step("complex", |a| a.assert_fn(|result| {
+    // Custom validation logic
+    true
+}))
+```
+
+## The `row!` Macro
+
+Build row expectations with type inference:
+
+```rust
+row!{ name: "Alice", age: 30i64, active: true }
+row!{ title: "Test", count: 0i64 }
+row!{ description: Option::<String>::None }  // Explicit null
+```
+
+Supported types: `i64`, `f64`, `&str`/`String`, `bool`, `Option<T>` for null.

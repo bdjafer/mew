@@ -1,0 +1,142 @@
+-- ===========================================================================
+-- SCENARIO: Comprehensive Library Errors
+-- DESCRIPTION: Test error cases specific to library domain
+-- ===========================================================================
+
+-- ===========================================================================
+-- BOOK SPAWN ERRORS
+-- ===========================================================================
+
+--# book_missing_isbn
+SPAWN b: Book {
+  title = "No ISBN"
+}
+
+--# book_missing_title
+SPAWN b: Book {
+  isbn = "978-TEST"
+}
+
+--# book_invalid_year_type
+SPAWN b: Book {
+  isbn = "978-TEST",
+  title = "Test",
+  publication_year = "2020"
+}
+
+--# book_invalid_page_count
+SPAWN b: Book {
+  isbn = "978-TEST",
+  title = "Test",
+  page_count = "many"
+}
+
+-- ===========================================================================
+-- AUTHOR SPAWN ERRORS
+-- ===========================================================================
+
+--# author_missing_name
+SPAWN a: Author {
+  birth_year = 1980
+}
+
+--# author_invalid_birth_year
+SPAWN a: Author {
+  name = "Test Author",
+  birth_year = "nineteen eighty"
+}
+
+-- ===========================================================================
+-- GENRE SPAWN ERRORS
+-- ===========================================================================
+
+--# genre_missing_name
+SPAWN g: Genre {
+  description = "A genre"
+}
+
+-- ===========================================================================
+-- MEMBER SPAWN ERRORS
+-- ===========================================================================
+
+--# member_missing_id
+SPAWN m: Member {
+  name = "Test Member"
+}
+
+--# member_missing_name
+SPAWN m: Member {
+  member_id = "M999"
+}
+
+--# member_invalid_active
+SPAWN m: Member {
+  member_id = "M999",
+  name = "Test",
+  active = "yes"
+}
+
+-- ===========================================================================
+-- COPY SPAWN ERRORS
+-- ===========================================================================
+
+--# copy_missing_barcode
+SPAWN c: Copy {
+  condition = "good"
+}
+
+--# copy_invalid_available
+SPAWN c: Copy {
+  barcode = "TEST",
+  is_available = "yes"
+}
+
+-- ===========================================================================
+-- EDGE ERRORS
+-- ===========================================================================
+
+--# borrowed_missing_dates
+SPAWN m: Member { member_id = "M001", name = "Test" }
+SPAWN c: Copy { barcode = "C001" }
+LINK borrowed(m, c) {}
+
+--# borrowed_invalid_date_type
+SPAWN m2: Member { member_id = "M002", name = "Test2" }
+SPAWN c2: Copy { barcode = "C002" }
+LINK borrowed(m2, c2) {
+  borrowed_at = "yesterday",
+  due_at = "next week"
+}
+
+--# returned_missing_dates
+SPAWN m3: Member { member_id = "M003", name = "Test3" }
+SPAWN c3: Copy { barcode = "C003" }
+LINK returned(m3, c3) {}
+
+--# wrong_edge_types
+SPAWN b: Book { isbn = "978-TEST", title = "Test" }
+SPAWN m4: Member { member_id = "M004", name = "Test4" }
+LINK written_by(m4, b)
+
+--# copy_of_wrong_types
+SPAWN a: Author { name = "Test Author" }
+SPAWN c4: Copy { barcode = "C004" }
+LINK copy_of(a, c4)
+
+-- ===========================================================================
+-- QUERY ERRORS
+-- ===========================================================================
+
+--# query_invalid_book_attribute
+MATCH b: Book RETURN b.nonexistent_field
+
+--# query_invalid_edge_attribute
+SPAWN b2: Book { isbn = "978-TEST2", title = "Test2" }
+SPAWN c5: Copy { barcode = "C005" }
+LINK copy_of(c5, b2)
+MATCH c: Copy, b: Book, copy_of(c, b) AS co
+RETURN co.invalid_attribute
+
+--# query_type_mismatch_year
+MATCH b: Book WHERE b.publication_year = "2020"
+RETURN b

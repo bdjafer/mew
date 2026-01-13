@@ -1,0 +1,162 @@
+-- ===========================================================================
+-- SCENARIO: Complex Multi-Hop Joins
+-- DESCRIPTION: Tests queries spanning multiple edge relationships
+-- FOCUS: Complex relational queries (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- BASIC TWO-HOP JOINS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_to_departments_to_parent
+MATCH e: Employee, d: Department, parent: Department, in_department(e, d), parent_dept(d, parent)
+RETURN e.first_name, d.name AS dept, parent.name AS parent_dept
+ORDER BY e.first_name
+
+--# test_employees_skills_to_courses
+MATCH e: Employee, s: Skill, c: Course, has_skill(e, s), teaches_skill(c, s)
+RETURN e.first_name, s.name, c.name
+ORDER BY e.first_name, s.name
+
+-- ---------------------------------------------------------------------------
+-- THREE-HOP JOINS
+-- ---------------------------------------------------------------------------
+
+--# test_employee_to_role_to_skill_requirement_to_skill
+MATCH e: Employee, r: Role, s: Skill, has_role(e, r), requires_skill(r, s)
+RETURN e.first_name, r.title, s.name
+ORDER BY e.first_name
+
+--# test_employee_manager_office_chain
+MATCH e: Employee, m: Manager, o: Office, reports_to(e, m), works_at(m, o)
+WHERE e.first_name IN ["Alice", "Bob"]
+RETURN e.first_name, m.first_name AS manager, o.name AS office
+ORDER BY e.first_name
+
+-- ---------------------------------------------------------------------------
+-- FOUR-HOP JOINS
+-- ---------------------------------------------------------------------------
+
+--# test_employee_to_course_to_skill_to_role
+MATCH e: Employee, c: Course, s: Skill, r: Role, completed_course(e, c), teaches_skill(c, s), requires_skill(r, s)
+RETURN e.first_name, c.name, s.name, r.title
+
+-- ---------------------------------------------------------------------------
+-- MULTI-PATH JOINS (Same entities via different paths)
+-- ---------------------------------------------------------------------------
+
+--# test_employee_has_skill_and_completed_course_for_same_skill
+MATCH e: Employee, s: Skill, has_skill(e, s)
+MATCH c: Course, completed_course(e, c), teaches_skill(c, s)
+RETURN e.first_name, s.name, c.name
+
+--# test_employee_role_and_skill_alignment
+MATCH e: Employee, r: Role, has_role(e, r)
+MATCH s: Skill, has_skill(e, s)
+MATCH requires_skill(r, s)
+RETURN e.first_name, r.title, s.name
+ORDER BY e.first_name
+
+-- ---------------------------------------------------------------------------
+-- BRANCHING JOINS (One entity to multiple related entities)
+-- ---------------------------------------------------------------------------
+
+--# test_employee_multiple_skills
+MATCH e: Employee, s: Skill, has_skill(e, s)
+WHERE e.first_name = "Alice"
+RETURN e.first_name, collect(s.name) AS skills
+
+--# test_manager_multiple_reports
+MATCH m: Manager, e: Employee, reports_to(e, m)
+WHERE m.first_name = "Charlie"
+RETURN m.first_name, collect(e.first_name) AS reports
+
+-- ---------------------------------------------------------------------------
+-- TRANSITIVE REPORTING CHAINS
+-- ---------------------------------------------------------------------------
+
+--# test_two_level_reporting_chain
+MATCH e: Employee, m: Manager, exec: Executive, reports_to(e, m), reports_to(m, exec)
+WHERE e.first_name IN ["Alice", "Bob"]
+RETURN e.first_name, m.first_name AS manager, exec.first_name AS executive
+ORDER BY e.first_name
+
+-- ---------------------------------------------------------------------------
+-- JOINS WITH AGGREGATIONS
+-- ---------------------------------------------------------------------------
+
+--# test_count_employees_per_manager
+MATCH m: Manager, e: Employee, reports_to(e, m)
+RETURN m.first_name, count(e) AS report_count
+ORDER BY report_count DESC
+
+--# test_department_employee_skill_count
+MATCH d: Department, e: Employee, s: Skill, in_department(e, d), has_skill(e, s)
+RETURN d.name, count(DISTINCT e) AS employee_count, count(DISTINCT s) AS skill_count
+ORDER BY d.name
+
+--# test_office_capacity_vs_occupancy
+MATCH o: Office
+OPTIONAL MATCH e: Employee, works_at(e, o)
+RETURN o.name, o.capacity, count(e) AS occupancy
+ORDER BY o.name
+
+-- ---------------------------------------------------------------------------
+-- JOINS WITH FILTERS ON MULTIPLE HOPS
+-- ---------------------------------------------------------------------------
+
+--# test_high_salary_employees_in_headquarters
+MATCH e: Employee, o: Office, works_at(e, o)
+WHERE e.salary > 100000.0 AND o.is_headquarters = true
+RETURN e.first_name, e.salary, o.name
+ORDER BY e.salary DESC
+
+--# test_expert_employees_in_management_roles
+MATCH e: Employee, r: Role, has_role(e, r)
+MATCH s: Skill, has_skill(e, s)
+WHERE r.is_management = true AND s.category = "Management"
+RETURN e.first_name, r.title, s.name
+ORDER BY e.first_name
+
+-- ---------------------------------------------------------------------------
+-- COMPLEX EXISTENCE CHECKS IN JOINS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_certification_and_course_completion
+MATCH e: Employee, cert: Certification, has_certification(e, cert)
+MATCH c: Course, completed_course(e, c)
+RETURN e.first_name, cert.name, c.name
+
+--# test_managers_heading_departments_with_employees
+MATCH m: Manager, d: Department, heads_department(m, d)
+MATCH e: Employee, in_department(e, d)
+RETURN m.first_name, d.name, count(e) AS employee_count
+ORDER BY employee_count DESC
+
+-- ---------------------------------------------------------------------------
+-- OPTIONAL JOINS FOR INCOMPLETE PATHS
+-- ---------------------------------------------------------------------------
+
+--# test_employees_with_optional_certifications
+MATCH e: Employee
+OPTIONAL MATCH cert: Certification, has_certification(e, cert)
+RETURN e.first_name, cert.name
+ORDER BY e.first_name
+
+--# test_skills_with_optional_course_and_employees
+MATCH s: Skill
+OPTIONAL MATCH c: Course, teaches_skill(c, s)
+OPTIONAL MATCH e: Employee, has_skill(e, s)
+RETURN s.name, c.name, count(e) AS employee_count
+ORDER BY s.name
+
+-- ---------------------------------------------------------------------------
+-- SELF-JOIN PATTERNS (Same type multiple times)
+-- ---------------------------------------------------------------------------
+
+--# test_employees_sharing_same_office
+MATCH e1: Employee, o: Office, e2: Employee, works_at(e1, o), works_at(e2, o)
+WHERE e1.employee_id < e2.employee_id
+RETURN o.name, e1.first_name, e2.first_name
+ORDER BY o.name, e1.first_name
+

@@ -1,0 +1,81 @@
+-- ===========================================================================
+-- SCENARIO: Query Complex Patterns
+-- DESCRIPTION: Test complex WHERE clauses and pattern matching
+-- ===========================================================================
+
+--# seed_complex_data
+SPAWN p1: Person { first_name = "Alice", last_name = "Smith", is_favorite = true }
+SPAWN p2: Person { first_name = "Bob", last_name = "Jones", is_favorite = false }
+SPAWN p3: Person { first_name = "Charlie", last_name = "Brown", is_favorite = true }
+SPAWN p4: Person { first_name = "Diana", last_name = "Prince", is_favorite = false }
+
+SPAWN o1: Organization { name = "TechCorp", industry = "Software" }
+SPAWN o2: Organization { name = "HealthCo", industry = "Healthcare" }
+
+LINK works_at(p1, o1) { title = "Engineer", is_current = true }
+LINK works_at(p2, o1) { title = "Manager", is_current = false }
+LINK works_at(p3, o2) { title = "Doctor", is_current = true }
+LINK works_at(p4, o2) { title = "Nurse", is_current = true }
+
+SPAWN tag_vip: Tag { name = "vip" }
+SPAWN tag_tech: Tag { name = "tech" }
+SPAWN tag_med: Tag { name = "medical" }
+
+LINK person_tagged(p1, tag_vip)
+LINK person_tagged(p1, tag_tech)
+LINK person_tagged(p3, tag_vip)
+LINK person_tagged(p3, tag_med)
+
+--# query_favorites_only
+MATCH p: Person WHERE p.is_favorite = true
+RETURN count(p)
+
+--# query_current_employees
+MATCH p: Person, o: Organization, works_at(p, o) AS w
+WHERE w.is_current = true
+RETURN count(p)
+
+--# query_by_industry
+MATCH p: Person, o: Organization, works_at(p, o)
+WHERE o.industry = "Software"
+RETURN p.first_name, p.last_name
+
+--# query_vip_contacts
+MATCH p: Person, t: Tag, person_tagged(p, t)
+WHERE t.name = "vip"
+RETURN p.first_name, p.last_name
+
+--# query_favorite_and_vip
+MATCH p: Person, t: Tag, person_tagged(p, t)
+WHERE p.is_favorite = true AND t.name = "vip"
+RETURN count(p)
+
+--# query_multi_tagged
+MATCH p: Person, t1: Tag, t2: Tag, person_tagged(p, t1), person_tagged(p, t2)
+WHERE t1.name = "vip" AND t2.name != "vip"
+RETURN DISTINCT p.first_name
+
+--# query_people_without_tags
+MATCH p: Person
+WHERE NOT EXISTS(t: Tag, person_tagged(p, t))
+RETURN count(p)
+
+--# query_people_with_tags
+MATCH p: Person
+WHERE EXISTS(t: Tag, person_tagged(p, t))
+RETURN count(p)
+
+--# query_unemployed
+MATCH p: Person
+WHERE NOT EXISTS(o: Organization, works_at(p, o))
+RETURN count(p)
+
+--# query_by_name_pattern
+MATCH p: Person
+WHERE p.last_name = "Smith" OR p.last_name = "Jones"
+RETURN count(p)
+
+--# query_current_in_techcorp
+MATCH p: Person, o: Organization, works_at(p, o) AS w
+WHERE o.name = "TechCorp" AND w.is_current = true
+RETURN count(p)

@@ -1,0 +1,80 @@
+-- ===========================================================================
+-- OPERATIONS: Debug Statement Tests
+-- Tests EXPLAIN and PROFILE
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SEED DATA FOR DEBUG TESTS
+-- ---------------------------------------------------------------------------
+
+--# seed_debug_data
+SPAWN m1: Measurement { name = "debug1", value = 10.0, count = 1 }
+SPAWN m2: Measurement { name = "debug2", value = 20.0, count = 2 }
+SPAWN m3: Measurement { name = "debug3", value = 30.0, count = 3 }
+SPAWN d1: DataPoint { category = "debug", float_value = 1.0, int_value = 1, label = "point1" }
+SPAWN d2: DataPoint { category = "debug", float_value = 2.0, int_value = 2, label = "point2" }
+LINK follows(#m1, #m2)
+LINK follows(#m2, #m3)
+
+-- ---------------------------------------------------------------------------
+-- EXPLAIN TESTS
+-- ---------------------------------------------------------------------------
+
+--# explain_simple_match
+EXPLAIN MATCH m: Measurement RETURN m
+
+--# explain_with_where
+EXPLAIN MATCH m: Measurement WHERE m.value > 15.0 RETURN m
+
+--# explain_with_join
+EXPLAIN MATCH m1: Measurement, m2: Measurement, follows(m1, m2) RETURN m1, m2
+
+--# explain_with_aggregation
+EXPLAIN MATCH d: DataPoint WHERE d.category = "debug"
+RETURN d.category, COUNT(d) AS count, SUM(d.float_value) AS sum
+
+--# explain_with_order_limit
+EXPLAIN MATCH m: Measurement
+RETURN m.name, m.value
+ORDER BY m.value DESC
+LIMIT 10
+
+-- ---------------------------------------------------------------------------
+-- PROFILE TESTS
+-- ---------------------------------------------------------------------------
+
+--# profile_simple_match
+PROFILE MATCH m: Measurement RETURN m
+
+--# profile_with_where
+PROFILE MATCH m: Measurement WHERE m.value > 15.0 RETURN m
+
+--# profile_with_join
+PROFILE MATCH m1: Measurement, m2: Measurement, follows(m1, m2) RETURN m1, m2
+
+--# profile_with_aggregation
+PROFILE MATCH d: DataPoint WHERE d.category = "debug"
+RETURN d.category, COUNT(d) AS count, SUM(d.float_value) AS sum
+
+--# profile_with_order_limit
+PROFILE MATCH m: Measurement
+RETURN m.name, m.value
+ORDER BY m.value DESC
+LIMIT 2
+
+-- ---------------------------------------------------------------------------
+-- EXPLAIN/PROFILE EDGE CASES
+-- ---------------------------------------------------------------------------
+
+--# explain_empty_result
+EXPLAIN MATCH m: Measurement WHERE m.name = "nonexistent" RETURN m
+
+--# profile_empty_result
+PROFILE MATCH m: Measurement WHERE m.name = "nonexistent" RETURN m
+
+--# explain_complex_query
+EXPLAIN MATCH m: Measurement
+WHERE m.value > 0.0 AND m.is_valid = true AND length(m.name) > 3
+RETURN m.name, m.value * 2.0 AS doubled, m.count + 10 AS adjusted
+ORDER BY m.value DESC
+LIMIT 5 OFFSET 0

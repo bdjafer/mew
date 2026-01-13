@@ -1,0 +1,104 @@
+-- ===========================================================================
+-- SEED: Populated
+-- Comprehensive data for expression tests
+-- ===========================================================================
+
+-- Measurements with various values
+SPAWN m1: Measurement {
+  name = "temperature",
+  value = 23.5,
+  tolerance = 0.1,
+  count = 100,
+  unit = "celsius",
+  description = "Room temperature reading"
+}
+
+SPAWN m2: Measurement {
+  name = "pressure",
+  value = 101.325,
+  tolerance = 0.5,
+  count = 50,
+  unit = "kPa",
+  is_valid = true
+}
+
+SPAWN m3: Measurement {
+  name = "humidity",
+  value = 65.0,
+  count = 75,
+  unit = "percent"
+}
+
+-- Text entries for string function tests
+SPAWN t1: TextEntry {
+  content = "Hello World",
+  mixed_case = "HeLLo WoRLD",
+  raw_input = "  needs trimming  ",
+  long_text = "The quick brown fox jumps over the lazy dog"
+}
+
+SPAWN t2: TextEntry {
+  content = "UPPERCASE",
+  alt_content = "lowercase",
+  mixed_case = "MixedCase"
+}
+
+-- Time records for timestamp tests
+SPAWN tr1: TimeRecord {
+  label = "morning_event",
+  start_time = @2024-06-15T09:00:00Z,
+  end_time = @2024-06-15T12:00:00Z,
+  timeout = 30.minutes
+}
+
+SPAWN tr2: TimeRecord {
+  label = "afternoon_event",
+  start_time = @2024-06-15T14:00:00Z,
+  scheduled_at = @2024-06-15T14:30:00Z
+}
+
+-- Calculations for arithmetic tests
+SPAWN c1: Calculation {
+  name = "basic_ops",
+  operand_a = 100.0,
+  operand_b = 25.0,
+  int_a = 17,
+  int_b = 5
+}
+
+-- Nullable records for null handling tests
+SPAWN n1: NullableRecord {
+  id_label = "partial_data",
+  nullable_string = "has_value",
+  nullable_int = 42
+}
+
+SPAWN n2: NullableRecord {
+  id_label = "empty_data"
+}
+
+-- Data points for aggregation tests
+SPAWN d1: DataPoint {
+  category = "sensors",
+  float_value = 10.5,
+  int_value = 1,
+  label = "sensor_a"
+}
+
+SPAWN d2: DataPoint {
+  category = "sensors",
+  float_value = 20.3,
+  int_value = 2,
+  label = "sensor_b"
+}
+
+SPAWN d3: DataPoint {
+  category = "actuators",
+  float_value = 5.0,
+  int_value = 1,
+  label = "actuator_a"
+}
+
+-- Links between measurements
+LINK follows(#m1, #m2)
+LINK follows(#m2, #m3)

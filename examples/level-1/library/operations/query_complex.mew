@@ -1,0 +1,118 @@
+-- ===========================================================================
+-- SCENARIO: Complex Library Queries
+-- DESCRIPTION: Test advanced query patterns specific to library domain
+-- ===========================================================================
+
+--# seed_library_data
+-- Books
+SPAWN b1: Book { isbn = "978-1-000001", title = "Sci-Fi Novel", publication_year = 2020 }
+SPAWN b2: Book { isbn = "978-1-000002", title = "History Book", publication_year = 2018 }
+SPAWN b3: Book { isbn = "978-1-000003", title = "Tech Guide", publication_year = 2022 }
+
+-- Authors
+SPAWN a1: Author { name = "Author One", nationality = "USA" }
+SPAWN a2: Author { name = "Author Two", nationality = "UK" }
+SPAWN a3: Author { name = "Author Three", nationality = "USA" }
+
+LINK written_by(b1, a1)
+LINK written_by(b2, a2)
+LINK written_by(b3, a1)
+LINK written_by(b3, a3)
+
+-- Genres
+SPAWN g1: Genre { name = "Fiction" }
+SPAWN g2: Genre { name = "Non-Fiction" }
+SPAWN g3: Genre { name = "Technology" }
+
+LINK in_genre(b1, g1)
+LINK in_genre(b2, g2)
+LINK in_genre(b3, g2)
+LINK in_genre(b3, g3)
+
+-- Copies
+SPAWN c1: Copy { barcode = "C001", is_available = true }
+SPAWN c2: Copy { barcode = "C002", is_available = false }
+SPAWN c3: Copy { barcode = "C003", is_available = true }
+SPAWN c4: Copy { barcode = "C004", is_available = true }
+SPAWN c5: Copy { barcode = "C005", is_available = false }
+
+LINK copy_of(c1, b1)
+LINK copy_of(c2, b1)
+LINK copy_of(c3, b2)
+LINK copy_of(c4, b3)
+LINK copy_of(c5, b3)
+
+-- Members
+SPAWN m1: Member { member_id = "M001", name = "Member One", active = true }
+SPAWN m2: Member { member_id = "M002", name = "Member Two", active = true }
+
+-- Active loans
+LINK borrowed(m1, c2) { borrowed_at = 1704067200000, due_at = 1706659200000 }
+LINK borrowed(m2, c5) { borrowed_at = 1704067200000, due_at = 1706659200000 }
+
+--# query_books_by_author
+MATCH b: Book, a: Author, written_by(b, a)
+WHERE a.name = "Author One"
+RETURN count(b)
+
+--# query_books_by_nationality
+MATCH b: Book, a: Author, written_by(b, a)
+WHERE a.nationality = "USA"
+RETURN count(DISTINCT b)
+
+--# query_books_with_multiple_authors
+MATCH b: Book
+WHERE count(a: Author, written_by(b, a)) > 1
+RETURN b.title
+
+--# query_available_books
+MATCH b: Book, c: Copy, copy_of(c, b)
+WHERE c.is_available = true
+RETURN DISTINCT b.title
+
+--# query_unavailable_books
+MATCH b: Book, c: Copy, copy_of(c, b)
+WHERE c.is_available = false
+RETURN DISTINCT b.title
+
+--# query_books_by_genre
+MATCH b: Book, g: Genre, in_genre(b, g)
+WHERE g.name = "Non-Fiction"
+RETURN count(b)
+
+--# query_books_in_multiple_genres
+MATCH b: Book
+WHERE count(g: Genre, in_genre(b, g)) > 1
+RETURN b.title
+
+--# query_borrowed_books
+MATCH b: Book, c: Copy, copy_of(c, b), m: Member, borrowed(m, c)
+RETURN DISTINCT b.title
+
+--# query_members_with_loans
+MATCH m: Member, c: Copy, borrowed(m, c)
+RETURN DISTINCT m.name
+
+--# query_copies_per_book
+MATCH b: Book
+RETURN b.title, count(c: Copy, copy_of(c, b))
+
+--# query_available_copies_per_book
+MATCH b: Book
+RETURN b.title, count(c: Copy, copy_of(c, b) WHERE c.is_available = true)
+
+--# query_books_fully_borrowed
+MATCH b: Book
+WHERE count(c: Copy, copy_of(c, b) WHERE c.is_available = true) = 0
+  AND count(c: Copy, copy_of(c, b)) > 0
+RETURN b.title
+
+--# query_recent_books
+MATCH b: Book
+WHERE b.publication_year >= 2020
+RETURN count(b)
+
+--# query_old_books
+MATCH b: Book
+WHERE b.publication_year < 2020
+RETURN count(b)

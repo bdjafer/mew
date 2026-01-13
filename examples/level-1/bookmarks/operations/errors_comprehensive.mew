@@ -1,0 +1,154 @@
+-- ===========================================================================
+-- SCENARIO: Comprehensive Error Cases
+-- DESCRIPTION: Test all types of validation and constraint errors
+-- ===========================================================================
+
+-- ===========================================================================
+-- SPAWN ERRORS
+-- ===========================================================================
+
+--# missing_required_url
+SPAWN b: Bookmark {
+  title = "No URL"
+}
+
+--# missing_required_title
+SPAWN b: Bookmark {
+  url = "https://test.com"
+}
+
+--# missing_both_required
+SPAWN b: Bookmark {
+  description = "Has description but no required fields"
+}
+
+--# type_mismatch_int_to_string
+SPAWN b: Bookmark {
+  url = "https://test.com",
+  title = "Type Error",
+  visit_count = "not a number"
+}
+
+--# type_mismatch_string_to_int
+SPAWN b: Bookmark {
+  url = "https://test.com",
+  title = 123
+}
+
+--# type_mismatch_string_to_bool
+SPAWN b: Bookmark {
+  url = "https://test.com",
+  title = "Test",
+  is_favorite = "yes"
+}
+
+--# type_mismatch_bool_to_int
+SPAWN b: Bookmark {
+  url = "https://test.com",
+  title = "Test",
+  visit_count = true
+}
+
+--# invalid_attribute_name
+SPAWN b: Bookmark {
+  url = "https://test.com",
+  title = "Test",
+  nonexistent_field = "value"
+}
+
+-- ===========================================================================
+-- SET ERRORS
+-- ===========================================================================
+
+--# set_on_nonexistent_node
+SET #nonexistent_id { title = "Updated" }
+
+--# set_required_to_null
+SPAWN b: Bookmark { url = "https://test.com", title = "Test" }
+SET b { url = null }
+
+--# set_type_mismatch
+SPAWN b2: Bookmark { url = "https://test2.com", title = "Test2" }
+SET b2 { visit_count = "not a number" }
+
+--# set_invalid_attribute
+SPAWN b3: Bookmark { url = "https://test3.com", title = "Test3" }
+SET b3 { nonexistent = "value" }
+
+--# set_readonly_created_at
+SPAWN b4: Bookmark { url = "https://test4.com", title = "Test4" }
+SET b4 { created_at = 12345 }
+
+-- ===========================================================================
+-- LINK ERRORS
+-- ===========================================================================
+
+--# link_nonexistent_source
+LINK in_folder(#nonexistent_bookmark, #some_folder)
+
+--# link_nonexistent_target
+SPAWN b5: Bookmark { url = "https://test5.com", title = "Test5" }
+LINK in_folder(b5, #nonexistent_folder)
+
+--# link_both_nonexistent
+LINK in_folder(#nonexistent_bookmark, #nonexistent_folder)
+
+--# link_wrong_type_source
+SPAWN b6: Bookmark { url = "https://test6.com", title = "Test6" }
+SPAWN f: Folder { name = "Folder" }
+LINK in_folder(f, f)
+
+--# link_wrong_type_target
+SPAWN b7: Bookmark { url = "https://test7.com", title = "Test7" }
+SPAWN b8: Bookmark { url = "https://test8.com", title = "Test8" }
+LINK in_folder(b7, b8)
+
+--# link_wrong_arity
+SPAWN b9: Bookmark { url = "https://test9.com", title = "Test9" }
+SPAWN f2: Folder { name = "Folder2" }
+LINK in_folder(b9)
+
+--# link_invalid_edge_type
+SPAWN b10: Bookmark { url = "https://test10.com", title = "Test10" }
+SPAWN f3: Folder { name = "Folder3" }
+LINK nonexistent_edge(b10, f3)
+
+-- ===========================================================================
+-- UNLINK ERRORS
+-- ===========================================================================
+
+--# unlink_nonexistent_edge
+UNLINK #nonexistent_edge_id
+
+--# unlink_nonexistent_pattern
+SPAWN b11: Bookmark { url = "https://test11.com", title = "Test11" }
+SPAWN f4: Folder { name = "Folder4" }
+UNLINK in_folder(b11, f4)
+
+-- ===========================================================================
+-- KILL ERRORS
+-- ===========================================================================
+
+--# kill_nonexistent_node
+KILL #nonexistent_node_id
+
+--# kill_already_killed
+SPAWN b12: Bookmark { url = "https://test12.com", title = "Test12" }
+KILL b12
+KILL b12
+
+-- ===========================================================================
+-- QUERY ERRORS
+-- ===========================================================================
+
+--# query_invalid_type
+MATCH x: NonexistentType RETURN x
+
+--# query_invalid_attribute
+MATCH b: Bookmark RETURN b.nonexistent_field
+
+--# query_invalid_edge
+MATCH b: Bookmark, nonexistent_edge(b, _) RETURN b
+
+--# query_type_mismatch_comparison
+MATCH b: Bookmark WHERE b.visit_count = "string" RETURN b

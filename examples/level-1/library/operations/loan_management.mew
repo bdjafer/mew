@@ -1,0 +1,114 @@
+-- ===========================================================================
+-- SCENARIO: Loan Management
+-- DESCRIPTION: Test borrow/return workflow with dates and availability
+-- ===========================================================================
+
+--# setup_library
+SPAWN book: Book {
+  isbn = "978-0-123456-78-9",
+  title = "The Art of Programming",
+  publication_year = 2020,
+  page_count = 500
+}
+
+SPAWN author: Author {
+  name = "Jane Doe",
+  birth_year = 1980,
+  nationality = "USA"
+}
+
+LINK written_by(book, author)
+
+SPAWN copy1: Copy {
+  barcode = "COPY-001",
+  condition = "excellent",
+  is_available = true
+}
+
+SPAWN copy2: Copy {
+  barcode = "COPY-002",
+  condition = "good",
+  is_available = true
+}
+
+LINK copy_of(copy1, book)
+LINK copy_of(copy2, book)
+
+SPAWN member1: Member {
+  member_id = "M001",
+  name = "Alice Reader",
+  email = "alice@example.com",
+  active = true
+}
+
+SPAWN member2: Member {
+  member_id = "M002",
+  name = "Bob Scholar",
+  phone = "555-0100",
+  active = true
+}
+
+--# verify_available_copies
+MATCH c: Copy WHERE c.is_available = true
+RETURN count(c)
+
+--# borrow_copy
+LINK borrowed(member1, copy1) {
+  borrowed_at = 1704067200000,
+  due_at = 1706659200000
+}
+
+SET copy1 { is_available = false }
+
+--# verify_copy_unavailable
+MATCH c: Copy WHERE c.barcode = "COPY-001"
+RETURN c.is_available
+
+--# query_active_loans
+MATCH m: Member, c: Copy, borrowed(m, c)
+RETURN count(*)
+
+--# query_member_loans
+MATCH m: Member, c: Copy, borrowed(m, c)
+WHERE m.member_id = "M001"
+RETURN count(c)
+
+--# return_copy
+UNLINK borrowed(member1, copy1)
+
+LINK returned(member1, copy1) {
+  borrowed_at = 1704067200000,
+  returned_at = 1706400000000
+}
+
+SET copy1 { is_available = true }
+
+--# verify_copy_available_again
+MATCH c: Copy WHERE c.barcode = "COPY-001"
+RETURN c.is_available
+
+--# query_no_active_loans
+MATCH m: Member, c: Copy, borrowed(m, c)
+RETURN count(*)
+
+--# query_return_history
+MATCH m: Member, c: Copy, returned(m, c)
+WHERE m.member_id = "M001"
+RETURN count(c)
+
+--# borrow_second_copy
+LINK borrowed(member2, copy2) {
+  borrowed_at = 1706659200000,
+  due_at = 1709251200000
+}
+
+SET copy2 { is_available = false }
+
+--# query_borrowed_by_member2
+MATCH m: Member, c: Copy, borrowed(m, c)
+WHERE m.member_id = "M002"
+RETURN count(c)
+
+--# verify_one_available_one_borrowed
+MATCH c: Copy WHERE c.is_available = true
+RETURN count(c)

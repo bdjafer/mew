@@ -1,0 +1,155 @@
+-- ===========================================================================
+-- OPERATIONS: Null Handling Tests
+-- Tests null semantics, coalesce, is_null, null propagation
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SEED DATA
+-- ---------------------------------------------------------------------------
+
+--# seed_null_data
+-- Record with all nulls
+SPAWN n1: NullableRecord { id_label = "all_null" }
+-- Record with some values
+SPAWN n2: NullableRecord {
+  id_label = "partial",
+  nullable_string = "has_value",
+  nullable_int = 42,
+  nullable_float = 3.14
+}
+-- Record with all non-null values
+SPAWN n3: NullableRecord {
+  id_label = "all_set",
+  nullable_string = "complete",
+  nullable_int = 100,
+  nullable_float = 2.718,
+  nullable_bool = true
+}
+-- Records for coalesce chain testing
+SPAWN n4: NullableRecord { id_label = "chain1", fallback1 = "first" }
+SPAWN n5: NullableRecord { id_label = "chain2", fallback2 = "second" }
+SPAWN n6: NullableRecord { id_label = "chain3" }
+
+-- ---------------------------------------------------------------------------
+-- NULL COMPARISON
+-- ---------------------------------------------------------------------------
+
+--# query_null_equals_null
+MATCH n: NullableRecord WHERE n.nullable_string = null
+RETURN COUNT(n) AS count
+
+--# query_null_not_equals_null
+MATCH n: NullableRecord WHERE n.nullable_string != null
+RETURN COUNT(n) AS count
+
+--# query_null_check_field
+MATCH n: NullableRecord WHERE n.id_label = "partial"
+RETURN n.nullable_string, n.nullable_bool
+
+-- ---------------------------------------------------------------------------
+-- IS_NULL FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_is_null_true
+MATCH n: NullableRecord WHERE is_null(n.nullable_string)
+RETURN COUNT(n) AS count
+
+--# query_is_null_false
+MATCH n: NullableRecord WHERE NOT is_null(n.nullable_string)
+RETURN COUNT(n) AS count
+
+--# query_is_null_multiple
+MATCH n: NullableRecord
+WHERE is_null(n.nullable_string) AND is_null(n.nullable_int)
+RETURN COUNT(n) AS count
+
+-- ---------------------------------------------------------------------------
+-- COALESCE FUNCTION
+-- ---------------------------------------------------------------------------
+
+--# query_coalesce_basic
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN coalesce(n.nullable_string, "fallback") AS result
+
+--# query_coalesce_not_null
+MATCH n: NullableRecord WHERE n.id_label = "partial"
+RETURN coalesce(n.nullable_string, "fallback") AS result
+
+--# query_coalesce_chain
+MATCH n: NullableRecord WHERE n.id_label = "chain1"
+RETURN coalesce(n.fallback1, n.fallback2, n.fallback3) AS result
+
+--# query_coalesce_chain_middle
+MATCH n: NullableRecord WHERE n.id_label = "chain2"
+RETURN coalesce(n.fallback1, n.fallback2, n.fallback3) AS result
+
+--# query_coalesce_chain_last
+MATCH n: NullableRecord WHERE n.id_label = "chain3"
+RETURN coalesce(n.fallback1, n.fallback2, n.fallback3) AS result
+
+-- ---------------------------------------------------------------------------
+-- ?? OPERATOR (Null coalescing shorthand)
+-- ---------------------------------------------------------------------------
+
+--# query_null_coalesce_op_basic
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN n.nullable_string ?? "default" AS result
+
+--# query_null_coalesce_op_not_null
+MATCH n: NullableRecord WHERE n.id_label = "partial"
+RETURN n.nullable_string ?? "default" AS result
+
+--# query_null_coalesce_op_chain
+MATCH n: NullableRecord WHERE n.id_label = "chain3"
+RETURN n.fallback1 ?? n.fallback2 ?? n.fallback3 AS result
+
+-- ---------------------------------------------------------------------------
+-- NULL PROPAGATION
+-- ---------------------------------------------------------------------------
+
+--# query_null_propagation_arithmetic
+-- null + number should be null
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN n.nullable_int + 1 AS result
+
+--# query_null_propagation_comparison
+-- Comparing with null propagates
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN n.nullable_int > 0 AS result
+
+--# query_null_propagation_string
+-- String operation on null propagates
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN length(n.nullable_string) AS result
+
+-- ---------------------------------------------------------------------------
+-- NULL IN BOOLEAN CONTEXT
+-- ---------------------------------------------------------------------------
+
+--# query_null_and_true
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN n.nullable_bool AND true AS result
+
+--# query_null_or_true
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN n.nullable_bool OR true AS result
+
+--# query_not_null_bool
+MATCH n: NullableRecord WHERE n.id_label = "all_null"
+RETURN NOT n.nullable_bool AS result
+
+-- ---------------------------------------------------------------------------
+-- CONDITIONAL WITH NULL
+-- ---------------------------------------------------------------------------
+
+--# query_where_nullable_true
+MATCH n: NullableRecord WHERE n.nullable_bool = true
+RETURN COUNT(n) AS count
+
+--# query_where_nullable_false
+MATCH n: NullableRecord WHERE n.nullable_bool = false
+RETURN COUNT(n) AS count
+
+--# query_where_nullable_is_null
+MATCH n: NullableRecord WHERE n.nullable_bool = null
+RETURN COUNT(n) AS count

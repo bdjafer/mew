@@ -17,7 +17,7 @@ Declare an ontology — types, relations, constraints, rules — compile it, the
 git clone https://github.com/bryandjafer/mew.git
 cd mew/mew
 cargo build --release
-cargo run --bin mew-repl
+cargo run --bin mew
 ```
 
 **Define an ontology** (`contacts.mew`):

@@ -1,0 +1,254 @@
+-- ===========================================================================
+-- SCENARIO: Blocks Edge and No-Self Constraint
+-- DESCRIPTION: Tests blocks edge behavior and no_self enforcement
+-- FOCUS: blocks edge semantics (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP
+-- ---------------------------------------------------------------------------
+
+--# test_setup_blocking_task_a
+SPAWN block_a: Task {
+  title = "Blocking A",
+  status = "in_progress",
+  priority = 5
+}
+--@ expect:ok
+
+--# test_setup_blocking_task_b
+SPAWN block_b: Task {
+  title = "Blocking B",
+  status = "todo",
+  priority = 4
+}
+--@ expect:ok
+
+--# test_setup_blocking_task_c
+SPAWN block_c: Task {
+  title = "Blocking C",
+  status = "todo",
+  priority = 3
+}
+--@ expect:ok
+
+--# test_setup_blocking_task_d
+SPAWN block_d: Task {
+  title = "Blocking D",
+  status = "todo",
+  priority = 2
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- BASIC BLOCKING RELATIONSHIPS
+-- ---------------------------------------------------------------------------
+
+--# test_create_simple_block
+MATCH a: Task, b: Task
+WHERE a.title = "Blocking A" AND b.title = "Blocking B"
+LINK blocks(a, b)
+--@ expect:ok
+
+--# test_verify_block_created
+MATCH a: Task, b: Task, blocks(a, b)
+WHERE a.title = "Blocking A" AND b.title = "Blocking B"
+RETURN a.title, b.title
+--@ expect:rows = 1
+--@ expect:has_row { a.title = "Blocking A", b.title = "Blocking B" }
+
+-- ---------------------------------------------------------------------------
+-- NO_SELF CONSTRAINT ON BLOCKS
+-- ---------------------------------------------------------------------------
+
+--# test_task_cannot_block_itself
+MATCH a: Task
+WHERE a.title = "Blocking A"
+LINK blocks(a, a)
+--@ expect:error = "NoSelfViolation"
+
+--# test_verify_no_self_block_created
+MATCH a: Task, blocks(a, a)
+WHERE a.title = "Blocking A"
+RETURN count(*) AS self_blocks
+--@ expect:rows = 1
+--@ expect:has_row { self_blocks = 0 }
+
+-- ---------------------------------------------------------------------------
+-- CHAIN OF BLOCKS
+-- ---------------------------------------------------------------------------
+
+--# test_create_blocking_chain
+MATCH b: Task, c: Task, d: Task
+WHERE b.title = "Blocking B" AND c.title = "Blocking C" AND d.title = "Blocking D"
+LINK blocks(b, c)
+LINK blocks(c, d)
+--@ expect:ok
+
+--# test_verify_blocking_chain
+MATCH a: Task, b: Task, c: Task, d: Task, blocks(a, b), blocks(b, c), blocks(c, d)
+WHERE a.title = "Blocking A"
+RETURN a.title, b.title, c.title, d.title
+--@ expect:rows = 1
+--@ expect:has_row { a.title = "Blocking A", b.title = "Blocking B", c.title = "Blocking C", d.title = "Blocking D" }
+
+-- ---------------------------------------------------------------------------
+-- QUERY BLOCKED TASKS (direct relationships only - Level 2)
+-- ---------------------------------------------------------------------------
+
+--# test_find_all_blocked_by_a
+MATCH a: Task, blocked: Task, blocks(a, blocked)
+WHERE a.title = "Blocking A"
+RETURN blocked.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Blocking B" }
+
+--# test_find_tasks_that_block_d
+MATCH blocker: Task, d: Task, blocks(blocker, d)
+WHERE d.title = "Blocking D"
+RETURN blocker.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Blocking C" }
+
+--# test_find_tasks_not_blocking_anything
+MATCH t: Task
+WHERE t.title STARTS WITH "Blocking"
+AND NOT EXISTS(other: Task, blocks(t, other))
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Blocking D" }
+
+--# test_find_tasks_not_blocked
+MATCH t: Task
+WHERE t.title STARTS WITH "Blocking"
+AND NOT EXISTS(other: Task, blocks(other, t))
+RETURN t.title
+ORDER BY t.title
+--@ expect:rows = 1
+--@ expect:has_row { title = "Blocking A" }
+
+-- ---------------------------------------------------------------------------
+-- CIRCULAR BLOCKING (ALLOWED - NO_SELF only prevents self-loops)
+-- ---------------------------------------------------------------------------
+
+--# test_setup_circular_tasks
+SPAWN circ_1: Task { title = "Circular 1", status = "todo", priority = 3 }
+SPAWN circ_2: Task { title = "Circular 2", status = "todo", priority = 3 }
+--@ expect:ok
+
+--# test_create_circular_block
+MATCH c1: Task, c2: Task
+WHERE c1.title = "Circular 1" AND c2.title = "Circular 2"
+LINK blocks(c1, c2)
+LINK blocks(c2, c1)
+--@ expect:ok
+
+--# test_verify_circular_blocks
+MATCH c1: Task, c2: Task, blocks(c1, c2), blocks(c2, c1)
+WHERE c1.title = "Circular 1"
+RETURN c1.title, c2.title
+--@ expect:rows = 1
+--@ expect:has_row { c1.title = "Circular 1", c2.title = "Circular 2" }
+
+-- ---------------------------------------------------------------------------
+-- MULTIPLE BLOCKERS
+-- ---------------------------------------------------------------------------
+
+--# test_setup_multi_blocker
+SPAWN multi_blocked: Task {
+  title = "Multi Blocked",
+  status = "todo",
+  priority = 1
+}
+--@ expect:ok
+
+--# test_create_multiple_blockers
+MATCH a: Task, b: Task, c: Task, target: Task
+WHERE a.title = "Blocking A" AND b.title = "Blocking B" AND c.title = "Blocking C"
+AND target.title = "Multi Blocked"
+LINK blocks(a, target)
+LINK blocks(b, target)
+LINK blocks(c, target)
+--@ expect:ok
+
+--# test_verify_multiple_blockers
+MATCH blocker: Task, target: Task, blocks(blocker, target)
+WHERE target.title = "Multi Blocked"
+RETURN count(blocker) AS blocker_count
+--@ expect:rows = 1
+--@ expect:has_row { blocker_count = 3 }
+
+--# test_list_all_blockers
+MATCH blocker: Task, target: Task, blocks(blocker, target)
+WHERE target.title = "Multi Blocked"
+RETURN blocker.title
+ORDER BY blocker.title
+--@ expect:rows = 3
+--@ expect:has_row { title = "Blocking A" }
+--@ expect:has_row { title = "Blocking B" }
+--@ expect:has_row { title = "Blocking C" }
+
+-- ---------------------------------------------------------------------------
+-- BLOCKS WITH STATUS FILTERING
+-- ---------------------------------------------------------------------------
+
+--# test_find_in_progress_blockers
+MATCH blocker: Task, blocked: Task, blocks(blocker, blocked)
+WHERE blocker.status = "in_progress"
+RETURN blocker.title, blocked.title
+ORDER BY blocked.title
+--@ expect:rows >= 2
+
+--# test_find_tasks_blocked_by_non_done
+MATCH blocker: Task, t: Task, blocks(blocker, t)
+WHERE blocker.status != "done" AND t.title STARTS WITH "Blocking"
+RETURN DISTINCT t.title
+ORDER BY t.title
+--@ expect:rows >= 3
+
+-- ---------------------------------------------------------------------------
+-- UNLINK BLOCKS
+-- ---------------------------------------------------------------------------
+
+--# test_unlink_one_blocker
+MATCH a: Task, multi: Task, blocks(a, multi) AS r
+WHERE a.title = "Blocking A" AND multi.title = "Multi Blocked"
+UNLINK r
+--@ expect:ok
+
+--# test_verify_one_blocker_removed
+MATCH blocker: Task, target: Task, blocks(blocker, target)
+WHERE target.title = "Multi Blocked"
+RETURN count(blocker) AS remaining_blockers
+--@ expect:rows = 1
+--@ expect:has_row { remaining_blockers = 2 }
+
+-- ---------------------------------------------------------------------------
+-- BLOCKS WITH PRIORITY
+-- ---------------------------------------------------------------------------
+
+--# test_high_priority_blocked_by_low_priority
+MATCH low: Task, high: Task, blocks(low, high)
+WHERE low.priority < high.priority
+RETURN low.title, low.priority, high.title, high.priority
+ORDER BY low.priority
+--@ expect:rows >= 1
+
+--# test_count_blocking_relationships
+MATCH a: Task, b: Task, blocks(a, b)
+WHERE a.title STARTS WITH "Blocking" OR a.title STARTS WITH "Circular"
+RETURN count(*) AS total_blocks
+--@ expect:rows = 1
+--@ expect:has_row { total_blocks >= 5 }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_blocking_tasks
+MATCH t: Task
+WHERE t.title STARTS WITH "Blocking" OR t.title STARTS WITH "Circular" OR t.title = "Multi Blocked"
+KILL t
+--@ expect:ok
+

@@ -1,0 +1,131 @@
+-- ===========================================================================
+-- SCENARIO: Uniqueness Constraint Violations
+-- DESCRIPTION: Tests unique constraint enforcement on attributes
+-- FOCUS: Uniqueness constraints (unique to this ontology's tests)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create entities with unique attributes
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_product_with_unique_sku
+SPAWN test_product: Product {
+  sku = "TEST-0001",
+  name = "Test Product",
+  price = 99.99,
+  status = "active"
+}
+
+-- ---------------------------------------------------------------------------
+-- UNIQUE CONSTRAINT VIOLATIONS: Cannot create duplicate SKUs
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_duplicate_sku_should_fail
+SPAWN duplicate_product: Product {
+  sku = "TEST-0001",
+  name = "Another Product",
+  price = 149.99,
+  status = "active"
+}
+
+--# test_spawn_duplicate_existing_sku_should_fail
+SPAWN duplicate_laptop: Product {
+  sku = "COMP-0001",
+  name = "Another Laptop",
+  price = 999.99,
+  status = "active"
+}
+
+-- ---------------------------------------------------------------------------
+-- UNIQUE CONSTRAINT ON CUSTOMER EMAIL
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_duplicate_customer_email_should_fail
+SPAWN duplicate_customer: Customer {
+  email = "alice@example.com",
+  name = "Alice Clone",
+  is_verified = false
+}
+
+-- ---------------------------------------------------------------------------
+-- UNIQUE CONSTRAINT ON CATEGORY SLUG
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_duplicate_category_slug_should_fail
+SPAWN duplicate_category: Category {
+  name = "Electronics Copy",
+  slug = "electronics",
+  description = "Duplicate slug"
+}
+
+-- ---------------------------------------------------------------------------
+-- SET OPERATION VIOLATING UNIQUENESS
+-- ---------------------------------------------------------------------------
+
+--# test_set_to_duplicate_sku_should_fail
+MATCH p: Product
+WHERE p.sku = "TEST-0001"
+SET p { sku = "COMP-0001" }
+
+--# test_verify_sku_unchanged_after_failed_set
+MATCH p: Product
+WHERE p.name = "Test Product"
+RETURN p.sku
+
+--# test_set_to_duplicate_email_should_fail
+MATCH c: Customer
+WHERE c.email = "charlie@example.com"
+SET c { email = "alice@example.com" }
+
+-- ---------------------------------------------------------------------------
+-- VALID UPDATES: Setting to unique values should succeed
+-- ---------------------------------------------------------------------------
+
+--# test_set_to_new_unique_sku_should_succeed
+MATCH p: Product
+WHERE p.sku = "TEST-0001"
+SET p { sku = "TEST-0002" }
+
+--# test_verify_sku_changed
+MATCH p: Product
+WHERE p.name = "Test Product"
+RETURN p.sku
+
+--# test_spawn_with_old_sku_now_succeeds
+SPAWN reuse_sku: Product {
+  sku = "TEST-0001",
+  name = "Reused SKU Product",
+  price = 199.99,
+  status = "active"
+}
+
+-- ---------------------------------------------------------------------------
+-- UNIQUENESS ACROSS INHERITANCE HIERARCHY
+-- ---------------------------------------------------------------------------
+
+--# test_physical_product_duplicate_sku_fails
+SPAWN duplicate_physical: PhysicalProduct {
+  sku = "TEST-0002",
+  name = "Physical Duplicate",
+  price = 299.99,
+  status = "active",
+  weight_kg = 1.0
+}
+
+--# test_digital_product_duplicate_sku_fails
+SPAWN duplicate_digital: DigitalProduct {
+  sku = "TEST-0002",
+  name = "Digital Duplicate",
+  price = 39.99,
+  status = "active",
+  file_size_mb = 20.0
+}
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_test_products
+MATCH p: Product
+WHERE p.sku IN ["TEST-0001", "TEST-0002"]
+KILL p

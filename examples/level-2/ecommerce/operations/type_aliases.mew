@@ -1,0 +1,482 @@
+-- ===========================================================================
+-- SCENARIO: Type Aliases
+-- DESCRIPTION: Tests type alias definitions and their constraint inheritance
+-- FOCUS: Level-2 type aliases (SKU, Price, Rating, ProductStatus)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SKU TYPE ALIAS: String [match: "^[A-Z]{2,4}-[0-9]{4,8}$"]
+-- ---------------------------------------------------------------------------
+
+--# test_sku_alias_valid_short
+SPAWN sku_test_1: Product {
+  sku = "AB-1234",
+  name = "SKU Test Short",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_sku_alias_valid_long
+SPAWN sku_test_2: Product {
+  sku = "ABCD-12345678",
+  name = "SKU Test Long",
+  price = 20.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_sku_alias_rejects_lowercase
+SPAWN sku_invalid_1: Product {
+  sku = "ab-1234",
+  name = "Invalid SKU",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_sku_alias_rejects_no_dash
+SPAWN sku_invalid_2: Product {
+  sku = "AB1234",
+  name = "Invalid SKU",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_sku_alias_rejects_too_few_numbers
+SPAWN sku_invalid_3: Product {
+  sku = "AB-123",
+  name = "Invalid SKU",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- PRICE TYPE ALIAS: Float [>= 0]
+-- ---------------------------------------------------------------------------
+
+--# test_price_alias_valid_zero
+SPAWN price_test_1: Product {
+  sku = "PRCE-0001",
+  name = "Free Product",
+  price = 0.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_price_alias_valid_positive
+SPAWN price_test_2: Product {
+  sku = "PRCE-0002",
+  name = "Priced Product",
+  price = 999.99,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_price_alias_rejects_negative
+SPAWN price_invalid: Product {
+  sku = "PRCE-0003",
+  name = "Negative Price",
+  price = -10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_price_alias_in_subtype
+SPAWN price_subtype: PhysicalProduct {
+  sku = "PRCE-0004",
+  name = "Physical with Price",
+  price = 49.99,
+  status = "active",
+  weight_kg = 1.0
+}
+--@ expect:ok
+
+--# test_price_alias_subtype_negative_fails
+SPAWN price_subtype_invalid: DigitalProduct {
+  sku = "PRCE-0005",
+  name = "Digital Negative Price",
+  price = -5.0,
+  status = "active",
+  file_size_mb = 100.0
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- RATING TYPE ALIAS: Int [1..5]
+-- ---------------------------------------------------------------------------
+
+--# test_setup_product_for_rating
+SPAWN rating_product: Product {
+  sku = "RATE-0001",
+  name = "Rating Test Product",
+  price = 50.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_rating_alias_valid_min
+SPAWN rating_test_1: Review {
+  rating = 1,
+  title = "One Star",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_rating_alias_valid_max
+SPAWN rating_test_2: Review {
+  rating = 5,
+  title = "Five Stars",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_rating_alias_valid_mid
+SPAWN rating_test_3: Review {
+  rating = 3,
+  title = "Three Stars",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_rating_alias_rejects_zero
+SPAWN rating_invalid_1: Review {
+  rating = 0,
+  title = "Zero Stars",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_rating_alias_rejects_six
+SPAWN rating_invalid_2: Review {
+  rating = 6,
+  title = "Six Stars",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_rating_alias_rejects_negative
+SPAWN rating_invalid_3: Review {
+  rating = -1,
+  title = "Negative Stars",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- PRODUCTSTATUS TYPE ALIAS: String [in: ["draft", "active", "discontinued", "out_of_stock"]]
+-- ---------------------------------------------------------------------------
+
+--# test_status_alias_valid_draft
+SPAWN status_test_1: Product {
+  sku = "STAT-0001",
+  name = "Draft Product",
+  price = 10.0,
+  status = "draft"
+}
+--@ expect:ok
+
+--# test_status_alias_valid_active
+SPAWN status_test_2: Product {
+  sku = "STAT-0002",
+  name = "Active Product",
+  price = 20.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_status_alias_valid_discontinued
+SPAWN status_test_3: Product {
+  sku = "STAT-0003",
+  name = "Discontinued Product",
+  price = 30.0,
+  status = "discontinued"
+}
+--@ expect:ok
+
+--# test_status_alias_valid_out_of_stock
+SPAWN status_test_4: Product {
+  sku = "STAT-0004",
+  name = "Out of Stock Product",
+  price = 40.0,
+  status = "out_of_stock"
+}
+--@ expect:ok
+
+--# test_status_alias_rejects_invalid
+SPAWN status_invalid: Product {
+  sku = "STAT-0005",
+  name = "Invalid Status Product",
+  price = 50.0,
+  status = "invalid_status"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_status_alias_rejects_empty
+SPAWN status_invalid_2: Product {
+  sku = "STAT-0006",
+  name = "Empty Status Product",
+  price = 60.0,
+  status = ""
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- TYPE ALIAS IN UPDATE OPERATIONS
+-- ---------------------------------------------------------------------------
+
+--# test_set_valid_status
+MATCH p: Product
+WHERE p.sku = "STAT-0001"
+SET p { status = "active" }
+--@ expect:ok
+
+--# test_verify_status_updated
+MATCH p: Product
+WHERE p.sku = "STAT-0001"
+RETURN p.status
+--@ expect:rows = 1
+--@ expect:has_row { status = "active" }
+
+--# test_set_invalid_status_fails
+MATCH p: Product
+WHERE p.sku = "STAT-0001"
+SET p { status = "unknown_status" }
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_set_valid_price
+MATCH p: Product
+WHERE p.sku = "PRCE-0001"
+SET p { price = 9.99 }
+--@ expect:ok
+
+--# test_set_invalid_price_fails
+MATCH p: Product
+WHERE p.sku = "PRCE-0001"
+SET p { price = -1.0 }
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- TYPE ALIAS IN QUERIES
+-- ---------------------------------------------------------------------------
+
+--# test_query_by_status_alias
+MATCH p: Product
+WHERE p.status = "active" AND p.sku STARTS WITH "STAT-"
+RETURN p.name
+ORDER BY p.name
+--@ expect:rows >= 1
+
+--# test_query_by_price_range
+MATCH p: Product
+WHERE p.price >= 0.0 AND p.price <= 50.0 AND p.sku STARTS WITH "PRCE-"
+RETURN p.name, p.price
+ORDER BY p.price
+--@ expect:rows >= 2
+
+--# test_query_reviews_by_rating
+MATCH r: Review
+WHERE r.rating >= 3 AND r.title ENDS WITH "Stars"
+RETURN r.title, r.rating
+ORDER BY r.rating DESC
+--@ expect:rows >= 2
+
+-- ---------------------------------------------------------------------------
+-- TYPE ALIAS INHERITANCE IN SUBTYPES
+-- ---------------------------------------------------------------------------
+
+--# test_physical_product_inherits_price_alias
+SPAWN physical_price: PhysicalProduct {
+  sku = "PHYS-0001",
+  name = "Physical Product",
+  price = 199.99,
+  status = "active",
+  weight_kg = 2.5
+}
+--@ expect:ok
+
+--# test_digital_product_inherits_price_alias
+SPAWN digital_price: DigitalProduct {
+  sku = "DIGI-0001",
+  name = "Digital Product",
+  price = 29.99,
+  status = "active",
+  file_size_mb = 500.0
+}
+--@ expect:ok
+
+--# test_physical_product_price_constraint_enforced
+SPAWN physical_price_invalid: PhysicalProduct {
+  sku = "PHYS-0002",
+  name = "Invalid Physical",
+  price = -10.0,
+  status = "active",
+  weight_kg = 1.0
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_digital_product_status_constraint_enforced
+SPAWN digital_status_invalid: DigitalProduct {
+  sku = "DIGI-0002",
+  name = "Invalid Digital",
+  price = 10.0,
+  status = "invalid",
+  file_size_mb = 100.0
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- LENGTH CONSTRAINT: name String [length: 1..100]
+-- ---------------------------------------------------------------------------
+
+--# test_name_length_valid_short
+SPAWN len_test_1: Product {
+  sku = "LENG-0001",
+  name = "A",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_name_length_valid_medium
+SPAWN len_test_2: Product {
+  sku = "LENG-0002",
+  name = "This is a medium length product name for testing",
+  price = 20.0,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_name_length_empty_fails
+SPAWN len_invalid_1: Product {
+  sku = "LENG-0003",
+  name = "",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_name_length_too_long_fails
+SPAWN len_invalid_2: Product {
+  sku = "LENG-0004",
+  name = "This product name is intentionally made extremely long to exceed the one hundred character limit that was set in the ontology schema definition",
+  price = 10.0,
+  status = "active"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- LENGTH CONSTRAINT: Review title String? [length: 3..50]
+-- ---------------------------------------------------------------------------
+
+--# test_review_title_valid_min
+SPAWN title_len_1: Review {
+  rating = 4,
+  title = "OK!",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_review_title_valid_max
+SPAWN title_len_2: Review {
+  rating = 5,
+  title = "This is exactly fifty characters long for testing!",
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+--# test_review_title_too_short_fails
+SPAWN title_len_invalid_1: Review {
+  rating = 3,
+  title = "No",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_review_title_too_long_fails
+SPAWN title_len_invalid_2: Review {
+  rating = 3,
+  title = "This review title is way too long and exceeds the fifty character maximum limit",
+  is_verified_purchase = false
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_review_title_null_allowed
+SPAWN title_null: Review {
+  rating = 4,
+  is_verified_purchase = false
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_sku_products
+MATCH p: Product
+WHERE p.sku STARTS WITH "AB-" OR p.sku STARTS WITH "ABCD-"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_price_products
+MATCH p: Product
+WHERE p.sku STARTS WITH "PRCE-"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_rating_products
+MATCH p: Product
+WHERE p.sku = "RATE-0001"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_status_products
+MATCH p: Product
+WHERE p.sku STARTS WITH "STAT-"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_physical_products
+MATCH p: Product
+WHERE p.sku STARTS WITH "PHYS-"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_digital_products
+MATCH p: Product
+WHERE p.sku STARTS WITH "DIGI-"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_length_products
+MATCH p: Product
+WHERE p.sku STARTS WITH "LENG-"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_reviews
+MATCH r: Review
+WHERE r.title IN ["One Star", "Five Stars", "Three Stars", "OK!", "This is exactly fifty characters long for testing!"]
+   OR r.title = null
+KILL r
+--@ expect:ok

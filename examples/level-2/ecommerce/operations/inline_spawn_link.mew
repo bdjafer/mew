@@ -1,0 +1,317 @@
+-- ===========================================================================
+-- SCENARIO: Inline SPAWN in LINK
+-- DESCRIPTION: Tests creating nodes inline within LINK statements
+-- FOCUS: Level-2 inline SPAWN in LINK (unique to this ontology)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create base entities
+-- ---------------------------------------------------------------------------
+
+--# test_setup_base_product
+SPAWN inline_product: Product {
+  sku = "INLN-0001",
+  name = "Inline Test Product",
+  price = 99.99,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_setup_base_category
+SPAWN inline_category: Category {
+  name = "Inline Test Category",
+  slug = "inline-test-category",
+  is_active = true
+}
+--@ expect:ok
+
+--# test_setup_base_customer
+SPAWN inline_customer: Customer {
+  email = "inline@test.com",
+  name = "Inline Test Customer",
+  is_verified = true
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: Create Review while linking
+-- ---------------------------------------------------------------------------
+
+--# test_inline_spawn_review_in_link
+MATCH p: Product, c: Customer
+WHERE p.sku = "INLN-0001" AND c.email = "inline@test.com"
+LINK review_of(
+  SPAWN Review {
+    rating = 5,
+    title = "Great Product!",
+    body = "This is an inline spawned review.",
+    is_verified_purchase = true
+  } AS new_review,
+  p
+)
+LINK reviewed_by(new_review, c)
+--@ expect:ok
+
+--# test_verify_inline_review_created
+MATCH r: Review, p: Product, review_of(r, p)
+WHERE p.sku = "INLN-0001" AND r.title = "Great Product!"
+RETURN r.rating, r.is_verified_purchase
+--@ expect:rows = 1
+--@ expect:has_row { rating = 5, is_verified_purchase = true }
+
+--# test_verify_inline_review_linked_to_customer
+MATCH r: Review, c: Customer, reviewed_by(r, c)
+WHERE r.title = "Great Product!"
+RETURN c.email
+--@ expect:rows = 1
+--@ expect:has_row { email = "inline@test.com" }
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: Create ProductImage while linking
+-- ---------------------------------------------------------------------------
+
+--# test_inline_spawn_image_in_link
+MATCH p: Product
+WHERE p.sku = "INLN-0001"
+LINK has_image(
+  p,
+  SPAWN ProductImage {
+    url = "https://example.com/inline-image.jpg",
+    alt_text = "Inline spawned image",
+    position = 1,
+    is_primary = true
+  }
+)
+--@ expect:ok
+
+--# test_verify_inline_image_created
+MATCH p: Product, img: ProductImage, has_image(p, img)
+WHERE p.sku = "INLN-0001" AND img.is_primary = true
+RETURN img.url, img.alt_text
+--@ expect:rows = 1
+--@ expect:has_row { url = "https://example.com/inline-image.jpg", alt_text = "Inline spawned image" }
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: Create Category while linking
+-- ---------------------------------------------------------------------------
+
+--# test_inline_spawn_category_in_link
+MATCH p: Product
+WHERE p.sku = "INLN-0001"
+LINK in_category(
+  p,
+  SPAWN Category {
+    name = "New Inline Category",
+    slug = "new-inline-category",
+    description = "Created inline while linking",
+    is_active = true
+  } AS new_cat
+)
+--@ expect:ok
+
+--# test_verify_inline_category_created
+MATCH p: Product, c: Category, in_category(p, c)
+WHERE p.sku = "INLN-0001" AND c.slug = "new-inline-category"
+RETURN c.name, c.description
+--@ expect:rows = 1
+--@ expect:has_row { name = "New Inline Category", description = "Created inline while linking" }
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: Multiple inline spawns
+-- ---------------------------------------------------------------------------
+
+--# test_setup_product_for_multiple_inline
+SPAWN multi_inline_product: Product {
+  sku = "INLN-0002",
+  name = "Multiple Inline Test",
+  price = 49.99,
+  status = "active"
+}
+--@ expect:ok
+
+--# test_multiple_inline_spawns
+MATCH p: Product
+WHERE p.sku = "INLN-0002"
+LINK has_image(p, SPAWN ProductImage { url = "https://example.com/img1.jpg", position = 1 })
+LINK has_image(p, SPAWN ProductImage { url = "https://example.com/img2.jpg", position = 2 })
+LINK has_image(p, SPAWN ProductImage { url = "https://example.com/img3.jpg", position = 3 })
+--@ expect:ok
+
+--# test_verify_multiple_inline_images
+MATCH p: Product, img: ProductImage, has_image(p, img)
+WHERE p.sku = "INLN-0002"
+RETURN count(img) AS image_count
+--@ expect:rows = 1
+--@ expect:has_row { image_count = 3 }
+
+--# test_verify_multiple_inline_positions
+MATCH p: Product, img: ProductImage, has_image(p, img)
+WHERE p.sku = "INLN-0002"
+RETURN img.position
+ORDER BY img.position
+--@ expect:rows = 3
+--@ expect:has_row { position = 1 }
+--@ expect:has_row { position = 2 }
+--@ expect:has_row { position = 3 }
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: With existing target
+-- ---------------------------------------------------------------------------
+
+--# test_inline_spawn_link_to_existing_category
+MATCH cat: Category
+WHERE cat.slug = "inline-test-category"
+LINK in_category(
+  SPAWN Product {
+    sku = "INLN-0003",
+    name = "Product with Existing Category",
+    price = 29.99,
+    status = "active"
+  },
+  cat
+)
+--@ expect:ok
+
+--# test_verify_inline_product_linked_to_existing
+MATCH p: Product, c: Category, in_category(p, c)
+WHERE p.sku = "INLN-0003" AND c.slug = "inline-test-category"
+RETURN p.name
+--@ expect:rows = 1
+--@ expect:has_row { name = "Product with Existing Category" }
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: Chained operations
+-- ---------------------------------------------------------------------------
+
+--# test_inline_spawn_with_chain
+MATCH c: Customer
+WHERE c.email = "inline@test.com"
+SPAWN chained_product: Product {
+  sku = "INLN-0004",
+  name = "Chained Inline Product",
+  price = 199.99,
+  status = "active"
+}
+LINK review_of(
+  SPAWN Review {
+    rating = 4,
+    title = "Good Product",
+    is_verified_purchase = false
+  } AS chained_review,
+  chained_product
+)
+LINK reviewed_by(chained_review, c)
+LINK has_image(
+  chained_product,
+  SPAWN ProductImage {
+    url = "https://example.com/chained.jpg",
+    is_primary = true
+  }
+)
+--@ expect:ok
+
+--# test_verify_chained_operations
+MATCH p: Product, img: ProductImage, has_image(p, img)
+WHERE p.sku = "INLN-0004"
+MATCH r: Review, review_of(r, p)
+MATCH cust: Customer, reviewed_by(r, cust)
+RETURN p.name, r.rating, img.is_primary, cust.email
+--@ expect:rows = 1
+--@ expect:has_row { name = "Chained Inline Product", rating = 4, is_primary = true, email = "inline@test.com" }
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: Related products
+-- ---------------------------------------------------------------------------
+
+--# test_inline_spawn_related_product
+MATCH p: Product
+WHERE p.sku = "INLN-0001"
+LINK related_to(
+  p,
+  SPAWN Product {
+    sku = "INLN-0005",
+    name = "Related Inline Product",
+    price = 79.99,
+    status = "active"
+  }
+)
+--@ expect:ok
+
+--# test_verify_related_product_created
+MATCH p1: Product, p2: Product, related_to(p1, p2)
+WHERE p1.sku = "INLN-0001" AND p2.sku = "INLN-0005"
+RETURN p2.name
+--@ expect:rows = 1
+--@ expect:has_row { name = "Related Inline Product" }
+
+-- ---------------------------------------------------------------------------
+-- INLINE SPAWN IN LINK: With subtype
+-- ---------------------------------------------------------------------------
+
+--# test_inline_spawn_physical_product_in_link
+MATCH cat: Category
+WHERE cat.slug = "inline-test-category"
+LINK in_category(
+  SPAWN PhysicalProduct {
+    sku = "INLN-0006",
+    name = "Inline Physical Product",
+    price = 149.99,
+    status = "active",
+    weight_kg = 2.5,
+    requires_shipping = true
+  },
+  cat
+)
+--@ expect:ok
+
+--# test_verify_inline_physical_product
+MATCH p: PhysicalProduct, c: Category, in_category(p, c)
+WHERE p.sku = "INLN-0006"
+RETURN p.name, p.weight_kg, p.requires_shipping
+--@ expect:rows = 1
+--@ expect:has_row { name = "Inline Physical Product", weight_kg = 2.5, requires_shipping = true }
+
+--# test_inline_spawn_digital_product_in_link
+MATCH cat: Category
+WHERE cat.slug = "inline-test-category"
+LINK in_category(
+  SPAWN DigitalProduct {
+    sku = "INLN-0007",
+    name = "Inline Digital Product",
+    price = 19.99,
+    status = "active",
+    file_size_mb = 500.0,
+    requires_shipping = false
+  },
+  cat
+)
+--@ expect:ok
+
+--# test_verify_inline_digital_product
+MATCH p: DigitalProduct, c: Category, in_category(p, c)
+WHERE p.sku = "INLN-0007"
+RETURN p.name, p.file_size_mb, p.requires_shipping
+--@ expect:rows = 1
+--@ expect:has_row { name = "Inline Digital Product", file_size_mb = 500.0, requires_shipping = false }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_inline_products
+MATCH p: Product
+WHERE p.sku STARTS WITH "INLN-"
+KILL p
+--@ expect:ok
+
+--# test_cleanup_inline_categories
+MATCH c: Category
+WHERE c.slug IN ["inline-test-category", "new-inline-category"]
+KILL c
+--@ expect:ok
+
+--# test_cleanup_inline_customer
+MATCH c: Customer
+WHERE c.email = "inline@test.com"
+KILL c
+--@ expect:ok

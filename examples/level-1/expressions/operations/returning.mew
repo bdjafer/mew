@@ -1,0 +1,95 @@
+-- ===========================================================================
+-- OPERATIONS: RETURNING Clause Tests
+-- Tests RETURNING variants on SPAWN, LINK, KILL, SET
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SPAWN RETURNING TESTS
+-- ---------------------------------------------------------------------------
+
+--# spawn_returning_id
+SPAWN m: Measurement { name = "ret_id_test", value = 1.0 }
+RETURNING id
+
+--# spawn_returning_star
+SPAWN m: Measurement { name = "ret_star_test", value = 2.0, count = 5, is_valid = true }
+RETURNING *
+
+--# spawn_returning_specific_attrs
+SPAWN m: Measurement { name = "ret_attrs_test", value = 3.0, count = 10, unit = "kg" }
+RETURNING name, value, count
+
+--# spawn_returning_with_default
+-- Should return the default value applied
+SPAWN m: Measurement { name = "ret_default_test", value = 4.0 }
+RETURNING name, unit
+-- unit should be "units" (default)
+
+-- ---------------------------------------------------------------------------
+-- LINK RETURNING TESTS
+-- ---------------------------------------------------------------------------
+
+--# setup_for_link_returning
+SPAWN m1: Measurement { name = "link_source", value = 10.0 }
+SPAWN m2: Measurement { name = "link_target", value = 20.0 }
+
+--# link_returning_id
+LINK follows(#m1, #m2)
+RETURNING id
+
+--# setup_for_link_star
+SPAWN m3: Measurement { name = "link_star_source", value = 30.0 }
+SPAWN m4: Measurement { name = "link_star_target", value = 40.0 }
+
+--# link_returning_star
+LINK follows(#m3, #m4) AS e
+RETURNING *
+
+-- ---------------------------------------------------------------------------
+-- SET RETURNING TESTS
+-- ---------------------------------------------------------------------------
+
+--# setup_for_set_returning
+SPAWN m5: Measurement { name = "set_test", value = 50.0, count = 0 }
+
+--# set_returning_single
+SET #m5.count = 100
+RETURNING count
+
+--# set_returning_multiple
+SET #m5 { value = 75.0, unit = "meters" }
+RETURNING value, unit
+
+--# set_returning_star
+SET #m5.is_valid = false
+RETURNING *
+
+-- ---------------------------------------------------------------------------
+-- KILL RETURNING TESTS
+-- ---------------------------------------------------------------------------
+
+--# setup_for_kill_returning
+SPAWN m6: Measurement { name = "kill_test_1", value = 60.0 }
+SPAWN m7: Measurement { name = "kill_test_2", value = 70.0 }
+SPAWN m8: Measurement { name = "kill_test_3", value = 80.0 }
+
+--# kill_returning_id
+KILL #m6
+RETURNING id
+
+--# kill_bulk_returning
+KILL { MATCH m: Measurement WHERE m.name = "kill_test_2" OR m.name = "kill_test_3" RETURN m }
+RETURNING id
+
+-- ---------------------------------------------------------------------------
+-- VERIFICATION QUERIES
+-- ---------------------------------------------------------------------------
+
+--# verify_spawned_records
+MATCH m: Measurement
+WHERE starts_with(m.name, "ret_") OR starts_with(m.name, "link_") OR starts_with(m.name, "set_")
+RETURN COUNT(m) AS count
+
+--# verify_links_created
+MATCH m1: Measurement, m2: Measurement, follows(m1, m2)
+RETURN COUNT(m1) AS count

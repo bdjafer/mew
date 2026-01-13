@@ -1,0 +1,42 @@
+-- ===========================================================================
+-- OPERATIONS: Basic Queries
+-- Basic queries for the expressions ontology
+-- ===========================================================================
+
+--# count_all_measurements
+MATCH m: Measurement
+RETURN COUNT(m) AS count
+
+--# count_all_text_entries
+MATCH t: TextEntry
+RETURN COUNT(t) AS count
+
+--# count_all_time_records
+MATCH t: TimeRecord
+RETURN COUNT(t) AS count
+
+--# count_all_calculations
+MATCH c: Calculation
+RETURN COUNT(c) AS count
+
+--# count_all_nullable_records
+MATCH n: NullableRecord
+RETURN COUNT(n) AS count
+
+--# count_all_data_points
+MATCH d: DataPoint
+RETURN COUNT(d) AS count
+
+--# query_measurements_by_validity
+MATCH m: Measurement WHERE m.is_valid = true
+RETURN m.name, m.value, m.unit
+
+--# query_data_points_by_category
+MATCH d: DataPoint WHERE d.is_active = true
+RETURN d.category, d.label, d.float_value
+ORDER BY d.category, d.label
+
+--# query_time_records_ordered
+MATCH t: TimeRecord
+RETURN t.label, t.start_time
+ORDER BY t.start_time ASC

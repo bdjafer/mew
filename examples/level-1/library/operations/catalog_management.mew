@@ -1,0 +1,136 @@
+-- ===========================================================================
+-- SCENARIO: Catalog Management
+-- DESCRIPTION: Test book cataloging with authors, genres, and copies
+-- ===========================================================================
+
+--# create_comprehensive_book
+SPAWN book1: Book {
+  isbn = "978-1-111111-11-1",
+  title = "Introduction to Databases",
+  publication_year = 2018,
+  page_count = 450,
+  language = "English"
+}
+
+--# add_multiple_authors
+SPAWN author1: Author {
+  name = "Dr. Smith",
+  birth_year = 1970,
+  nationality = "UK",
+  biography = "Database expert with 20 years experience"
+}
+
+SPAWN author2: Author {
+  name = "Prof. Johnson",
+  birth_year = 1975,
+  nationality = "USA"
+}
+
+LINK written_by(book1, author1)
+LINK written_by(book1, author2)
+
+--# count_authors_for_book
+MATCH b: Book, a: Author, written_by(b, a)
+WHERE b.isbn = "978-1-111111-11-1"
+RETURN count(a)
+
+--# add_multiple_genres
+SPAWN genre_tech: Genre {
+  name = "Technology",
+  description = "Books about computer science and technology"
+}
+
+SPAWN genre_ref: Genre {
+  name = "Reference",
+  description = "Reference materials and textbooks"
+}
+
+LINK in_genre(book1, genre_tech)
+LINK in_genre(book1, genre_ref)
+
+--# count_genres_for_book
+MATCH b: Book, g: Genre, in_genre(b, g)
+WHERE b.isbn = "978-1-111111-11-1"
+RETURN count(g)
+
+--# add_multiple_copies_with_conditions
+SPAWN copy_new: Copy {
+  barcode = "NEW-001",
+  condition = "new",
+  is_available = true
+}
+
+SPAWN copy_good: Copy {
+  barcode = "GOOD-001",
+  condition = "good",
+  is_available = true
+}
+
+SPAWN copy_fair: Copy {
+  barcode = "FAIR-001",
+  condition = "fair",
+  is_available = true
+}
+
+SPAWN copy_poor: Copy {
+  barcode = "POOR-001",
+  condition = "poor",
+  is_available = false
+}
+
+LINK copy_of(copy_new, book1)
+LINK copy_of(copy_good, book1)
+LINK copy_of(copy_fair, book1)
+LINK copy_of(copy_poor, book1)
+
+--# count_all_copies
+MATCH b: Book, c: Copy, copy_of(c, b)
+WHERE b.isbn = "978-1-111111-11-1"
+RETURN count(c)
+
+--# count_available_copies
+MATCH b: Book, c: Copy, copy_of(c, b)
+WHERE b.isbn = "978-1-111111-11-1" AND c.is_available = true
+RETURN count(c)
+
+--# query_by_condition
+MATCH c: Copy WHERE c.condition = "good"
+RETURN count(c)
+
+--# create_series_of_books
+SPAWN book2: Book {
+  isbn = "978-2-222222-22-2",
+  title = "Advanced Databases",
+  publication_year = 2020
+}
+
+SPAWN book3: Book {
+  isbn = "978-3-333333-33-3",
+  title = "Database Design Patterns",
+  publication_year = 2022
+}
+
+LINK written_by(book2, author1)
+LINK written_by(book3, author1)
+
+LINK in_genre(book2, genre_tech)
+LINK in_genre(book3, genre_tech)
+
+--# count_books_by_author
+MATCH b: Book, a: Author, written_by(b, a)
+WHERE a.name = "Dr. Smith"
+RETURN count(b)
+
+--# count_books_in_genre
+MATCH b: Book, g: Genre, in_genre(b, g)
+WHERE g.name = "Technology"
+RETURN count(b)
+
+--# query_books_by_year_range
+MATCH b: Book
+WHERE b.publication_year >= 2018 AND b.publication_year <= 2022
+RETURN count(b)
+
+--# query_books_by_language
+MATCH b: Book WHERE b.language = "English"
+RETURN count(b)

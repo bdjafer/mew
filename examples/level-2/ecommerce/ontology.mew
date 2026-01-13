@@ -22,7 +22,7 @@ ontology Ecommerce {
   --- Base product type
   node Product {
     sku: SKU [required, unique],
-    name: String [required],
+    name: String [required, length: 1..100],
     description: String?,
     price: Price [required],
     status: ProductStatus = "draft",
@@ -65,7 +65,7 @@ ontology Ecommerce {
   --- A product review by a customer
   node Review {
     rating: Rating [required],
-    title: String?,
+    title: String? [length: 3..50],
     body: String?,
     is_verified_purchase: Bool = false,
     created_at: Timestamp = now(),
