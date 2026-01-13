@@ -15,10 +15,10 @@ use thiserror::Error;
 #[derive(Debug, Clone, Error)]
 pub enum TargetError {
     /// Variable not found in bindings.
-    #[error("Unknown variable: {name}")]
+    #[error("Variable not found: {name}")]
     UnknownVariable { name: String },
 
-    /// Target type not supported (Id, Pattern).
+    /// Target type not supported (Pattern).
     #[error("Unsupported target type: {target_type}")]
     UnsupportedTarget { target_type: String },
 
@@ -49,6 +49,18 @@ pub enum TargetError {
     EdgeNotFound { edge_type: String },
 }
 
+/// Resolve a binding name to an EntityId.
+///
+/// Used for both Var and Id targets which reference bound variables.
+fn resolve_binding(name: &str, bindings: &HashMap<String, EntityId>) -> Result<EntityId, TargetError> {
+    bindings
+        .get(name)
+        .copied()
+        .ok_or_else(|| TargetError::UnknownVariable {
+            name: name.to_string(),
+        })
+}
+
 /// Resolve a target to an EntityId.
 ///
 /// For simple variable targets, just looks up in bindings.
@@ -60,16 +72,9 @@ pub fn resolve_target(
     graph: &Graph,
 ) -> Result<EntityId, TargetError> {
     match target {
-        Target::Var(var_name) => bindings
-            .get(var_name)
-            .copied()
-            .ok_or_else(|| TargetError::UnknownVariable {
-                name: var_name.clone(),
-            }),
+        Target::Var(var_name) => resolve_binding(var_name, bindings),
 
-        Target::Id(_) => Err(TargetError::UnsupportedTarget {
-            target_type: "Id".to_string(),
-        }),
+        Target::Id(id_name) => resolve_binding(id_name, bindings),
 
         Target::Pattern(_) => Err(TargetError::UnsupportedTarget {
             target_type: "Pattern".to_string(),
@@ -89,16 +94,9 @@ pub fn resolve_target_ref(
     bindings: &HashMap<String, EntityId>,
 ) -> Result<EntityId, TargetError> {
     match target_ref {
-        TargetRef::Var(var_name) => bindings
-            .get(var_name)
-            .copied()
-            .ok_or_else(|| TargetError::UnknownVariable {
-                name: var_name.clone(),
-            }),
+        TargetRef::Var(var_name) => resolve_binding(var_name, bindings),
 
-        TargetRef::Id(_) => Err(TargetError::UnsupportedTarget {
-            target_type: "Id".to_string(),
-        }),
+        TargetRef::Id(id_name) => resolve_binding(id_name, bindings),
 
         TargetRef::Pattern(_) => Err(TargetError::UnsupportedTarget {
             target_type: "Pattern".to_string(),
@@ -114,16 +112,9 @@ pub fn resolve_var_target(
     bindings: &HashMap<String, EntityId>,
 ) -> Result<EntityId, TargetError> {
     match target {
-        Target::Var(var_name) => bindings
-            .get(var_name)
-            .copied()
-            .ok_or_else(|| TargetError::UnknownVariable {
-                name: var_name.clone(),
-            }),
+        Target::Var(var_name) => resolve_binding(var_name, bindings),
 
-        Target::Id(_) => Err(TargetError::UnsupportedTarget {
-            target_type: "Id".to_string(),
-        }),
+        Target::Id(id_name) => resolve_binding(id_name, bindings),
 
         Target::Pattern(_) => Err(TargetError::UnsupportedTarget {
             target_type: "Pattern".to_string(),
