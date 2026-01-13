@@ -206,8 +206,7 @@ impl Compiler {
                 // The actual now() value would be computed at runtime
                 if is_now_call(default_expr) {
                     // Mark as having a timestamp default (computed at runtime)
-                    // Also mark as readonly - auto-generated timestamps shouldn't be modified
-                    attr = attr.with_default(Value::Timestamp(0)).readonly(); // Placeholder
+                    attr = attr.with_default(Value::Timestamp(0)); // Placeholder
                 }
             }
 
@@ -363,8 +362,7 @@ impl Compiler {
                     attr = attr.with_default(value);
                 }
                 if is_now_call(default_expr) {
-                    // Mark as readonly - auto-generated timestamps shouldn't be modified
-                    attr = attr.with_default(Value::Timestamp(0)).readonly(); // Placeholder
+                    attr = attr.with_default(Value::Timestamp(0)); // Placeholder
                 }
             }
 

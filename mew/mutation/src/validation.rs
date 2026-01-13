@@ -6,22 +6,17 @@ use mew_registry::Registry;
 use crate::error::{MutationError, MutationResult};
 
 /// Validate an attribute assignment against the registry.
-/// Use `is_update` = true for SET operations to check readonly attributes.
+/// Use `is_update` = true for SET operations (currently unused but kept for future extensions).
 pub fn validate_attribute(
     registry: &Registry,
     type_name: &str,
     type_id: TypeId,
     attr_name: &str,
     value: &Value,
-    is_update: bool,
+    _is_update: bool,
 ) -> MutationResult<()> {
     // Use get_type_attr to check inherited attributes
     if let Some(attr_def) = registry.get_type_attr(type_id, attr_name) {
-        // Check if trying to modify a readonly attribute (only for updates, not initial creation)
-        if is_update && attr_def.readonly {
-            return Err(MutationError::readonly_attribute(type_name, attr_name));
-        }
-
         // Check if trying to set a required attribute to null
         if attr_def.required && matches!(value, Value::Null) {
             return Err(MutationError::required_null_violation(type_name, attr_name));

@@ -72,9 +72,6 @@ pub enum MutationError {
         value: String,
         range_desc: String,
     },
-
-    #[error("Cannot modify readonly attribute: {attr} on type {type_name}")]
-    ReadonlyAttribute { type_name: String, attr: String },
 }
 
 impl MutationError {
@@ -176,13 +173,6 @@ impl MutationError {
             attr: attr.into(),
             value: value.into(),
             range_desc: range_desc.into(),
-        }
-    }
-
-    pub fn readonly_attribute(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
-        Self::ReadonlyAttribute {
-            type_name: type_name.into(),
-            attr: attr.into(),
         }
     }
 }
