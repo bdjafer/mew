@@ -44,10 +44,20 @@ pub enum Stmt {
 pub struct MatchStmt {
     pub pattern: Vec<PatternElem>,
     pub where_clause: Option<Expr>,
+    /// OPTIONAL MATCH clauses (left outer joins)
+    pub optional_matches: Vec<OptionalMatch>,
     pub return_clause: ReturnClause,
     pub order_by: Option<Vec<OrderTerm>>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub span: Span,
+}
+
+/// An OPTIONAL MATCH clause (left outer join).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionalMatch {
+    pub pattern: Vec<PatternElem>,
+    pub where_clause: Option<Expr>,
     pub span: Span,
 }
 

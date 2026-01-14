@@ -167,6 +167,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![Projection {
@@ -210,6 +211,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![Projection {
@@ -268,6 +270,7 @@ mod tests {
                 })),
                 Span::default(),
             )),
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![Projection {
@@ -311,6 +314,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![Projection {

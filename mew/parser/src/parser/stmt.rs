@@ -75,6 +75,9 @@ impl Parser {
             None
         };
 
+        // Parse OPTIONAL MATCH clauses
+        let optional_matches = self.parse_optional_matches()?;
+
         // Check what comes next: RETURN or mutation keyword
         if self.check(&TokenKind::Return) {
             // Parse as normal MATCH query
@@ -110,6 +113,7 @@ impl Parser {
             Ok(Stmt::Match(MatchStmt {
                 pattern,
                 where_clause,
+                optional_matches,
                 return_clause,
                 order_by,
                 limit,
@@ -140,6 +144,38 @@ impl Parser {
         }
     }
 
+    /// Parse zero or more OPTIONAL MATCH clauses.
+    fn parse_optional_matches(&mut self) -> ParseResult<Vec<OptionalMatch>> {
+        let mut optional_matches = Vec::new();
+        while self.check(&TokenKind::Optional) {
+            optional_matches.push(self.parse_optional_match()?);
+        }
+        Ok(optional_matches)
+    }
+
+    /// Parse a single OPTIONAL MATCH clause.
+    fn parse_optional_match(&mut self) -> ParseResult<OptionalMatch> {
+        let start = self.expect(&TokenKind::Optional)?.span;
+        self.expect(&TokenKind::Match)?;
+
+        let pattern = self.parse_pattern()?;
+
+        let where_clause = if self.check(&TokenKind::Where) {
+            self.advance();
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let span = self.span_from(start);
+
+        Ok(OptionalMatch {
+            pattern,
+            where_clause,
+            span,
+        })
+    }
+
     /// Parse multiple statements until end of input.
     pub fn parse_stmts(&mut self) -> ParseResult<Vec<Stmt>> {
         let mut stmts = Vec::new();
@@ -166,6 +202,9 @@ impl Parser {
         } else {
             None
         };
+
+        // Parse OPTIONAL MATCH clauses
+        let optional_matches = self.parse_optional_matches()?;
 
         // Parse RETURN (required for query)
         let return_clause = self.parse_return_clause()?;
@@ -200,6 +239,7 @@ impl Parser {
         Ok(MatchStmt {
             pattern,
             where_clause,
+            optional_matches,
             return_clause,
             order_by,
             limit,

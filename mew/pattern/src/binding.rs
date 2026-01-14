@@ -12,6 +12,8 @@ pub enum Binding {
     Edge(EdgeId),
     /// A scalar value.
     Value(Value),
+    /// Null binding (for unmatched OPTIONAL MATCH variables).
+    Null,
 }
 
 impl Binding {
@@ -45,6 +47,7 @@ impl Binding {
             Binding::Node(id) => Value::NodeRef(*id),
             Binding::Edge(id) => Value::EdgeRef(*id),
             Binding::Value(v) => v.clone(),
+            Binding::Null => Value::Null,
         }
     }
 }

@@ -72,6 +72,15 @@ pub enum PlanOp {
         right: Box<PlanOp>,
     },
 
+    /// Left outer join (for OPTIONAL MATCH).
+    /// Returns all rows from left, with nulls for right if no match.
+    LeftOuterJoin {
+        left: Box<PlanOp>,
+        right: Box<PlanOp>,
+        /// Optional condition for the join
+        condition: Option<Expr>,
+    },
+
     /// Transitive closure for WALK.
     TransitiveClosure {
         start_var: String,
@@ -141,6 +150,16 @@ impl<'r> QueryPlanner<'r> {
             plan = PlanOp::Filter {
                 input: Box::new(plan),
                 condition: cond.clone(),
+            };
+        }
+
+        // Handle OPTIONAL MATCH clauses (left outer joins)
+        for opt_match in &stmt.optional_matches {
+            let opt_plan = self.plan_pattern(&opt_match.pattern)?;
+            plan = PlanOp::LeftOuterJoin {
+                left: Box::new(plan),
+                right: Box::new(opt_plan),
+                condition: opt_match.where_clause.clone(),
             };
         }
 
@@ -442,6 +461,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![mew_parser::Projection {
@@ -479,6 +499,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![mew_parser::Projection {
@@ -515,6 +536,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![],
