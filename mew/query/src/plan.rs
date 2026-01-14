@@ -108,6 +108,7 @@ pub enum AggregateKind {
     Avg,
     Min,
     Max,
+    Collect,
 }
 
 /// Specification for an aggregate computation.
@@ -271,6 +272,7 @@ impl<'r> QueryPlanner<'r> {
                     // min/max are aggregates only with 1 arg; with 2 args they're binary functions
                     "min" if fc.args.len() == 1 => Some(AggregateKind::Min),
                     "max" if fc.args.len() == 1 => Some(AggregateKind::Max),
+                    "collect" => Some(AggregateKind::Collect),
                     _ => None,
                 };
                 kind.map(|k| {

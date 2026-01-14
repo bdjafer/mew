@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use crate::error::{SessionError, SessionResult};
 use crate::query::convert_query_result;
-use crate::result::{MutationSummary, QueryResult, StatementResult};
+use crate::result::{MutationSummary, QueryResult, StatementResult, TransactionResult};
 use crate::transaction::{self, TransactionState};
 
 /// Session ID type.
@@ -128,6 +128,10 @@ impl<'r> Session<'r> {
             match result {
                 StatementResult::Mutation(m) => {
                     total_mutations.merge(&m);
+                }
+                StatementResult::Transaction(TransactionResult::RolledBack) => {
+                    // On ROLLBACK, clear accumulated mutation counts since changes were undone
+                    total_mutations = MutationSummary::default();
                 }
                 StatementResult::Query(q) => {
                     // Combine query results: append rows if columns match, or replace if different
@@ -264,8 +268,11 @@ impl<'r> Session<'r> {
         let matcher = Matcher::new(self.registry, &self.graph);
         let bindings_list = matcher.find_all(&pattern)?;
 
-        let mut total_nodes = 0usize;
-        let mut total_edges = 0usize;
+        let mut nodes_modified = 0usize;
+        let mut edges_modified = 0usize;
+        let mut edges_created = 0usize;
+        let mut nodes_deleted = 0usize;
+        let mut edges_deleted = 0usize;
 
         // For each set of bindings from the match, execute the mutations
         for pattern_bindings in bindings_list {
@@ -312,23 +319,30 @@ impl<'r> Session<'r> {
                         }
 
                         if result.created_edge().is_some() {
-                            total_edges += 1;
+                            edges_created += 1;
                         }
                     }
                     MutationAction::Set(set_stmt) => {
                         let target_id =
                             self.resolve_target_with_bindings(&set_stmt.target, &local_bindings)?;
-                        let node_id = target_id.as_node().ok_or_else(|| {
-                            SessionError::invalid_statement_type(messages::ERR_SET_REQUIRES_NODE)
-                        })?;
-
                         let pb = Bindings::new();
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
-                        let result = executor.execute_set(set_stmt, vec![node_id], &pb)?;
 
                         use mew_mutation::MutationOutcome;
-                        if let MutationOutcome::Updated(ref u) = result {
-                            total_nodes += u.node_ids.len();
+                        if let Some(node_id) = target_id.as_node() {
+                            let result = executor.execute_set(set_stmt, vec![node_id], &pb)?;
+                            if let MutationOutcome::Updated(ref u) = result {
+                                nodes_modified += u.node_ids.len();
+                            }
+                        } else if let Some(edge_id) = target_id.as_edge() {
+                            let result = executor.execute_set_edge(set_stmt, vec![edge_id], &pb)?;
+                            if let MutationOutcome::Updated(ref u) = result {
+                                edges_modified += u.edge_ids.len();
+                            }
+                        } else {
+                            return Err(SessionError::invalid_statement_type(
+                                messages::ERR_SET_REQUIRES_NODE,
+                            ));
                         }
                     }
                     MutationAction::Kill(kill_stmt) => {
@@ -341,8 +355,8 @@ impl<'r> Session<'r> {
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
                         let result = executor.execute_kill(kill_stmt, node_id)?;
 
-                        total_nodes += result.deleted_nodes();
-                        total_edges += result.deleted_edges();
+                        nodes_deleted += result.deleted_nodes();
+                        edges_deleted += result.deleted_edges();
                     }
                     MutationAction::Unlink(unlink_stmt) => {
                         let target_id = self
@@ -354,13 +368,20 @@ impl<'r> Session<'r> {
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
                         let result = executor.execute_unlink(unlink_stmt, edge_id)?;
 
-                        total_edges += result.deleted_edges();
+                        edges_deleted += result.deleted_edges();
                     }
                 }
             }
         }
 
-        Ok(MutationSummary::new(total_nodes, total_edges))
+        Ok(MutationSummary {
+            nodes_modified,
+            edges_modified,
+            edges_created,
+            nodes_deleted,
+            edges_deleted,
+            ..Default::default()
+        })
     }
 
     /// Resolve a target using provided bindings.
@@ -495,12 +516,20 @@ impl<'r> Session<'r> {
         // Store the created node ID with the variable name and count it
         let nodes_created = if let Some(node_id) = result.created_node() {
             self.bindings.insert(stmt.var.clone(), node_id.into());
+            // Track for transaction rollback
+            self.txn_state.track_created_node(node_id);
             1
         } else {
             0
         };
 
-        let edges_created = usize::from(result.created_edge().is_some());
+        let edges_created = if let Some(edge_id) = result.created_edge() {
+            // Track for transaction rollback
+            self.txn_state.track_created_edge(edge_id);
+            1
+        } else {
+            0
+        };
 
         Ok(MutationSummary {
             nodes_created,
@@ -511,6 +540,11 @@ impl<'r> Session<'r> {
 
     /// Execute a KILL statement.
     fn execute_kill(&mut self, stmt: &mew_parser::KillStmt) -> SessionResult<MutationSummary> {
+        // Handle pattern-based KILL specially
+        if let mew_parser::Target::Pattern(match_stmt) = &stmt.target {
+            return self.execute_kill_pattern(stmt, match_stmt);
+        }
+
         // Resolve the target
         let target_id = self.resolve_target(&stmt.target)?;
         let node_id = target_id
@@ -523,6 +557,46 @@ impl<'r> Session<'r> {
         Ok(MutationSummary {
             nodes_deleted: result.deleted_nodes(),
             edges_deleted: result.deleted_edges(),
+            ..Default::default()
+        })
+    }
+
+    /// Execute a KILL statement with a pattern target.
+    /// Runs the MATCH query first, then deletes all matching nodes.
+    fn execute_kill_pattern(
+        &mut self,
+        stmt: &mew_parser::KillStmt,
+        match_stmt: &MatchStmt,
+    ) -> SessionResult<MutationSummary> {
+        // Execute the MATCH query to get matching entities
+        let executor = QueryExecutor::new(self.registry, &self.graph);
+        let query_result = executor.execute_match(match_stmt)?;
+
+        // Collect all node IDs to delete
+        let mut node_ids = Vec::new();
+        for row in query_result.rows() {
+            // Get the first column value which should be the node reference
+            if let Some(value) = row.get(0) {
+                if let Some(node_id) = value.as_node_ref() {
+                    node_ids.push(node_id);
+                }
+            }
+        }
+
+        // Delete each node
+        let mut total_nodes_deleted = 0usize;
+        let mut total_edges_deleted = 0usize;
+
+        for node_id in node_ids {
+            let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+            let result = executor.execute_kill(stmt, node_id)?;
+            total_nodes_deleted += result.deleted_nodes();
+            total_edges_deleted += result.deleted_edges();
+        }
+
+        Ok(MutationSummary {
+            nodes_deleted: total_nodes_deleted,
+            edges_deleted: total_edges_deleted,
             ..Default::default()
         })
     }
@@ -546,6 +620,8 @@ impl<'r> Session<'r> {
             if let Some(ref var) = stmt.var {
                 self.bindings.insert(var.clone(), edge_id.into());
             }
+            // Track for transaction rollback
+            self.txn_state.track_created_edge(edge_id);
             1
         } else {
             0
@@ -577,23 +653,38 @@ impl<'r> Session<'r> {
     /// Execute a SET statement.
     fn execute_set(&mut self, stmt: &mew_parser::SetStmt) -> SessionResult<MutationSummary> {
         let target_id = self.resolve_target(&stmt.target)?;
-        let node_id = target_id
-            .as_node()
-            .ok_or_else(|| SessionError::invalid_statement_type(messages::ERR_SET_REQUIRES_NODE))?;
-
         let pattern_bindings = Bindings::new();
-        let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
-        let result = executor.execute_set(stmt, vec![node_id], &pattern_bindings)?;
 
-        let nodes_modified = match result {
-            MutationOutcome::Updated(ref u) => u.node_ids.len(),
-            _ => 0,
-        };
+        // Handle both node and edge targets
+        if let Some(node_id) = target_id.as_node() {
+            let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+            let result = executor.execute_set(stmt, vec![node_id], &pattern_bindings)?;
 
-        Ok(MutationSummary {
-            nodes_modified,
-            ..Default::default()
-        })
+            let nodes_modified = match result {
+                MutationOutcome::Updated(ref u) => u.node_ids.len(),
+                _ => 0,
+            };
+
+            Ok(MutationSummary {
+                nodes_modified,
+                ..Default::default()
+            })
+        } else if let Some(edge_id) = target_id.as_edge() {
+            let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+            let result = executor.execute_set_edge(stmt, vec![edge_id], &pattern_bindings)?;
+
+            let edges_modified = match result {
+                MutationOutcome::Updated(ref u) => u.edge_ids.len(),
+                _ => 0,
+            };
+
+            Ok(MutationSummary {
+                edges_modified,
+                ..Default::default()
+            })
+        } else {
+            Err(SessionError::invalid_statement_type(messages::ERR_SET_REQUIRES_NODE))
+        }
     }
 
     /// Resolve a target to an EntityId.
@@ -628,7 +719,37 @@ impl<'r> Session<'r> {
     }
 
     /// Execute a transaction statement.
+    ///
+    /// # ROLLBACK Semantics
+    ///
+    /// ROLLBACK currently only undoes SPAWN operations (node/edge creation).
+    /// SET mutations and DELETE operations within the transaction are NOT
+    /// automatically reverted. This is a known limitation - full MVCC or
+    /// undo-logging would be required for complete rollback support.
+    ///
+    /// Errors during rollback cleanup are intentionally ignored because:
+    /// - The entity may have already been deleted by a KILL within the transaction
+    /// - Partial rollback is better than failing and leaving the DB in an
+    ///   inconsistent state
     fn execute_txn(&mut self, stmt: &mew_parser::TxnStmt) -> SessionResult<StatementResult> {
+        // For ROLLBACK, we need to undo created entities before processing
+        if matches!(stmt, mew_parser::TxnStmt::Rollback) {
+            // Take ownership to avoid clone - clear_tracked() would clear anyway
+            let created_edges = std::mem::take(&mut self.txn_state.created_edges);
+            let created_nodes = std::mem::take(&mut self.txn_state.created_nodes);
+
+            // Delete edges first (they may reference nodes)
+            for edge_id in created_edges {
+                // Errors ignored intentionally - see doc comment above
+                let _ = self.graph.delete_edge(edge_id);
+            }
+            // Then delete nodes
+            for node_id in created_nodes {
+                // Errors ignored intentionally - see doc comment above
+                let _ = self.graph.delete_node(node_id);
+            }
+        }
+
         transaction::execute_txn(&mut self.txn_state, stmt)
     }
 

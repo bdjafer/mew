@@ -589,6 +589,14 @@ impl Parser {
             Vec::new()
         };
 
+        // Support "LINK edge_type(...) AS e" syntax in addition to "LINK e: edge_type(...)"
+        let var = if var.is_none() && self.check(&TokenKind::As) {
+            self.advance();
+            Some(self.expect_ident()?)
+        } else {
+            var
+        };
+
         let returning = self.parse_optional_returning()?;
         let span = self.span_from(start);
 

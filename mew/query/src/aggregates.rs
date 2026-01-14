@@ -23,6 +23,7 @@ pub fn compute_aggregate(
         AggregateKind::Avg => compute_avg(agg, group, evaluator, graph),
         AggregateKind::Min => compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Less),
         AggregateKind::Max => compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Greater),
+        AggregateKind::Collect => compute_collect(agg, group, evaluator, graph),
     }
 }
 
@@ -150,6 +151,27 @@ fn compute_min_max(
     Ok(result.unwrap_or(Value::Null))
 }
 
+/// Compute COLLECT aggregate - collects all values into a list.
+fn compute_collect(
+    agg: &AggregateSpec,
+    group: &[(Bindings, Vec<Value>)],
+    evaluator: &Evaluator<'_>,
+    graph: &Graph,
+) -> QueryResult<Value> {
+    let mut result = Vec::new();
+
+    for (bindings, _) in group {
+        if let Ok(val) = evaluator.eval(&agg.expr, bindings, graph) {
+            // Skip null values
+            if !matches!(val, Value::Null) {
+                result.push(val);
+            }
+        }
+    }
+
+    Ok(Value::List(result))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +287,55 @@ mod tests {
 
         // THEN
         assert_eq!(result, Value::Float(6.0));
+    }
+
+    #[test]
+    fn test_collect_values() {
+        // GIVEN
+        let evaluator = test_evaluator();
+        let graph = Graph::new();
+
+        // COLLECT of literal 7, evaluated 3 times = [7, 7, 7]
+        let agg = AggregateSpec {
+            name: "collect".to_string(),
+            kind: AggregateKind::Collect,
+            expr: make_literal_expr(7),
+            distinct: false,
+        };
+
+        let group = vec![
+            (Bindings::new(), vec![]),
+            (Bindings::new(), vec![]),
+            (Bindings::new(), vec![]),
+        ];
+
+        // WHEN
+        let result = compute_aggregate(&agg, &group, &evaluator, &graph).unwrap();
+
+        // THEN
+        assert_eq!(
+            result,
+            Value::List(vec![Value::Int(7), Value::Int(7), Value::Int(7)])
+        );
+    }
+
+    #[test]
+    fn test_collect_empty() {
+        // GIVEN
+        let evaluator = test_evaluator();
+        let graph = Graph::new();
+
+        let agg = AggregateSpec {
+            name: "collect".to_string(),
+            kind: AggregateKind::Collect,
+            expr: make_literal_expr(1),
+            distinct: false,
+        };
+
+        // WHEN
+        let result = compute_aggregate(&agg, &[], &evaluator, &graph).unwrap();
+
+        // THEN
+        assert_eq!(result, Value::List(vec![]));
     }
 }

@@ -72,6 +72,8 @@ pub struct MutationSummary {
     pub nodes_deleted: usize,
     /// Number of edges created.
     pub edges_created: usize,
+    /// Number of edges modified.
+    pub edges_modified: usize,
     /// Number of edges deleted.
     pub edges_deleted: usize,
     /// Any returned values.
@@ -86,6 +88,7 @@ impl MutationSummary {
             nodes_modified: 0,
             nodes_deleted: 0,
             edges_created: edges_affected,
+            edges_modified: 0,
             edges_deleted: 0,
             returned: Vec::new(),
         }
@@ -144,7 +147,7 @@ impl MutationSummary {
 
     /// Total edges affected.
     pub fn edges_affected(&self) -> usize {
-        self.edges_created + self.edges_deleted
+        self.edges_created + self.edges_modified + self.edges_deleted
     }
 
     /// Get total affected count.
@@ -158,6 +161,7 @@ impl MutationSummary {
         self.nodes_modified += other.nodes_modified;
         self.nodes_deleted += other.nodes_deleted;
         self.edges_created += other.edges_created;
+        self.edges_modified += other.edges_modified;
         self.edges_deleted += other.edges_deleted;
     }
 }

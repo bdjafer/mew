@@ -5,12 +5,17 @@
 
 use crate::error::{SessionError, SessionResult};
 use crate::result::{StatementResult, TransactionResult};
+use mew_core::{EdgeId, NodeId};
 use mew_parser::TxnStmt;
 
 /// Transaction state tracker.
 pub struct TransactionState {
     /// Whether a transaction is active.
     pub in_transaction: bool,
+    /// Nodes created during this transaction (for rollback).
+    pub created_nodes: Vec<NodeId>,
+    /// Edges created during this transaction (for rollback).
+    pub created_edges: Vec<EdgeId>,
 }
 
 impl TransactionState {
@@ -18,7 +23,29 @@ impl TransactionState {
     pub fn new() -> Self {
         Self {
             in_transaction: false,
+            created_nodes: Vec::new(),
+            created_edges: Vec::new(),
         }
+    }
+
+    /// Track a created node for potential rollback.
+    pub fn track_created_node(&mut self, id: NodeId) {
+        if self.in_transaction {
+            self.created_nodes.push(id);
+        }
+    }
+
+    /// Track a created edge for potential rollback.
+    pub fn track_created_edge(&mut self, id: EdgeId) {
+        if self.in_transaction {
+            self.created_edges.push(id);
+        }
+    }
+
+    /// Clear tracked changes (for commit or after rollback).
+    pub fn clear_tracked(&mut self) {
+        self.created_nodes.clear();
+        self.created_edges.clear();
     }
 }
 
@@ -51,6 +78,7 @@ pub fn execute_txn(
                 ));
             }
             state.in_transaction = false;
+            state.clear_tracked(); // Clear tracked entities on commit
             Ok(StatementResult::Transaction(TransactionResult::Committed))
         }
 
@@ -60,6 +88,7 @@ pub fn execute_txn(
                     mew_transaction::TransactionError::NoActiveTransaction,
                 ));
             }
+            // Note: Caller must handle the actual rollback using state.created_nodes/created_edges
             state.in_transaction = false;
             Ok(StatementResult::Transaction(TransactionResult::RolledBack))
         }

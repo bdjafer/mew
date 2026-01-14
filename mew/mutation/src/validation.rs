@@ -1,6 +1,6 @@
 //! Attribute validation helpers for mutation operations.
 
-use mew_core::{TypeId, Value};
+use mew_core::{EdgeTypeId, TypeId, Value};
 use mew_registry::Registry;
 
 use crate::error::{MutationError, MutationResult};
@@ -38,6 +38,49 @@ pub fn validate_attribute(
         validate_range(attr_name, value, &attr_def.min, &attr_def.max)?;
     } else {
         return Err(MutationError::unknown_attribute(type_name, attr_name));
+    }
+
+    Ok(())
+}
+
+/// Validate an edge attribute assignment against the registry.
+/// Use `is_update` = true for SET operations (currently unused but kept for future extensions).
+pub fn validate_edge_attribute(
+    registry: &Registry,
+    edge_type_name: &str,
+    edge_type_id: EdgeTypeId,
+    attr_name: &str,
+    value: &Value,
+    _is_update: bool,
+) -> MutationResult<()> {
+    // Get the edge type definition
+    let edge_type = registry
+        .get_edge_type(edge_type_id)
+        .ok_or_else(|| MutationError::unknown_attribute(edge_type_name, attr_name))?;
+
+    // Look up the attribute in the edge type
+    if let Some(attr_def) = edge_type.attributes.get(attr_name) {
+        // Check if trying to set a required attribute to null
+        if attr_def.required && matches!(value, Value::Null) {
+            return Err(MutationError::required_null_violation(edge_type_name, attr_name));
+        }
+
+        // Check type compatibility
+        let expected_type = &attr_def.type_name;
+        let actual_type = value_type_name(value);
+
+        if !types_compatible(expected_type, &actual_type) {
+            return Err(MutationError::invalid_attr_type(
+                attr_name,
+                expected_type,
+                actual_type,
+            ));
+        }
+
+        // Check range constraints (min/max)
+        validate_range(attr_name, value, &attr_def.min, &attr_def.max)?;
+    } else {
+        return Err(MutationError::unknown_attribute(edge_type_name, attr_name));
     }
 
     Ok(())

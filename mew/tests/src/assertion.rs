@@ -173,12 +173,13 @@ impl Assertion {
         }
 
         if let Some(expected) = self.modified {
-            if result.nodes_modified != expected {
+            let total_modified = result.nodes_modified + result.edges_modified;
+            if total_modified != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
                     format!(
                         "expected {} modified, got {}",
-                        expected, result.nodes_modified
+                        expected, total_modified
                     ),
                 ));
             }
