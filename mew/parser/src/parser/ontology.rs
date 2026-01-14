@@ -346,7 +346,8 @@ impl Parser {
         self.expect(&TokenKind::LParen)?;
         let mut params = Vec::new();
         while !self.check(&TokenKind::RParen) && !self.check(&TokenKind::Eof) {
-            let param_name = self.expect_ident()?;
+            // Use expect_name to allow keywords (like 'profile') as parameter names
+            let param_name = self.expect_name()?;
             self.expect(&TokenKind::Colon)?;
             // Accept 'any' keyword as a type constraint
             let param_type = if self.check(&TokenKind::Any) {

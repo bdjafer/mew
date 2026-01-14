@@ -103,7 +103,10 @@ impl<'r> Session<'r> {
     }
 
     /// Execute multiple statements from a string.
-    /// Returns aggregated mutation results (sums created/deleted nodes and edges).
+    ///
+    /// Aggregation behavior:
+    /// - Mutations: sums all created/deleted/modified counts
+    /// - Queries: combines rows when columns match; different columns replace accumulated result
     pub fn execute_all(&mut self, input: &str) -> SessionResult<StatementResult> {
         let stmts = parse_stmts(input)?;
 
@@ -117,26 +120,56 @@ impl<'r> Session<'r> {
         }
 
         // Execute all statements and aggregate results
-        let mut total = MutationSummary::default();
-        let mut last_result = None;
+        let mut total_mutations = MutationSummary::default();
+        let mut combined_query: Option<QueryResult> = None;
 
         for stmt in &stmts {
             let result = self.execute_statement(stmt)?;
-            match &result {
+            match result {
                 StatementResult::Mutation(m) => {
-                    total.merge(m);
+                    total_mutations.merge(&m);
+                }
+                StatementResult::Query(q) => {
+                    // Combine query results: append rows if columns match, or replace if different
+                    combined_query = Some(match combined_query {
+                        None => q,
+                        Some(mut existing) => {
+                            if existing.columns == q.columns {
+                                // Same columns - append rows
+                                existing.rows.extend(q.rows);
+                                existing
+                            } else {
+                                // Different columns - use the new result
+                                q
+                            }
+                        }
+                    });
                 }
                 _ => {}
             }
-            last_result = Some(result);
         }
 
-        // Return aggregated mutation result if any mutations happened
-        if total.total_affected() > 0 {
-            Ok(StatementResult::Mutation(total))
-        } else {
-            // Otherwise return the last statement's result
-            Ok(last_result.unwrap_or(StatementResult::Mutation(MutationSummary::default())))
+        // Return results based on what was executed
+        match (total_mutations.total_affected() > 0, combined_query) {
+            (true, Some(query_result)) => {
+                // Both mutations and queries occurred - return Mixed
+                Ok(StatementResult::Mixed {
+                    mutations: total_mutations,
+                    queries: query_result,
+                })
+            }
+            (true, None) => {
+                // Only mutations occurred
+                Ok(StatementResult::Mutation(total_mutations))
+            }
+            (false, Some(query_result)) => {
+                // Only queries occurred
+                Ok(StatementResult::Query(query_result))
+            }
+            (false, None) => {
+                // No mutations or queries (empty statements)
+                Ok(StatementResult::Mutation(MutationSummary::default()))
+            }
         }
     }
 
@@ -638,6 +671,10 @@ impl<'r> Session<'r> {
 
         match result {
             StatementResult::Query(qr) => Ok(qr),
+            StatementResult::Mixed { queries, .. } => {
+                // For mixed results, return the query part
+                Ok(queries)
+            }
             StatementResult::Mutation(_) => {
                 // For mutations, return empty query result
                 Ok(QueryResult {

@@ -149,6 +149,11 @@ impl Assertion {
         match result {
             StatementResult::Mutation(m) => self.verify_mutation(step, m),
             StatementResult::Query(q) => self.verify_query(step, q),
+            StatementResult::Mixed { mutations, queries } => {
+                // Verify both mutations and queries
+                self.verify_mutation(step, mutations)?;
+                self.verify_query(step, queries)
+            }
             StatementResult::Transaction(_) => Ok(()),
             StatementResult::Empty => Ok(()),
         }

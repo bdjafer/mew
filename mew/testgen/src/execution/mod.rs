@@ -138,6 +138,14 @@ impl TestExecutor {
                     })
                     .collect(),
             ),
+            StatementResult::Mixed { queries, .. } => ActualResult::Rows(
+                queries.rows
+                    .into_iter()
+                    .map(|row| Row {
+                        columns: row.into_iter().map(|v| Value::from(&v)).collect(),
+                    })
+                    .collect(),
+            ),
             StatementResult::Mutation(_)
             | StatementResult::Transaction(_)
             | StatementResult::Empty => ActualResult::Success,

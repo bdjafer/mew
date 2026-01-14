@@ -9,6 +9,11 @@ pub enum StatementResult {
     Query(QueryResult),
     /// Mutation result with affected counts.
     Mutation(MutationSummary),
+    /// Mixed result containing both mutations and queries.
+    Mixed {
+        mutations: MutationSummary,
+        queries: QueryResult,
+    },
     /// Transaction control result.
     Transaction(TransactionResult),
     /// Empty result (for comments, etc.).

@@ -21,7 +21,8 @@ mod edge_cases {
             .step("spawn_person_multiple_current_jobs", |a| a.created(3).linked(2))
             .step("query_multiple_current_employments", |a| a.scalar("count", 2i64))
             .step("create_then_delete_person", |a| a.created(3).linked(2).deleted(1))
-            .step("verify_contact_info_remains", |a| a.rows(1))
+            // Two queries returning count - combined into 2 rows (1 for email, 1 for phone)
+            .step("verify_contact_info_remains", |a| a.rows(2))
             .step("verify_edges_cascade_removed", |a| a.scalar("count", 0i64))
     }
 
