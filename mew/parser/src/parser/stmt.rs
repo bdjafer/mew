@@ -89,17 +89,7 @@ impl Parser {
     /// Also supports multiple MATCH clauses that combine patterns.
     fn parse_match_or_mutate(&mut self) -> ParseResult<Stmt> {
         let start = self.expect(&TokenKind::Match)?.span;
-
-        // Parse pattern
-        let mut pattern = self.parse_pattern()?;
-
-        // Support for multiple MATCH clauses (pattern chaining)
-        // Each additional MATCH extends the pattern
-        while self.check(&TokenKind::Match) {
-            self.advance();
-            let additional_pattern = self.parse_pattern()?;
-            pattern.extend(additional_pattern);
-        }
+        let pattern = self.parse_chained_patterns()?;
 
         // Parse optional WHERE
         let where_clause = if self.check(&TokenKind::Where) {
@@ -233,20 +223,22 @@ impl Parser {
 
     // ==================== MATCH ====================
 
+    /// Parse pattern with optional chaining (MATCH p1 MATCH p2 → combined pattern).
+    /// Handles multiple consecutive MATCH clauses by extending the pattern.
+    fn parse_chained_patterns(&mut self) -> ParseResult<Vec<PatternElem>> {
+        let mut pattern = self.parse_pattern()?;
+        while self.check(&TokenKind::Match) {
+            self.advance();
+            pattern.extend(self.parse_pattern()?);
+        }
+        Ok(pattern)
+    }
+
     /// Parse a MATCH statement. Returns either a MatchStmt (with RETURN) or
     /// a MatchMutateStmt (with mutations like LINK, SET, KILL, UNLINK).
     pub(crate) fn parse_match(&mut self) -> ParseResult<MatchStmt> {
         let start = self.expect(&TokenKind::Match)?.span;
-
-        // Parse pattern
-        let mut pattern = self.parse_pattern()?;
-
-        // Support for multiple MATCH clauses (pattern chaining)
-        while self.check(&TokenKind::Match) {
-            self.advance();
-            let additional_pattern = self.parse_pattern()?;
-            pattern.extend(additional_pattern);
-        }
+        let pattern = self.parse_chained_patterns()?;
 
         // Parse optional WHERE
         let where_clause = if self.check(&TokenKind::Where) {
