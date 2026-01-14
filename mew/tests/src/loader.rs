@@ -22,6 +22,9 @@ pub struct Operations {
 
 impl Operations {
     /// Parse an operations file from a string.
+    ///
+    /// If the file has no step markers (`--#`), the entire content is treated
+    /// as a single step named `__default__`.
     pub fn parse(source: &str) -> ExampleResult<Self> {
         let mut steps = HashMap::new();
         let mut step_order = Vec::new();
@@ -29,12 +32,22 @@ impl Operations {
         let mut current_step: Option<String> = None;
         let mut current_content = String::new();
         let mut current_params: HashMap<String, String> = HashMap::new();
+        let mut has_step_markers = false;
+        let mut all_content = String::new();
 
         for line in source.lines() {
             let trimmed = line.trim();
 
+            // Collect all non-comment content for the fallback case
+            if !trimmed.starts_with("--") && !trimmed.is_empty() {
+                all_content.push_str(line);
+                all_content.push('\n');
+            }
+
             // Check for step marker
             if let Some(suffix) = trimmed.strip_prefix("--#") {
+                has_step_markers = true;
+
                 // Save previous step if any
                 if let Some(ref step_name) = current_step {
                     let content = current_content.trim().to_string();
@@ -81,6 +94,15 @@ impl Operations {
             }
             if !current_params.is_empty() {
                 step_params.insert(step_name.clone(), current_params);
+            }
+        }
+
+        // If no step markers found, treat entire file as a single default step
+        if !has_step_markers {
+            let content = all_content.trim().to_string();
+            if !content.is_empty() {
+                steps.insert("__default__".to_string(), content);
+                step_order.push("__default__".to_string());
             }
         }
 
@@ -197,5 +219,29 @@ SPAWN x: Thing { name: "test" }
         let step = ops.get_step("step1").unwrap();
         assert!(!step.contains("@expect"));
         assert!(step.contains("SPAWN"));
+    }
+
+    #[test]
+    fn test_parse_no_step_markers() {
+        // Files without step markers should have all content as __default__ step
+        let source = r#"
+-- Seed file header comment
+
+SPAWN m1: Measurement { name = "test1" }
+
+SPAWN m2: Measurement { name = "test2" }
+
+LINK follows(#m1, #m2)
+"#;
+
+        let ops = Operations::parse(source).unwrap();
+
+        // Should have a single __default__ step
+        assert_eq!(ops.step_order, vec!["__default__"]);
+
+        let content = ops.get_step("__default__").unwrap();
+        assert!(content.contains("SPAWN m1"));
+        assert!(content.contains("SPAWN m2"));
+        assert!(content.contains("LINK follows"));
     }
 }
