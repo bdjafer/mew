@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use mew_core::{messages, EntityId};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Target, TargetRef, TxnStmt, WalkStmt};
+use mew_parser::{InspectStmt, MatchMutateStmt, MatchStmt, MatchWalkStmt, MutationAction, Target, TargetRef, TxnStmt, WalkStmt};
 use mew_pattern::{target, Binding, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -81,6 +81,49 @@ pub fn execute_walk(
     output.push_str(&columns.join(" | "));
     output.push('\n');
     output.push_str(&"-".repeat(columns.len() * 15));
+    output.push('\n');
+
+    // Rows
+    for row in results.rows() {
+        let values: Vec<String> = columns
+            .iter()
+            .map(|c| {
+                row.get_by_name(c)
+                    .map(format_value)
+                    .unwrap_or_else(|| "NULL".to_string())
+            })
+            .collect();
+        output.push_str(&values.join(" | "));
+        output.push('\n');
+    }
+
+    output.push_str(&format!("\n({} paths)", results.len()));
+
+    Ok(output)
+}
+
+/// Execute a MATCH...WALK compound statement and return formatted results.
+pub fn execute_match_walk(
+    registry: &Registry,
+    graph: &Graph,
+    bindings: &HashMap<String, EntityId>,
+    stmt: &MatchWalkStmt,
+) -> Result<String, String> {
+    let executor = QueryExecutor::new(registry, graph);
+    let _initial_bindings = to_pattern_bindings(bindings);
+    let results = executor
+        .execute_match_walk(stmt)
+        .map_err(|e| format!("Walk error: {}", e))?;
+
+    if results.is_empty() {
+        return Ok("(no paths found)".to_string());
+    }
+
+    let mut output = String::new();
+
+    // Header
+    let columns = results.column_names();
+    output.push_str(&columns.join(" | "));
     output.push('\n');
 
     // Rows

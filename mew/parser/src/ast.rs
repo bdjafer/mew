@@ -27,6 +27,7 @@ impl Span {
 pub enum Stmt {
     Match(MatchStmt),
     MatchMutate(MatchMutateStmt),
+    MatchWalk(MatchWalkStmt),
     Spawn(SpawnStmt),
     Kill(KillStmt),
     Link(LinkStmt),
@@ -68,6 +69,16 @@ pub struct MatchMutateStmt {
     pub pattern: Vec<PatternElem>,
     pub where_clause: Option<Expr>,
     pub mutations: Vec<MutationAction>,
+    pub span: Span,
+}
+
+/// MATCH followed by WALK (compound statement).
+/// E.g., MATCH e: Employee WHERE ... WALK FROM e FOLLOW ...
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchWalkStmt {
+    pub pattern: Vec<PatternElem>,
+    pub where_clause: Option<Expr>,
+    pub walk: WalkStmt,
     pub span: Span,
 }
 

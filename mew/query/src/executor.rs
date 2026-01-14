@@ -52,6 +52,50 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
         self.execute_plan(&plan, None)
     }
 
+    /// Execute a MATCH...WALK compound statement.
+    pub fn execute_match_walk(
+        &self,
+        stmt: &mew_parser::MatchWalkStmt,
+    ) -> QueryResult<QueryResults> {
+        // Build a plan for the pattern match to get initial bindings
+        let planner = QueryPlanner::new(self.registry);
+        let pattern_plan = planner.plan_pattern(&stmt.pattern)?;
+
+        // Execute pattern to get bindings
+        let ctx = OperatorContext::new(self.registry, self.graph, &self.evaluator);
+        let pattern_results = ctx.execute_op(&pattern_plan, None)?;
+
+        // Filter by WHERE clause if present
+        let filtered_bindings: Vec<_> = if let Some(ref where_clause) = stmt.where_clause {
+            pattern_results
+                .into_iter()
+                .filter(|(bindings, _)| {
+                    self.evaluator
+                        .eval_bool(where_clause, bindings, self.graph)
+                        .unwrap_or(false)
+                })
+                .map(|(bindings, _)| bindings)
+                .collect()
+        } else {
+            pattern_results.into_iter().map(|(bindings, _)| bindings).collect()
+        };
+
+        // Plan the WALK
+        let walk_plan = planner.plan_walk(&stmt.walk)?;
+
+        // For each binding, execute the WALK
+        let mut results = QueryResults::with_columns(walk_plan.columns.clone());
+
+        for binding in filtered_bindings {
+            let walk_results = self.execute_plan(&walk_plan, Some(&binding))?;
+            for row in walk_results.iter() {
+                results.push(row.clone());
+            }
+        }
+
+        Ok(results)
+    }
+
     /// Execute a MATCH statement using initial bindings.
     pub fn execute_match_with_bindings(
         &self,

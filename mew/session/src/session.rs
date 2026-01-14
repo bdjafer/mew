@@ -183,6 +183,11 @@ impl<'r> Session<'r> {
                 Ok(StatementResult::Query(result))
             }
 
+            Stmt::MatchWalk(match_walk_stmt) => {
+                let result = self.execute_match_walk(match_walk_stmt)?;
+                Ok(StatementResult::Query(result))
+            }
+
             Stmt::Inspect(inspect_stmt) => {
                 let result = self.execute_inspect(inspect_stmt)?;
                 Ok(StatementResult::Query(result))
@@ -337,6 +342,16 @@ impl<'r> Session<'r> {
     fn execute_walk(&self, stmt: &WalkStmt) -> SessionResult<QueryResult> {
         let executor = QueryExecutor::new(self.registry, &self.graph);
         let result = executor.execute_walk(stmt)?;
+        Ok(convert_query_result(&result))
+    }
+
+    /// Execute a MATCH...WALK compound statement.
+    fn execute_match_walk(
+        &self,
+        stmt: &mew_parser::MatchWalkStmt,
+    ) -> SessionResult<QueryResult> {
+        let executor = QueryExecutor::new(self.registry, &self.graph);
+        let result = executor.execute_match_walk(stmt)?;
         Ok(convert_query_result(&result))
     }
 

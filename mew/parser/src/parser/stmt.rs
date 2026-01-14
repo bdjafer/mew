@@ -61,6 +61,7 @@ impl Parser {
     /// Parse MATCH, which can be either:
     /// - MATCH ... RETURN ... (query)
     /// - MATCH ... LINK/SET/KILL/UNLINK ... (compound mutation)
+    /// - MATCH ... WALK ... (compound walk)
     fn parse_match_or_mutate(&mut self) -> ParseResult<Stmt> {
         let start = self.expect(&TokenKind::Match)?.span;
 
@@ -78,7 +79,7 @@ impl Parser {
         // Parse OPTIONAL MATCH clauses
         let optional_matches = self.parse_optional_matches()?;
 
-        // Check what comes next: RETURN or mutation keyword
+        // Check what comes next: RETURN, mutation keyword, or WALK
         if self.check(&TokenKind::Return) {
             // Parse as normal MATCH query
             let return_clause = self.parse_return_clause()?;
@@ -133,6 +134,18 @@ impl Parser {
                 pattern,
                 where_clause,
                 mutations,
+                span,
+            }))
+        } else if self.check(&TokenKind::Walk) {
+            // Parse as compound walk
+            let walk = self.parse_walk()?;
+
+            let span = self.span_from(start);
+
+            Ok(Stmt::MatchWalk(MatchWalkStmt {
+                pattern,
+                where_clause,
+                walk,
                 span,
             }))
         } else {
@@ -719,22 +732,30 @@ impl Parser {
     fn parse_walk_return(&mut self) -> ParseResult<WalkReturnType> {
         self.expect(&TokenKind::Return)?;
 
-        if self.check(&TokenKind::Path) {
+        let ret_type = if self.check(&TokenKind::Path) {
             self.advance();
-            Ok(WalkReturnType::Path)
+            WalkReturnType::Path
         } else if self.check(&TokenKind::Nodes) {
             self.advance();
-            Ok(WalkReturnType::Nodes)
+            WalkReturnType::Nodes
         } else if self.check(&TokenKind::Edges) {
             self.advance();
-            Ok(WalkReturnType::Edges)
+            WalkReturnType::Edges
         } else if self.check(&TokenKind::Terminal) {
             self.advance();
-            Ok(WalkReturnType::Terminal)
+            WalkReturnType::Terminal
         } else {
             let projections = self.parse_projections()?;
-            Ok(WalkReturnType::Projections(projections))
+            WalkReturnType::Projections(projections)
+        };
+
+        // Skip optional AS alias (used for display, not stored)
+        if self.check(&TokenKind::As) {
+            self.advance();
+            self.expect_ident()?; // Consume the alias name
         }
+
+        Ok(ret_type)
     }
 
     // ==================== INSPECT ====================

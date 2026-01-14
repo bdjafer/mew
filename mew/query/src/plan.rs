@@ -285,7 +285,7 @@ impl<'r> QueryPlanner<'r> {
     }
 
     /// Plan the pattern matching portion.
-    fn plan_pattern(&self, pattern: &[mew_parser::PatternElem]) -> QueryResult<PlanOp> {
+    pub fn plan_pattern(&self, pattern: &[mew_parser::PatternElem]) -> QueryResult<PlanOp> {
         if pattern.is_empty() {
             return Ok(PlanOp::Empty);
         }
