@@ -121,7 +121,15 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
     ) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
         let mut results = Vec::new();
 
-        for node_id in self.graph.nodes_by_type(type_id) {
+        // Collect all nodes of the given type AND all subtypes (polymorphic matching)
+        let mut node_ids: Vec<mew_core::NodeId> = self.graph.nodes_by_type(type_id).collect();
+
+        // Also include nodes of all subtypes
+        for subtype_id in self.registry.get_subtypes(type_id) {
+            node_ids.extend(self.graph.nodes_by_type(subtype_id));
+        }
+
+        for node_id in node_ids {
             let mut bindings = initial_bindings.cloned().unwrap_or_default();
             if let Some(existing) = bindings.get(var) {
                 if existing.as_node() != Some(node_id) {
@@ -150,32 +158,40 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
 
         let mut results = Vec::new();
 
+        // Collect all type IDs to scan (including subtypes for polymorphic matching)
+        let mut type_ids = vec![type_id];
+        type_ids.extend(self.registry.get_subtypes(type_id));
+
         // Use attribute index
         if !matches!(search_val, Value::Null) {
-            for node_id in self.graph.nodes_by_attr(type_id, attr, &search_val) {
-                let mut bindings = initial_bindings.cloned().unwrap_or_default();
-                if let Some(existing) = bindings.get(var) {
-                    if existing.as_node() != Some(node_id) {
-                        continue;
+            for tid in &type_ids {
+                for node_id in self.graph.nodes_by_attr(*tid, attr, &search_val) {
+                    let mut bindings = initial_bindings.cloned().unwrap_or_default();
+                    if let Some(existing) = bindings.get(var) {
+                        if existing.as_node() != Some(node_id) {
+                            continue;
+                        }
                     }
+                    bindings.insert(var, mew_pattern::Binding::Node(node_id));
+                    results.push((bindings, Vec::new()));
                 }
-                bindings.insert(var, mew_pattern::Binding::Node(node_id));
-                results.push((bindings, Vec::new()));
             }
         } else {
             // Fall back to scan with filter
-            for node_id in self.graph.nodes_by_type(type_id) {
-                if let Some(node) = self.graph.get_node(node_id) {
-                    if let Some(attr_val) = node.get_attr(attr) {
-                        if values_equal(attr_val, &search_val) {
-                            let mut bindings = initial_bindings.cloned().unwrap_or_default();
-                            if let Some(existing) = bindings.get(var) {
-                                if existing.as_node() != Some(node_id) {
-                                    continue;
+            for tid in &type_ids {
+                for node_id in self.graph.nodes_by_type(*tid) {
+                    if let Some(node) = self.graph.get_node(node_id) {
+                        if let Some(attr_val) = node.get_attr(attr) {
+                            if values_equal(attr_val, &search_val) {
+                                let mut bindings = initial_bindings.cloned().unwrap_or_default();
+                                if let Some(existing) = bindings.get(var) {
+                                    if existing.as_node() != Some(node_id) {
+                                        continue;
+                                    }
                                 }
+                                bindings.insert(var, mew_pattern::Binding::Node(node_id));
+                                results.push((bindings, Vec::new()));
                             }
-                            bindings.insert(var, mew_pattern::Binding::Node(node_id));
-                            results.push((bindings, Vec::new()));
                         }
                     }
                 }
