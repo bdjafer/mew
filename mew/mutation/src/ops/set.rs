@@ -33,7 +33,7 @@ pub fn execute_set(
             .unwrap_or_else(|| "unknown".to_string());
 
         // Validate and collect new attributes
-        let mut new_attrs = Vec::new();
+        let mut new_attrs = mew_core::Attributes::new();
 
         for assign in &stmt.assignments {
             // Evaluate the value
@@ -42,11 +42,14 @@ pub fn execute_set(
             // Validate attribute (is_update=true since we're modifying an existing node)
             validation::validate_attribute(registry, &type_name, type_id, &assign.name, &value, true)?;
 
-            new_attrs.push((assign.name.clone(), value));
+            new_attrs.insert(assign.name.clone(), value);
         }
 
+        // Check uniqueness constraints, excluding the current node
+        validation::check_unique_constraints(registry, graph, &type_name, type_id, &new_attrs, Some(node_id))?;
+
         // Apply updates
-        for (name, value) in new_attrs {
+        for (name, value) in new_attrs.into_iter() {
             graph
                 .set_node_attr(node_id, &name, value)
                 .map_err(|e| MutationError::pattern_error(e.to_string()))?;

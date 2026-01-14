@@ -48,6 +48,9 @@ pub fn execute_spawn(
     // Apply default values
     validation::apply_defaults(registry, type_id, &mut attrs)?;
 
+    // Check uniqueness constraints
+    validation::check_unique_constraints(registry, graph, &stmt.type_name, type_id, &attrs, None)?;
+
     // Create the node
     let node_id = graph.create_node(type_id, attrs);
 

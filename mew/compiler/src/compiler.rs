@@ -210,8 +210,19 @@ impl Compiler {
                 }
             }
 
+            // Collect all modifiers: from type alias (if any) + from attribute definition
+            let mut all_modifiers: Vec<AttrModifier> = Vec::new();
+
+            // First, add modifiers from type alias (if this type is an alias)
+            if let Some(alias) = self.type_aliases.get(&attr_def.type_name) {
+                all_modifiers.extend(alias.modifiers.clone());
+            }
+
+            // Then, add modifiers from the attribute definition itself (these override/add to alias modifiers)
+            all_modifiers.extend(attr_def.modifiers.clone());
+
             // Process modifiers and expand to constraints
-            for modifier in &attr_def.modifiers {
+            for modifier in &all_modifiers {
                 match modifier {
                     AttrModifier::Required => {
                         attr = attr.required();
@@ -262,10 +273,18 @@ impl Compiler {
                         }
                     }
                     AttrModifier::InValues(values) => {
-                        // Generate enum constraint
-                        let value_strs: Vec<String> = values
+                        // Collect the allowed values
+                        let allowed_values: Vec<Value> = values
                             .iter()
                             .filter_map(expr_to_value)
+                            .collect();
+                        // Store allowed values on the attribute
+                        if !allowed_values.is_empty() {
+                            attr = attr.with_allowed_values(allowed_values.clone());
+                        }
+                        // Generate enum constraint
+                        let value_strs: Vec<String> = allowed_values
+                            .iter()
                             .map(|v| format!("{:?}", v))
                             .collect();
                         if !value_strs.is_empty() {
@@ -281,6 +300,8 @@ impl Compiler {
                         }
                     }
                     AttrModifier::Match(pattern) => {
+                        // Store the pattern on the attribute
+                        attr = attr.with_match_pattern(pattern.clone());
                         // Generate regex constraint
                         self.generated_type_constraints.push(GeneratedConstraint {
                             name: format!("_{}_{}_{}", node_def.name, attr_def.name, "match"),
@@ -300,6 +321,8 @@ impl Compiler {
                         });
                     }
                     AttrModifier::Format(format_name) => {
+                        // Store the format on the attribute
+                        attr = attr.with_format(format_name.clone());
                         // Generate format constraint
                         self.generated_type_constraints.push(GeneratedConstraint {
                             name: format!("_{}_{}_{}", node_def.name, attr_def.name, "format"),

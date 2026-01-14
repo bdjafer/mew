@@ -1,6 +1,6 @@
 //! LINK operation - creates edges between entities.
 
-use mew_core::{EdgeTypeId, EntityId, NodeId};
+use mew_core::{EdgeId, EdgeTypeId, EntityId, NodeId};
 use mew_graph::Graph;
 use mew_parser::LinkStmt;
 use mew_pattern::{Bindings, Evaluator};
@@ -25,10 +25,9 @@ pub fn execute_link(
 
     // If IF NOT EXISTS, check if edge already exists
     if stmt.if_not_exists {
-        if let Some(existing_edge_id) = find_existing_edge(graph, edge_type_id, &target_ids) {
-            // Edge already exists - return it as a Created outcome with created=false metadata
-            // The RETURNING clause will handle extracting the id and created flag
-            return Ok(MutationOutcome::Created(CreatedEntity::edge(existing_edge_id)));
+        if find_existing_edge(graph, edge_type_id, &target_ids).is_some() {
+            // Edge already exists - no new edge created
+            return Ok(MutationOutcome::Empty);
         }
     }
 

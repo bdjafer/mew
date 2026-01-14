@@ -1,6 +1,7 @@
 //! Attribute validation helpers for mutation operations.
 
-use mew_core::{EdgeTypeId, TypeId, Value};
+use mew_core::{EdgeTypeId, NodeId, TypeId, Value};
+use mew_graph::Graph;
 use mew_registry::Registry;
 
 use crate::error::{MutationError, MutationResult};
@@ -36,6 +37,21 @@ pub fn validate_attribute(
 
         // Check range constraints (min/max)
         validate_range(attr_name, value, &attr_def.min, &attr_def.max)?;
+
+        // Check format constraint
+        if let Some(ref format) = attr_def.format {
+            validate_format(attr_name, value, format)?;
+        }
+
+        // Check match pattern constraint
+        if let Some(ref pattern) = attr_def.match_pattern {
+            validate_match_pattern(attr_name, value, pattern)?;
+        }
+
+        // Check allowed values constraint (in: [...])
+        if let Some(ref allowed_values) = attr_def.allowed_values {
+            validate_allowed_values(attr_name, value, allowed_values)?;
+        }
     } else {
         return Err(MutationError::unknown_attribute(type_name, attr_name));
     }
@@ -205,5 +221,219 @@ pub fn types_compatible(expected: &str, actual: &str) -> bool {
         return true;
     }
     false
+}
+
+/// Check uniqueness constraints on attributes.
+/// Excludes `exclude_node` when checking (used for SET operations on existing nodes).
+pub fn check_unique_constraints(
+    registry: &Registry,
+    graph: &Graph,
+    type_name: &str,
+    type_id: TypeId,
+    attrs: &mew_core::Attributes,
+    exclude_node: Option<NodeId>,
+) -> MutationResult<()> {
+    // Get all attrs including inherited ones and check for unique constraints
+    for attr_def in registry.get_all_type_attrs(type_id) {
+        if !attr_def.unique {
+            continue;
+        }
+
+        // Get the value for this attribute
+        let value = match attrs.get(&attr_def.name) {
+            Some(v) => v,
+            None => continue, // Attribute not being set
+        };
+
+        // Skip null values - they don't violate uniqueness
+        if matches!(value, Value::Null) {
+            continue;
+        }
+
+        // Find the type that declares this unique attribute
+        // For inheritance, uniqueness is checked across the declaring type and all subtypes
+        let declaring_type_id = find_declaring_type(registry, type_id, &attr_def.name);
+
+        // Check all nodes of the declaring type and its subtypes
+        if value_exists_in_nodes(
+            registry,
+            graph,
+            declaring_type_id,
+            &attr_def.name,
+            value,
+            exclude_node,
+        ) {
+            return Err(MutationError::unique_constraint_violation(
+                type_name,
+                &attr_def.name,
+                format!("{:?}", value),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Find the type that originally declares an attribute (for inheritance).
+fn find_declaring_type(registry: &Registry, type_id: TypeId, attr_name: &str) -> TypeId {
+    // Walk up the type hierarchy to find the topmost type that declares this attribute
+    let mut declaring_type = type_id;
+    for supertype_id in registry.get_supertypes(type_id) {
+        if let Some(supertype) = registry.get_type(supertype_id) {
+            if supertype.attributes.contains_key(attr_name) {
+                declaring_type = supertype_id;
+            }
+        }
+    }
+    declaring_type
+}
+
+/// Check if a value exists in any node of the given type or its subtypes.
+fn value_exists_in_nodes(
+    registry: &Registry,
+    graph: &Graph,
+    type_id: TypeId,
+    attr_name: &str,
+    value: &Value,
+    exclude_node: Option<NodeId>,
+) -> bool {
+    // Collect all type IDs to check (the type itself plus all subtypes)
+    let mut types_to_check = vec![type_id];
+    types_to_check.extend(registry.get_subtypes(type_id));
+
+    // Check all nodes of these types
+    for check_type_id in types_to_check {
+        for node_id in graph.nodes_by_type(check_type_id) {
+            // Skip the excluded node
+            if Some(node_id) == exclude_node {
+                continue;
+            }
+
+            if let Some(node) = graph.get_node(node_id) {
+                if let Some(node_value) = node.attributes.get(attr_name) {
+                    if node_value == value {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Validate a value against a format constraint.
+pub fn validate_format(attr_name: &str, value: &Value, format: &str) -> MutationResult<()> {
+    // Skip null values
+    if matches!(value, Value::Null) {
+        return Ok(());
+    }
+
+    let s = match value {
+        Value::String(s) => s,
+        _ => return Ok(()), // Format only applies to strings
+    };
+
+    let valid = match format {
+        "slug" => is_valid_slug(s),
+        "email" => is_valid_email(s),
+        "url" => is_valid_url(s),
+        "uuid" => is_valid_uuid(s),
+        _ => true, // Unknown format - don't validate
+    };
+
+    if !valid {
+        return Err(MutationError::format_constraint_violation(
+            attr_name,
+            s.clone(),
+            format,
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validate a value against a match pattern constraint.
+pub fn validate_match_pattern(attr_name: &str, value: &Value, pattern: &str) -> MutationResult<()> {
+    // Skip null values
+    if matches!(value, Value::Null) {
+        return Ok(());
+    }
+
+    let s = match value {
+        Value::String(s) => s,
+        _ => return Ok(()), // Match pattern only applies to strings
+    };
+
+    // Compile and test the regex
+    match regex_lite::Regex::new(pattern) {
+        Ok(re) => {
+            if !re.is_match(s) {
+                return Err(MutationError::pattern_constraint_violation(
+                    attr_name,
+                    s.clone(),
+                    pattern,
+                ));
+            }
+        }
+        Err(_) => {
+            // Invalid regex pattern - skip validation but could log warning
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if a string is a valid slug (lowercase letters, numbers, and hyphens).
+/// Slugs must not start or end with a hyphen, and cannot have consecutive hyphens.
+fn is_valid_slug(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    if s.starts_with('-') || s.ends_with('-') {
+        return false;
+    }
+    if s.contains("--") {
+        return false;
+    }
+    s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Check if a string looks like a valid email (simple validation).
+fn is_valid_email(s: &str) -> bool {
+    // Simple email validation: contains @ with text before and after
+    let parts: Vec<&str> = s.split('@').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    !parts[0].is_empty() && parts[1].contains('.') && !parts[1].starts_with('.') && !parts[1].ends_with('.')
+}
+
+/// Check if a string looks like a valid URL.
+fn is_valid_url(s: &str) -> bool {
+    s.starts_with("http://") || s.starts_with("https://")
+}
+
+/// Check if a string is a valid UUID format.
+fn is_valid_uuid(s: &str) -> bool {
+    // UUID format: 8-4-4-4-12 hex digits
+    let pattern = regex_lite::Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    pattern.map(|re| re.is_match(s)).unwrap_or(false)
+}
+
+/// Validate a value against allowed values constraint (in: [...]).
+pub fn validate_allowed_values(attr_name: &str, value: &Value, allowed_values: &[Value]) -> MutationResult<()> {
+    // Skip null values
+    if matches!(value, Value::Null) {
+        return Ok(());
+    }
+
+    // Check if value is in the allowed list
+    if !allowed_values.contains(value) {
+        return Err(MutationError::allowed_values_violation(
+            attr_name,
+            format!("{:?}", value),
+        ));
+    }
+
+    Ok(())
 }
 

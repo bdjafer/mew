@@ -22,6 +22,12 @@ pub struct AttrDef {
     pub min: Option<Value>,
     /// Maximum value constraint (for Int, Float).
     pub max: Option<Value>,
+    /// Format constraint (e.g., "slug", "email", "url", "uuid").
+    pub format: Option<String>,
+    /// Match pattern constraint (regex).
+    pub match_pattern: Option<String>,
+    /// Allowed values (in: [...] constraint).
+    pub allowed_values: Option<Vec<Value>>,
 }
 
 impl AttrDef {
@@ -35,6 +41,9 @@ impl AttrDef {
             default: None,
             min: None,
             max: None,
+            format: None,
+            match_pattern: None,
+            allowed_values: None,
         }
     }
 
@@ -61,6 +70,21 @@ impl AttrDef {
     pub fn with_range(mut self, min: Option<Value>, max: Option<Value>) -> Self {
         self.min = min;
         self.max = max;
+        self
+    }
+
+    pub fn with_format(mut self, format: impl Into<String>) -> Self {
+        self.format = Some(format.into());
+        self
+    }
+
+    pub fn with_match_pattern(mut self, pattern: impl Into<String>) -> Self {
+        self.match_pattern = Some(pattern.into());
+        self
+    }
+
+    pub fn with_allowed_values(mut self, values: Vec<Value>) -> Self {
+        self.allowed_values = Some(values);
         self
     }
 }

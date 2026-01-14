@@ -47,3 +47,4 @@ mew-testgen = { path = "testgen" }
 
 # External dependencies
 thiserror = "1.0"
+regex-lite = "0.1"
