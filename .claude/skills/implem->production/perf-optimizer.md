@@ -1,0 +1,1 @@
+goal: find optimization opportunities (reduce latency, increase throughput/bandwith)

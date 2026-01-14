@@ -1,0 +1,1 @@
+goal: make the system crash
