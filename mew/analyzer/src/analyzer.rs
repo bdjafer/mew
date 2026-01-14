@@ -451,10 +451,7 @@ impl<'r> Analyzer<'r> {
             }
             mew_parser::TargetRef::Id(_) => Ok(Type::AnyNodeRef),
             mew_parser::TargetRef::Pattern(match_stmt) => self.analyze_match(match_stmt),
-            mew_parser::TargetRef::InlineSpawn(_) => {
-                // Inline spawn returns a node reference (type checked at runtime)
-                Ok(Type::AnyNodeRef)
-            }
+            mew_parser::TargetRef::InlineSpawn(spawn_stmt) => self.analyze_spawn(spawn_stmt)
         }
     }
 

@@ -25,8 +25,10 @@ pub fn execute_link(
 
     // If IF NOT EXISTS, check if edge already exists
     if stmt.if_not_exists {
-        if edge_exists(graph, edge_type_id, &target_ids) {
-            return Ok(MutationOutcome::Empty);
+        if let Some(existing_edge_id) = find_existing_edge(graph, edge_type_id, &target_ids) {
+            // Edge already exists - return it as a Created outcome with created=false metadata
+            // The RETURNING clause will handle extracting the id and created flag
+            return Ok(MutationOutcome::Created(CreatedEntity::edge(existing_edge_id)));
         }
     }
 
@@ -124,8 +126,9 @@ fn ensure_acyclic(
     Ok(())
 }
 
-/// Check if an edge with the given type and exact targets already exists.
-fn edge_exists(graph: &Graph, edge_type_id: EdgeTypeId, target_ids: &[EntityId]) -> bool {
+/// Find an existing edge with the given type and exact targets.
+/// Returns the edge ID if found, None otherwise.
+fn find_existing_edge(graph: &Graph, edge_type_id: EdgeTypeId, target_ids: &[EntityId]) -> Option<EdgeId> {
     // Get candidate edges based on first target type
     let candidate_edges: Vec<_> = match target_ids.first() {
         Some(EntityId::Node(source_id)) => {
@@ -143,7 +146,7 @@ fn edge_exists(graph: &Graph, edge_type_id: EdgeTypeId, target_ids: &[EntityId])
                 })
                 .collect()
         }
-        None => return false,
+        None => return None,
     };
 
     // Check if any candidate has exact matching targets
@@ -156,12 +159,12 @@ fn edge_exists(graph: &Graph, edge_type_id: EdgeTypeId, target_ids: &[EntityId])
                     .zip(target_ids.iter())
                     .all(|(a, b)| a == b);
                 if matches {
-                    return true;
+                    return Some(edge_id);
                 }
             }
         }
     }
-    false
+    None
 }
 
 /// Check if a path exists from start to goal using edges of the given type.
