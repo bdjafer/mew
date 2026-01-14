@@ -165,8 +165,8 @@ mod no_self {
             .step("test_verify_no_parent_dept_self_edge", |a| a.scalar("self_edges", 0i64))
             // Update test (conceptual)
             .step("test_update_to_create_self_link_should_fail", |a| a.rows(1))
-            // Multiple employees reporting to same manager: alice, bob -> charlie = 2
-            .step("test_multiple_employees_reporting_to_same_manager", |a| a.scalar("report_count", 2i64))
+            // Multiple employees reporting to same manager: alice, bob, SelfTest -> charlie = 3
+            .step("test_multiple_employees_reporting_to_same_manager", |a| a.scalar("report_count", 3i64))
             // Setup circular employees
             .step("test_setup_circular_employees", |a| a.created(1))
             .step("test_setup_circular_employee_2", |a| a.created(1))
