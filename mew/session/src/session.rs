@@ -149,14 +149,27 @@ impl<'r> Session<'r> {
             }
         }
 
-        // Return aggregated mutation result if any mutations happened
-        if total_mutations.total_affected() > 0 {
-            Ok(StatementResult::Mutation(total_mutations))
-        } else if let Some(query_result) = combined_query {
-            // Return combined query results
-            Ok(StatementResult::Query(query_result))
-        } else {
-            Ok(StatementResult::Mutation(MutationSummary::default()))
+        // Return results based on what was executed
+        match (total_mutations.total_affected() > 0, combined_query) {
+            (true, Some(query_result)) => {
+                // Both mutations and queries occurred - return Mixed
+                Ok(StatementResult::Mixed {
+                    mutations: total_mutations,
+                    queries: query_result,
+                })
+            }
+            (true, None) => {
+                // Only mutations occurred
+                Ok(StatementResult::Mutation(total_mutations))
+            }
+            (false, Some(query_result)) => {
+                // Only queries occurred
+                Ok(StatementResult::Query(query_result))
+            }
+            (false, None) => {
+                // No mutations or queries (empty statements)
+                Ok(StatementResult::Mutation(MutationSummary::default()))
+            }
         }
     }
 
@@ -658,6 +671,10 @@ impl<'r> Session<'r> {
 
         match result {
             StatementResult::Query(qr) => Ok(qr),
+            StatementResult::Mixed { queries, .. } => {
+                // For mixed results, return the query part
+                Ok(queries)
+            }
             StatementResult::Mutation(_) => {
                 // For mutations, return empty query result
                 Ok(QueryResult {
