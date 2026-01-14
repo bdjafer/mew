@@ -211,9 +211,10 @@ LINK has_image(
 --@ expect:ok
 
 --# test_verify_chained_operations
-MATCH p: Product, img: ProductImage, r: Review, cust: Customer,
-      has_image(p, img), review_of(r, p), reviewed_by(r, cust)
+MATCH p: Product, img: ProductImage, has_image(p, img)
 WHERE p.sku = "INLN-0004"
+MATCH r: Review, review_of(r, p)
+MATCH cust: Customer, reviewed_by(r, cust)
 RETURN p.name, r.rating, img.is_primary, cust.email
 --@ expect:rows = 1
 --@ expect:has_row { name = "Chained Inline Product", rating = 4, is_primary = true, email = "inline@test.com" }
