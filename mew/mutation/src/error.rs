@@ -99,6 +99,14 @@ pub enum MutationError {
         attr: String,
         value: String,
     },
+
+    #[error("length constraint violated: {attr} length {actual_length} is out of range [{min_length}..{max_length}]")]
+    LengthConstraintViolation {
+        attr: String,
+        actual_length: usize,
+        min_length: i64,
+        max_length: i64,
+    },
 }
 
 impl MutationError {
@@ -246,6 +254,20 @@ impl MutationError {
         Self::AllowedValuesViolation {
             attr: attr.into(),
             value: value.into(),
+        }
+    }
+
+    pub fn length_constraint_violation(
+        attr: impl Into<String>,
+        actual_length: usize,
+        min_length: i64,
+        max_length: i64,
+    ) -> Self {
+        Self::LengthConstraintViolation {
+            attr: attr.into(),
+            actual_length,
+            min_length,
+            max_length,
         }
     }
 }

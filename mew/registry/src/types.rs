@@ -28,6 +28,10 @@ pub struct AttrDef {
     pub match_pattern: Option<String>,
     /// Allowed values (in: [...] constraint).
     pub allowed_values: Option<Vec<Value>>,
+    /// Minimum string length constraint.
+    pub length_min: Option<i64>,
+    /// Maximum string length constraint.
+    pub length_max: Option<i64>,
 }
 
 impl AttrDef {
@@ -44,6 +48,8 @@ impl AttrDef {
             format: None,
             match_pattern: None,
             allowed_values: None,
+            length_min: None,
+            length_max: None,
         }
     }
 
@@ -68,8 +74,13 @@ impl AttrDef {
     }
 
     pub fn with_range(mut self, min: Option<Value>, max: Option<Value>) -> Self {
-        self.min = min;
-        self.max = max;
+        // Merge rather than replace: only update if Some is provided
+        if min.is_some() {
+            self.min = min;
+        }
+        if max.is_some() {
+            self.max = max;
+        }
         self
     }
 
@@ -85,6 +96,12 @@ impl AttrDef {
 
     pub fn with_allowed_values(mut self, values: Vec<Value>) -> Self {
         self.allowed_values = Some(values);
+        self
+    }
+
+    pub fn with_length(mut self, min: i64, max: i64) -> Self {
+        self.length_min = Some(min);
+        self.length_max = Some(max);
         self
     }
 }
