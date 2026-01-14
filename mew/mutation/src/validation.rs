@@ -71,6 +71,11 @@ pub fn validate_attribute(
         if let Some(ref allowed_values) = attr_def.allowed_values {
             validate_allowed_values(attr_name, value, allowed_values)?;
         }
+
+        // Check length constraint (for strings)
+        if attr_def.length_min.is_some() || attr_def.length_max.is_some() {
+            validate_length(attr_name, value, attr_def.length_min, attr_def.length_max)?;
+        }
     } else {
         return Err(MutationError::unknown_attribute(type_name, attr_name));
     }
@@ -452,6 +457,39 @@ pub fn validate_allowed_values(attr_name: &str, value: &Value, allowed_values: &
         return Err(MutationError::allowed_values_violation(
             attr_name,
             format_value(value),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validate a value against length constraints (for strings).
+pub fn validate_length(
+    attr_name: &str,
+    value: &Value,
+    length_min: Option<i64>,
+    length_max: Option<i64>,
+) -> MutationResult<()> {
+    // Skip null values
+    if matches!(value, Value::Null) {
+        return Ok(());
+    }
+
+    let s = match value {
+        Value::String(s) => s,
+        _ => return Ok(()), // Length only applies to strings
+    };
+
+    let actual_length = s.chars().count();
+    let min = length_min.unwrap_or(0);
+    let max = length_max.unwrap_or(i64::MAX);
+
+    if (actual_length as i64) < min || (actual_length as i64) > max {
+        return Err(MutationError::length_constraint_violation(
+            attr_name,
+            actual_length,
+            min,
+            max,
         ));
     }
 

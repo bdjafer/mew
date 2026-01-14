@@ -310,6 +310,8 @@ impl Compiler {
                         });
                     }
                     AttrModifier::Length { min, max } => {
+                        // Store length constraint on attribute for direct validation
+                        attr = attr.with_length(*min, *max);
                         // Generate length constraint for strings
                         self.generated_type_constraints.push(GeneratedConstraint {
                             name: format!("_{}_{}_{}", node_def.name, attr_def.name, "length"),
