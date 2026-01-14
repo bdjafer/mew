@@ -103,6 +103,7 @@ pub struct MatchWalkStmt {
 /// A mutation action within a compound statement.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MutationAction {
+    Spawn(SpawnStmt),
     Link(LinkStmt),
     Set(SetStmt),
     Kill(KillStmt),
@@ -245,6 +246,8 @@ pub struct LinkStmt {
     pub targets: Vec<TargetRef>,
     pub attrs: Vec<AttrAssignment>,
     pub returning: Option<ReturningClause>,
+    /// If true, only creates the edge if it doesn't already exist (LINK IF NOT EXISTS)
+    pub if_not_exists: bool,
     pub span: Span,
 }
 
@@ -254,6 +257,8 @@ pub enum TargetRef {
     Var(String),
     Id(String),
     Pattern(Box<MatchStmt>),
+    /// Inline SPAWN in LINK target
+    InlineSpawn(Box<SpawnStmt>),
 }
 
 // ==================== UNLINK ====================

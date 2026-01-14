@@ -338,6 +338,7 @@ mod tests {
             ],
             attrs: vec![],
             returning: None,
+            if_not_exists: false,
             span: Span::default(),
         };
 
@@ -365,6 +366,7 @@ mod tests {
             targets: vec![mew_parser::TargetRef::Var("p".to_string())], // Missing second target
             attrs: vec![],
             returning: None,
+            if_not_exists: false,
             span: Span::default(),
         };
 

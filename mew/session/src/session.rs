@@ -268,6 +268,7 @@ impl<'r> Session<'r> {
         let matcher = Matcher::new(self.registry, &self.graph);
         let bindings_list = matcher.find_all(&pattern)?;
 
+        let mut nodes_created = 0usize;
         let mut nodes_modified = 0usize;
         let mut edges_modified = 0usize;
         let mut edges_created = 0usize;
@@ -296,11 +297,24 @@ impl<'r> Session<'r> {
             // Execute each mutation with the current bindings
             for mutation in &stmt.mutations {
                 match mutation {
+                    MutationAction::Spawn(spawn_stmt) => {
+                        let summary = self.execute_spawn(spawn_stmt)?;
+                        nodes_created += summary.nodes_created;
+
+                        // Add spawned node to local bindings
+                        if let Some(entity_id) = self.bindings.get(&spawn_stmt.var) {
+                            local_bindings.insert(spawn_stmt.var.clone(), *entity_id);
+                        }
+                    }
                     MutationAction::Link(link_stmt) => {
                         let mut targets = Vec::new();
                         for target_ref in &link_stmt.targets {
-                            let entity_id =
-                                self.resolve_target_ref_with_bindings(target_ref, &local_bindings)?;
+                            let entity_id = self
+                                .resolve_or_spawn_target_ref_with_bindings(
+                                    target_ref,
+                                    &mut local_bindings,
+                                    &mut nodes_created,
+                                )?;
                             targets.push(entity_id);
                         }
 
@@ -375,6 +389,7 @@ impl<'r> Session<'r> {
         }
 
         Ok(MutationSummary {
+            nodes_created,
             nodes_modified,
             edges_modified,
             edges_created,
@@ -400,6 +415,39 @@ impl<'r> Session<'r> {
         bindings: &HashMap<String, EntityId>,
     ) -> SessionResult<EntityId> {
         Ok(target::resolve_target_ref(target_ref, bindings)?)
+    }
+
+    /// Resolve a target reference, handling inline spawns with provided bindings.
+    fn resolve_or_spawn_target_ref_with_bindings(
+        &mut self,
+        target_ref: &TargetRef,
+        bindings: &mut HashMap<String, EntityId>,
+        nodes_created: &mut usize,
+    ) -> SessionResult<EntityId> {
+        match target_ref {
+            TargetRef::InlineSpawn(spawn_stmt) => {
+                // Execute the spawn and return the created node ID
+                let summary = self.execute_spawn(spawn_stmt)?;
+                *nodes_created += summary.nodes_created;
+
+                // Get the node ID from session bindings (spawn stores it with var name)
+                let entity_id = self
+                    .bindings
+                    .get(&spawn_stmt.var)
+                    .cloned()
+                    .ok_or_else(|| {
+                        SessionError::invalid_statement_type(format!(
+                            "inline spawn did not create binding for '{}'",
+                            spawn_stmt.var
+                        ))
+                    })?;
+
+                // Also add to local bindings for MATCH context
+                bindings.insert(spawn_stmt.var.clone(), entity_id);
+                Ok(entity_id)
+            }
+            _ => self.resolve_target_ref_with_bindings(target_ref, bindings),
+        }
     }
 
     /// Execute a WALK statement.
@@ -603,12 +651,14 @@ impl<'r> Session<'r> {
 
     /// Execute a LINK statement.
     fn execute_link(&mut self, stmt: &mew_parser::LinkStmt) -> SessionResult<MutationSummary> {
-        // Resolve all targets
-        let target_ids: Vec<_> = stmt
-            .targets
-            .iter()
-            .map(|t| self.resolve_target_ref(t))
-            .collect::<Result<_, _>>()?;
+        // Resolve all targets, handling inline spawns
+        let mut target_ids = Vec::new();
+        let mut nodes_created = 0;
+
+        for target_ref in &stmt.targets {
+            let entity_id = self.resolve_or_spawn_target_ref(target_ref, &mut nodes_created)?;
+            target_ids.push(entity_id);
+        }
 
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_link(stmt, target_ids)?;
@@ -628,9 +678,39 @@ impl<'r> Session<'r> {
         };
 
         Ok(MutationSummary {
+            nodes_created,
             edges_created,
             ..Default::default()
         })
+    }
+
+    /// Resolve a target reference to an entity ID, spawning if it's an inline spawn.
+    fn resolve_or_spawn_target_ref(
+        &mut self,
+        target_ref: &TargetRef,
+        nodes_created: &mut usize,
+    ) -> SessionResult<EntityId> {
+        match target_ref {
+            TargetRef::InlineSpawn(spawn_stmt) => {
+                // Execute the spawn and return the created node ID
+                let summary = self.execute_spawn(spawn_stmt)?;
+                *nodes_created += summary.nodes_created;
+
+                // Get the node ID from bindings (spawn stores it with var name)
+                let entity_id = self
+                    .bindings
+                    .get(&spawn_stmt.var)
+                    .cloned()
+                    .ok_or_else(|| {
+                        SessionError::invalid_statement_type(format!(
+                            "inline spawn did not create binding for '{}'",
+                            spawn_stmt.var
+                        ))
+                    })?;
+                Ok(entity_id)
+            }
+            _ => self.resolve_target_ref(target_ref),
+        }
     }
 
     /// Execute an UNLINK statement.

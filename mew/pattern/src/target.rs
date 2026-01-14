@@ -101,6 +101,10 @@ pub fn resolve_target_ref(
         TargetRef::Pattern(_) => Err(TargetError::UnsupportedTarget {
             target_type: "Pattern".to_string(),
         }),
+
+        TargetRef::InlineSpawn(_) => Err(TargetError::UnsupportedTarget {
+            target_type: "InlineSpawn".to_string(),
+        }),
     }
 }
 

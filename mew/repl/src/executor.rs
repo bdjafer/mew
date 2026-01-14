@@ -410,6 +410,18 @@ pub fn execute_match_mutate(
         // Execute each mutation with the current bindings
         for mutation in &stmt.mutations {
             match mutation {
+                MutationAction::Spawn(spawn_stmt) => {
+                    let pattern_bindings = to_pattern_bindings(&local_bindings);
+                    let mut executor = MutationExecutor::new(registry, graph);
+                    let result = executor
+                        .execute_spawn(spawn_stmt, &pattern_bindings)
+                        .map_err(|e| format!("Spawn error: {}", e))?;
+
+                    if let Some(node_id) = result.created_node() {
+                        local_bindings.insert(spawn_stmt.var.clone(), node_id.into());
+                        total_nodes += 1;
+                    }
+                }
                 MutationAction::Link(link_stmt) => {
                     let mut targets = Vec::new();
                     for target_ref in &link_stmt.targets {

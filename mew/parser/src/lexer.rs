@@ -22,6 +22,7 @@ pub enum TokenKind {
     Unlink,
     Set,
     Walk,
+    If,
     Inspect,
     From,
     Follow,
@@ -125,6 +126,7 @@ impl TokenKind {
             TokenKind::Unlink => "UNLINK",
             TokenKind::Set => "SET",
             TokenKind::Walk => "WALK",
+            TokenKind::If => "IF",
             TokenKind::Inspect => "INSPECT",
             TokenKind::From => "FROM",
             TokenKind::Follow => "FOLLOW",
@@ -223,6 +225,7 @@ impl TokenKind {
                 | TokenKind::Unlink
                 | TokenKind::Set
                 | TokenKind::Walk
+                | TokenKind::If
                 | TokenKind::From
                 | TokenKind::Follow
                 | TokenKind::Until
@@ -564,6 +567,7 @@ impl<'a> Lexer<'a> {
             "UNLINK" => TokenKind::Unlink,
             "SET" => TokenKind::Set,
             "WALK" => TokenKind::Walk,
+            "IF" => TokenKind::If,
             "INSPECT" => TokenKind::Inspect,
             "FROM" => TokenKind::From,
             "FOLLOW" => TokenKind::Follow,
