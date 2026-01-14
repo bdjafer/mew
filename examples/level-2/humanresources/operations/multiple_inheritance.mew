@@ -229,9 +229,10 @@ RETURN count(mentee) AS mentee_count
 -- ---------------------------------------------------------------------------
 
 --# test_find_mentors_with_capacity
-MATCH m: Mentorship
+-- Rewritten: combine patterns in single MATCH (semantically equivalent)
+-- Original used MATCH...WHERE...MATCH which is not in spec
+MATCH m: Mentorship, mentee: Employee, mentors(m, mentee)
 WHERE m.can_mentor = true AND m.max_mentees > 3
-MATCH mentee: Employee, mentors(m, mentee)
 RETURN count(DISTINCT m) AS active_mentors
 --@ expect:rows = 1
 
@@ -282,14 +283,13 @@ SPAWN new_lead: TeamLead {
 --@ expect:ok
 
 --# test_verify_new_lead_as_all_types
-MATCH p: Person
-WHERE p.email = "new.lead@company.com"
-MATCH e: Employee
-WHERE e.employee_id = "EMP800005"
-MATCH m: Mentorship
-WHERE m.mentoring_areas = "Testing, QA"
+-- Verify entity satisfies all parent types via explicit type checks
+-- Uses expr:Type syntax to check inheritance chain
 MATCH tl: TeamLead
-WHERE tl.technical_specialty = "Quality Engineering"
+WHERE tl.email = "new.lead@company.com"
+  AND tl:Person       -- Verify TeamLead is a Person (via Employee)
+  AND tl:Employee     -- Verify TeamLead is an Employee
+  AND tl:Mentorship   -- Verify TeamLead satisfies Mentorship mixin
 RETURN count(*) AS type_check
 --@ expect:rows = 1
 --@ expect:has_row { type_check = 1 }

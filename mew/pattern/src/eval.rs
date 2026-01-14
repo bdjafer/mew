@@ -52,6 +52,31 @@ impl<'r> Evaluator<'r> {
                     .collect();
                 Ok(Value::List(values?))
             }
+            Expr::TypeCheck(base, type_name, _) => {
+                // Type check: expr:Type - checks if the value is of the given type
+                let base_val = self.eval(base, bindings, graph)?;
+                let is_type = match &base_val {
+                    Value::NodeRef(node_id) => {
+                        // Get the node and check its type
+                        if let Some(node) = graph.get_node(*node_id) {
+                            // Check if the node's type matches or is a subtype
+                            let node_type_id = node.type_id;
+                            // Get the target type ID
+                            if let Some(target_type_id) = self.registry.get_type_id(type_name) {
+                                // Check if node type equals or is a subtype of target
+                                node_type_id == target_type_id
+                                    || self.registry.is_subtype(node_type_id, target_type_id)
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false, // Non-node values are not typed
+                };
+                Ok(Value::Bool(is_type))
+            }
         }
     }
 

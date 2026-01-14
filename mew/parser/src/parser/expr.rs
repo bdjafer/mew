@@ -162,6 +162,31 @@ impl Parser {
             });
         }
 
+        // Handle IS [NOT] NULL
+        if self.check(&TokenKind::Is) {
+            let start = left.span();
+            self.advance(); // consume IS
+
+            let is_not = if self.check(&TokenKind::Not) {
+                self.advance(); // consume NOT
+                true
+            } else {
+                false
+            };
+
+            self.expect(&TokenKind::Null)?;
+            let span = self.span_from(start);
+
+            // Transform to comparison: expr = null or expr != null
+            let null_expr = Expr::Literal(Literal {
+                kind: LiteralKind::Null,
+                span,
+            });
+
+            let op = if is_not { BinaryOp::NotEq } else { BinaryOp::Eq };
+            left = Expr::BinaryOp(op, Box::new(left), Box::new(null_expr), span);
+        }
+
         Ok(left)
     }
 
@@ -226,6 +251,16 @@ impl Parser {
 
     fn parse_postfix(&mut self) -> ParseResult<Expr> {
         let mut expr = self.parse_primary()?;
+
+        // Handle type check: expr:Type
+        // Must be checked before attribute access to handle node:Type syntax
+        if self.check(&TokenKind::Colon) {
+            let start = expr.span();
+            self.advance();
+            let type_name = self.expect_ident()?;
+            let span = self.span_from(start);
+            return Ok(Expr::TypeCheck(Box::new(expr), type_name, span));
+        }
 
         // Handle attribute access: expr.attr
         // And duration literals: 30.seconds, 5.minutes, etc.

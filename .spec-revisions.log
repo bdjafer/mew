@@ -32,3 +32,41 @@ Propagated to: None needed (implementation already has this field)
 Resolution: Added "spawn" SpawnExpr to MutationOp grammar and "Spawn" to MutationOp AST kind union
 Propagated to: None needed (implementation already has this variant)
 ---
+---
+Date: 2026-01-14
+Document: specs/specification/1_LANGUAGE.md
+Section: Keywords (2.5.2), Expressions (5.X)
+Problem: New syntax features (type checking expr:Type and IS [NOT] NULL) added to implementation without specification
+Evidence: PR #41 adds parser support, but 1_LANGUAGE.md doesn't document these features
+
+BEFORE:
+- `is` keyword not in MEW Language Keywords
+- No type check expression (expr:Type) documented
+- IS [NOT] NULL operator not documented
+
+AFTER:
+- Add `is` to Logic keywords in section 2.5.2
+- Add section 5.10 "Type Check Expression" documenting expr:Type syntax
+- Add IS [NOT] NULL to section 5.11 Null Handling Expressions (renumbered from 5.10)
+
+JUSTIFICATION:
+These features are implemented and working (PR #41). The specification must document
+all available syntax. The type check feature enables runtime type checking in patterns,
+and IS NULL provides familiar SQL-style null checking syntax.
+
+Downstream impact:
+- No other spec files need updates (language-level feature)
+- Tests already exist in examples/level-2/humanresources/operations/multiple_inheritance.mew
+- Implementation complete in parser, analyzer, pattern evaluator
+
+Resolution:
+- Added `is` to MEW Language Keywords in section 2.5.2
+- Added `is` to alphabetical keyword list in section 2.5.3
+- Added new section 5.10 "Type Check Expression" with grammar, semantics, examples, and AST
+- Added new section 5.11.1 "IS [NOT] NULL Operator" with grammar, semantics, examples
+- Renumbered section 5.10 "Null Handling Expressions" to 5.11
+- Renumbered section 5.11 "Expression Type Rules" to 5.12
+- Updated type inference table to include `x:Type` and `x IS NULL` expressions
+
+Propagated to: specs/specification/1_LANGUAGE.md (complete)
+---
