@@ -63,9 +63,8 @@ mod errors {
             .operations("level-4/factbase/operations/errors.mew")
             .step("spawn_missing_name", |a| a.error("required"))
             .step("spawn_missing_source", |a| a.error("required"))
-            // Note: type alias constraints are not enforced at runtime
-            .step("spawn_invalid_reliability_low", |a| a.created(1))
-            .step("spawn_invalid_reliability_high", |a| a.created(1))
+            .step("spawn_invalid_reliability_low", |a| a.error("constraint"))
+            .step("spawn_invalid_reliability_high", |a| a.error("constraint"))
             .step("spawn_valid", |a| a.created(1))
     }
 

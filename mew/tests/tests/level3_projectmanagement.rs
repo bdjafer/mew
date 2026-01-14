@@ -70,10 +70,9 @@ mod errors {
             .ontology("level-3/projectmanagement/ontology.mew")
             .operations("level-3/projectmanagement/operations/errors.mew")
             .step("spawn_missing_title", |a| a.error("required"))
-            // Note: type alias constraints are not enforced at runtime
-            .step("spawn_invalid_priority_low", |a| a.created(1))
-            .step("spawn_invalid_priority_high", |a| a.created(1))
-            .step("spawn_invalid_status", |a| a.created(1))
+            .step("spawn_invalid_priority_low", |a| a.error("constraint"))
+            .step("spawn_invalid_priority_high", |a| a.error("constraint"))
+            .step("spawn_invalid_status", |a| a.error("constraint"))
             .step("spawn_valid", |a| a.created(1))
     }
 

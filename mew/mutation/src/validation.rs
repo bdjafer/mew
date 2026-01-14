@@ -6,6 +6,25 @@ use mew_registry::Registry;
 
 use crate::error::{MutationError, MutationResult};
 
+/// Format a value for display in error messages.
+fn format_value(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Int(i) => i.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_string(),
+        Value::Timestamp(t) => t.to_string(),
+        Value::Duration(d) => d.to_string(),
+        Value::List(items) => {
+            let formatted: Vec<String> = items.iter().map(format_value).collect();
+            format!("[{}]", formatted.join(", "))
+        }
+        Value::NodeRef(id) => format!("node:{:?}", id),
+        Value::EdgeRef(id) => format!("edge:{:?}", id),
+    }
+}
+
 /// Validate an attribute assignment against the registry.
 /// Use `is_update` = true for SET operations (currently unused but kept for future extensions).
 pub fn validate_attribute(
@@ -266,7 +285,7 @@ pub fn check_unique_constraints(
             return Err(MutationError::unique_constraint_violation(
                 type_name,
                 &attr_def.name,
-                format!("{:?}", value),
+                format_value(value),
             ));
         }
     }
@@ -274,17 +293,19 @@ pub fn check_unique_constraints(
 }
 
 /// Find the type that originally declares an attribute (for inheritance).
+/// Recursively walks up the type hierarchy to find the topmost type.
 fn find_declaring_type(registry: &Registry, type_id: TypeId, attr_name: &str) -> TypeId {
-    // Walk up the type hierarchy to find the topmost type that declares this attribute
-    let mut declaring_type = type_id;
+    // Check each supertype recursively
     for supertype_id in registry.get_supertypes(type_id) {
         if let Some(supertype) = registry.get_type(supertype_id) {
             if supertype.attributes.contains_key(attr_name) {
-                declaring_type = supertype_id;
+                // This supertype declares the attribute, but check if there's an even higher one
+                return find_declaring_type(registry, supertype_id, attr_name);
             }
         }
     }
-    declaring_type
+    // No supertype declares it, so this type is the declarer
+    type_id
 }
 
 /// Check if a value exists in any node of the given type or its subtypes.
@@ -430,7 +451,7 @@ pub fn validate_allowed_values(attr_name: &str, value: &Value, allowed_values: &
     if !allowed_values.contains(value) {
         return Err(MutationError::allowed_values_violation(
             attr_name,
-            format!("{:?}", value),
+            format_value(value),
         ));
     }
 

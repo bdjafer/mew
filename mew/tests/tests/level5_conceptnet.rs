@@ -64,9 +64,8 @@ mod errors {
             .ontology("level-5/conceptnet/ontology.mew")
             .operations("level-5/conceptnet/operations/errors.mew")
             .step("spawn_missing_name", |a| a.error("required"))
-            // Note: type alias constraints are not enforced at runtime
-            .step("spawn_invalid_confidence_low", |a| a.created(1))
-            .step("spawn_invalid_confidence_high", |a| a.created(1))
+            .step("spawn_invalid_confidence_low", |a| a.error("constraint"))
+            .step("spawn_invalid_confidence_high", |a| a.error("constraint"))
             .step("spawn_valid", |a| a.created(1))
     }
 
