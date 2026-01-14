@@ -978,6 +978,7 @@ mod tests {
             name: "count".to_string(),
             args: vec![],
             distinct: false,
+            limit: None,
             span: Span::default(),
         });
 

@@ -10,7 +10,7 @@
 //! - Primary: literals, variables, function calls, EXISTS
 
 use super::Parser;
-use crate::ast::*;
+use crate::ast::{*, CollectLimit};
 use crate::error::ParseResult;
 use crate::lexer::TokenKind;
 
@@ -158,6 +158,7 @@ impl Parser {
                 name: fn_name.to_string(),
                 args: vec![left, right],
                 distinct: false,
+                limit: None,
                 span,
             });
         }
@@ -490,11 +491,42 @@ impl Parser {
                         }
                     }
                     self.expect(&TokenKind::RParen)?;
+
+                    // Check for [limit: N] syntax (used with COLLECT)
+                    let limit = if self.check(&TokenKind::LBracket) {
+                        self.advance();
+                        // "limit" can be either the Limit keyword or an identifier
+                        if self.check(&TokenKind::Limit) {
+                            self.advance();
+                        } else if self.check_ident("limit") {
+                            self.advance();
+                        } else {
+                            let token = self.peek();
+                            return Err(crate::ParseError::unexpected_token(
+                                token.span,
+                                "limit",
+                                token.kind.name(),
+                            ));
+                        }
+                        self.expect(&TokenKind::Colon)?;
+                        let limit_value = if self.check_ident("none") {
+                            self.advance();
+                            CollectLimit::None
+                        } else {
+                            CollectLimit::Value(self.expect_int()?)
+                        };
+                        self.expect(&TokenKind::RBracket)?;
+                        Some(limit_value)
+                    } else {
+                        None
+                    };
+
                     let span = self.span_from(token.span);
                     Ok(Expr::FnCall(FnCall {
                         name,
                         args,
                         distinct,
+                        limit,
                         span,
                     }))
                 } else {

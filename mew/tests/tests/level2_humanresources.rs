@@ -57,11 +57,11 @@ mod deep_inheritance {
             // New executive queryable as Manager
             .step("test_new_executive_queryable_as_manager", |a| a.rows(1))
             // Count all Persons: 5 + 3 = 8 (includes eve/Contractor)
-            .step("test_count_persons_includes_all", |a| a.scalar("person_count", 8i64))
+            .step("test_count_persons_includes_all", |a| a.scalar("total", 8i64))
             // Count all Employees: 4 + 3 = 7
-            .step("test_count_employees_includes_subtypes", |a| a.scalar("employee_count", 7i64))
+            .step("test_count_employees_includes_subtypes", |a| a.scalar("total", 7i64))
             // Count all Managers: 2 + 2 (new manager + new executive) = 4
-            .step("test_count_managers_includes_executives", |a| a.scalar("manager_count", 4i64))
+            .step("test_count_managers_includes_executives", |a| a.scalar("total", 4i64))
             // Update person attribute on executive
             .step("test_update_person_attribute_on_executive", |a| a.modified(1))
             // Verify update

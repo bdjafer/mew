@@ -31,15 +31,15 @@ mod unlink {
             // Create links: 3 tagged + 2 blocks + 1 subtask_of = 6
             .step("test_setup_create_links", |a| a.linked(6))
             // Verify tagged links = 3
-            .step("test_verify_tagged_links_exist", |a| a.scalar("tag_count", 3i64))
+            .step("test_verify_tagged_links_exist", |a| a.scalar("tagged_count", 3i64))
             // Verify blocking links = 2
-            .step("test_verify_blocking_links_exist", |a| a.scalar("block_count", 2i64))
+            .step("test_verify_blocking_links_exist", |a| a.scalar("blocking_count", 2i64))
             // Unlink single tag
             .step("test_unlink_single_tag", |a| a.unlinked(1))
             // Verify single unlink = 0
-            .step("test_verify_single_unlink", |a| a.scalar("tag_count", 0i64))
+            .step("test_verify_single_unlink", |a| a.scalar("still_linked", 0i64))
             // Verify other links remain = 2
-            .step("test_verify_other_links_remain", |a| a.scalar("tag_count", 2i64))
+            .step("test_verify_other_links_remain", |a| a.scalar("remaining_count", 2i64))
             // Unlink all tags from task 2
             .step("test_unlink_all_tags_from_specific_task", |a| a.unlinked(1))
             // Verify all tags unlinked = 0
@@ -53,13 +53,13 @@ mod unlink {
             // Unlink subtask
             .step("test_unlink_subtask", |a| a.unlinked(1))
             // Verify subtask unlinked = 0
-            .step("test_verify_subtask_unlinked", |a| a.scalar("subtask_count", 0i64))
+            .step("test_verify_subtask_unlinked", |a| a.scalar("link_count", 0i64))
             // Recreate some tags
             .step("test_recreate_some_tags", |a| a.linked(2))
             // Unlink all tags from tag
             .step("test_unlink_all_tags_from_tag", |a| a.unlinked(2))
             // Verify all unlinked = 0
-            .step("test_verify_all_unlinked", |a| a.scalar("tag_count", 0i64))
+            .step("test_verify_all_unlinked", |a| a.scalar("remaining", 0i64))
             // Tasks still exist = 3
             .step("test_tasks_still_exist_after_unlink", |a| a.scalar("task_count", 3i64))
             // Tag still exists = 1
@@ -77,7 +77,7 @@ mod unlink {
             // Unlink and relink
             .step("test_unlink_and_relink", |a| a.linked(1))
             // Verify relink = 1
-            .step("test_verify_relink", |a| a.scalar("subtask_count", 1i64))
+            .step("test_verify_relink", |a| a.scalar("new_link_count", 1i64))
             // Unlink non-existent edge (should not error)
             .step("test_unlink_nonexistent_edge", |a| a.rows(2))
             // Cleanup
@@ -102,8 +102,10 @@ mod bulk_mutations {
             .operations("level-2/tasks/operations/bulk_mutations.mew")
             // SPAWN with RETURNING
             .step("test_spawn_returning_single", |a| a.created(1).rows(1))
-            // SPAWN multiple with RETURNING
-            .step("test_spawn_returning_multiple", |a| a.created(3).rows(3))
+            // SPAWN multiple with RETURNING (3 separate statements)
+            .step("test_spawn_returning_multiple_1", |a| a.created(1).rows(1))
+            .step("test_spawn_returning_multiple_2", |a| a.created(1).rows(1))
+            .step("test_spawn_returning_multiple_3", |a| a.created(1).rows(1))
             // SPAWN with specific fields RETURNING
             .step("test_spawn_returning_specific_fields", |a| a.created(1).rows(1))
             // SET multiple attributes
