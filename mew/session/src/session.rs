@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use crate::error::{SessionError, SessionResult};
 use crate::query::convert_query_result;
-use crate::result::{MutationSummary, QueryResult, StatementResult};
+use crate::result::{MutationSummary, QueryResult, StatementResult, TransactionResult};
 use crate::transaction::{self, TransactionState};
 
 /// Session ID type.
@@ -128,6 +128,10 @@ impl<'r> Session<'r> {
             match result {
                 StatementResult::Mutation(m) => {
                     total_mutations.merge(&m);
+                }
+                StatementResult::Transaction(TransactionResult::RolledBack) => {
+                    // On ROLLBACK, clear accumulated mutation counts since changes were undone
+                    total_mutations = MutationSummary::default();
                 }
                 StatementResult::Query(q) => {
                     // Combine query results: append rows if columns match, or replace if different
@@ -512,12 +516,20 @@ impl<'r> Session<'r> {
         // Store the created node ID with the variable name and count it
         let nodes_created = if let Some(node_id) = result.created_node() {
             self.bindings.insert(stmt.var.clone(), node_id.into());
+            // Track for transaction rollback
+            self.txn_state.track_created_node(node_id);
             1
         } else {
             0
         };
 
-        let edges_created = usize::from(result.created_edge().is_some());
+        let edges_created = if let Some(edge_id) = result.created_edge() {
+            // Track for transaction rollback
+            self.txn_state.track_created_edge(edge_id);
+            1
+        } else {
+            0
+        };
 
         Ok(MutationSummary {
             nodes_created,
@@ -608,6 +620,8 @@ impl<'r> Session<'r> {
             if let Some(ref var) = stmt.var {
                 self.bindings.insert(var.clone(), edge_id.into());
             }
+            // Track for transaction rollback
+            self.txn_state.track_created_edge(edge_id);
             1
         } else {
             0
@@ -706,6 +720,20 @@ impl<'r> Session<'r> {
 
     /// Execute a transaction statement.
     fn execute_txn(&mut self, stmt: &mew_parser::TxnStmt) -> SessionResult<StatementResult> {
+        // For ROLLBACK, we need to undo created entities before processing
+        if matches!(stmt, mew_parser::TxnStmt::Rollback) {
+            // Delete edges first (they may reference nodes)
+            for edge_id in self.txn_state.created_edges.clone() {
+                let _ = self.graph.delete_edge(edge_id);
+            }
+            // Then delete nodes
+            for node_id in self.txn_state.created_nodes.clone() {
+                let _ = self.graph.delete_node(node_id);
+            }
+            // Clear tracked entities
+            self.txn_state.clear_tracked();
+        }
+
         transaction::execute_txn(&mut self.txn_state, stmt)
     }
 
