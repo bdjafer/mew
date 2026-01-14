@@ -72,6 +72,9 @@ impl<'r> Analyzer<'r> {
         // Analyze each mutation
         for mutation in &stmt.mutations {
             match mutation {
+                mew_parser::MutationAction::Spawn(s) => {
+                    self.analyze_spawn(s)?;
+                }
                 mew_parser::MutationAction::Link(l) => {
                     self.analyze_link(l)?;
                 }
@@ -448,6 +451,7 @@ impl<'r> Analyzer<'r> {
             }
             mew_parser::TargetRef::Id(_) => Ok(Type::AnyNodeRef),
             mew_parser::TargetRef::Pattern(match_stmt) => self.analyze_match(match_stmt),
+            mew_parser::TargetRef::InlineSpawn(spawn_stmt) => self.analyze_spawn(spawn_stmt)
         }
     }
 

@@ -220,7 +220,8 @@ pub fn execute_link(
 ) -> Result<String, String> {
     let mut targets = Vec::new();
     for target_ref in &stmt.targets {
-        targets.push(resolve_target_ref(target_ref, bindings)?);
+        let entity_id = resolve_or_spawn_target_ref(registry, graph, bindings, target_ref)?;
+        targets.push(entity_id);
     }
 
     let mut executor = MutationExecutor::new(registry, graph);
@@ -340,6 +341,33 @@ pub fn resolve_target_ref(
         .map_err(|e| e.to_string())
 }
 
+/// Resolve a target reference, handling inline spawns by executing them.
+pub fn resolve_or_spawn_target_ref(
+    registry: &Registry,
+    graph: &mut Graph,
+    bindings: &mut HashMap<String, EntityId>,
+    target_ref: &TargetRef,
+) -> Result<EntityId, String> {
+    match target_ref {
+        TargetRef::InlineSpawn(spawn_stmt) => {
+            // Execute the spawn
+            let pattern_bindings = to_pattern_bindings(bindings);
+            let mut executor = MutationExecutor::new(registry, graph);
+            let result = executor
+                .execute_spawn(spawn_stmt, &pattern_bindings)
+                .map_err(|e| format!("Inline spawn error: {}", e))?;
+
+            // Get the created node ID and add to bindings
+            let node_id = result.created_node().ok_or_else(|| {
+                "Inline spawn did not create a node".to_string()
+            })?;
+            bindings.insert(spawn_stmt.var.clone(), node_id.into());
+            Ok(node_id.into())
+        }
+        _ => resolve_target_ref(target_ref, bindings),
+    }
+}
+
 /// Convert REPL bindings to pattern bindings.
 pub fn to_pattern_bindings(bindings: &HashMap<String, EntityId>) -> Bindings {
     let mut pattern_bindings = Bindings::new();
@@ -410,10 +438,27 @@ pub fn execute_match_mutate(
         // Execute each mutation with the current bindings
         for mutation in &stmt.mutations {
             match mutation {
+                MutationAction::Spawn(spawn_stmt) => {
+                    let pattern_bindings = to_pattern_bindings(&local_bindings);
+                    let mut executor = MutationExecutor::new(registry, graph);
+                    let result = executor
+                        .execute_spawn(spawn_stmt, &pattern_bindings)
+                        .map_err(|e| format!("Spawn error: {}", e))?;
+
+                    if let Some(node_id) = result.created_node() {
+                        local_bindings.insert(spawn_stmt.var.clone(), node_id.into());
+                        total_nodes += 1;
+                    }
+                }
                 MutationAction::Link(link_stmt) => {
                     let mut targets = Vec::new();
                     for target_ref in &link_stmt.targets {
-                        let entity_id = resolve_target_ref(target_ref, &local_bindings)?;
+                        let entity_id = resolve_or_spawn_target_ref(
+                            registry,
+                            graph,
+                            &mut local_bindings,
+                            target_ref,
+                        )?;
                         targets.push(entity_id);
                     }
 

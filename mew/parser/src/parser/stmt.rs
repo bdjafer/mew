@@ -289,20 +289,21 @@ impl Parser {
     fn is_mutation_keyword(&self) -> bool {
         matches!(
             &self.peek().kind,
-            TokenKind::Link | TokenKind::Set | TokenKind::Kill | TokenKind::Unlink
+            TokenKind::Spawn | TokenKind::Link | TokenKind::Set | TokenKind::Kill | TokenKind::Unlink
         )
     }
 
     /// Parse a mutation action within a compound statement.
     fn parse_mutation_action(&mut self) -> ParseResult<MutationAction> {
         match &self.peek().kind {
+            TokenKind::Spawn => Ok(MutationAction::Spawn(self.parse_spawn()?)),
             TokenKind::Link => Ok(MutationAction::Link(self.parse_link()?)),
             TokenKind::Set => Ok(MutationAction::Set(self.parse_set()?)),
             TokenKind::Kill => Ok(MutationAction::Kill(self.parse_kill()?)),
             TokenKind::Unlink => Ok(MutationAction::Unlink(self.parse_unlink()?)),
             _ => Err(crate::ParseError::unexpected_token(
                 self.peek().span,
-                "mutation (LINK, SET, KILL, UNLINK)",
+                "mutation (SPAWN, LINK, SET, KILL, UNLINK)",
                 self.peek().kind.name(),
             )),
         }
@@ -405,14 +406,43 @@ impl Parser {
     fn parse_spawn(&mut self) -> ParseResult<SpawnStmt> {
         let start = self.expect(&TokenKind::Spawn)?.span;
 
-        let var = self.expect_ident()?;
-        self.expect(&TokenKind::Colon)?;
-        let type_name = self.expect_ident()?;
+        let first = self.expect_ident()?;
+
+        // Two syntaxes:
+        // 1. SPAWN var: Type { ... } - standard
+        // 2. SPAWN Type { ... } AS alias - inline (used in LINK targets)
+        let (var, type_name) = if self.check(&TokenKind::Colon) {
+            // Standard syntax: first is var, next is type
+            self.advance();
+            let type_name = self.expect_ident()?;
+            (first, type_name)
+        } else if self.check(&TokenKind::LBrace) {
+            // Inline syntax: first is type, var comes from AS clause later
+            // Use empty string as placeholder - will be set by AS clause
+            (String::new(), first)
+        } else {
+            // Could still be inline syntax if there's an AS clause coming
+            // Default: assume first is type (inline syntax)
+            (String::new(), first)
+        };
 
         let attrs = if self.check(&TokenKind::LBrace) {
             self.parse_attr_block()?
         } else {
             Vec::new()
+        };
+
+        // Check for AS clause (inline spawn syntax)
+        let var = if var.is_empty() {
+            if self.check(&TokenKind::As) {
+                self.advance();
+                self.expect_ident()?
+            } else {
+                // Generate a temp var name for inline spawn without AS
+                format!("_inline_{}", start.start)
+            }
+        } else {
+            var
         };
 
         let returning = self.parse_optional_returning()?;
@@ -552,6 +582,16 @@ impl Parser {
     fn parse_link(&mut self) -> ParseResult<LinkStmt> {
         let start = self.expect(&TokenKind::Link)?.span;
 
+        // Check for IF NOT EXISTS
+        let if_not_exists = if self.check(&TokenKind::If) {
+            self.advance();
+            self.expect(&TokenKind::Not)?;
+            self.expect(&TokenKind::Exists)?;
+            true
+        } else {
+            false
+        };
+
         // Check for optional variable: "LINK e: edge_type(...)"
         let (var, edge_type) = if self.peek_is_ident() {
             let first = self.expect_ident()?;
@@ -606,6 +646,7 @@ impl Parser {
             targets,
             attrs,
             returning,
+            if_not_exists,
             span,
         })
     }
@@ -620,6 +661,10 @@ impl Parser {
             let pattern = self.parse_match()?;
             self.expect(&TokenKind::RBrace)?;
             Ok(TargetRef::Pattern(Box::new(pattern)))
+        } else if self.check(&TokenKind::Spawn) {
+            // Inline SPAWN in LINK target
+            let spawn = self.parse_spawn()?;
+            Ok(TargetRef::InlineSpawn(Box::new(spawn)))
         } else {
             let var = self.expect_ident()?;
             Ok(TargetRef::Var(var))

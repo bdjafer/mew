@@ -711,7 +711,8 @@ CompoundMatchStmt =
   MutationOp+
 
 MutationOp =
-    "link" EdgeExpr
+    "spawn" SpawnExpr
+  | "link" EdgeExpr
   | "unlink" EdgeExpr
   | "set" AttributeAssignment
   | "kill" Identifier
@@ -786,7 +787,7 @@ interface MatchMutateStmt {
 }
 
 interface MutationOp {
-  kind: "Link" | "Unlink" | "Set" | "Kill"
+  kind: "Spawn" | "Link" | "Unlink" | "Set" | "Kill"
   // Specific fields depend on mutation type
 }
 

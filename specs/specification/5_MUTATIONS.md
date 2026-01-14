@@ -647,6 +647,7 @@ interface LinkStmt {
   alias: string | null
   attributes: AttrAssignment[]
   returning: ReturningClause | null
+  ifNotExists: boolean              // true for LINK IF NOT EXISTS
 }
 ```
 

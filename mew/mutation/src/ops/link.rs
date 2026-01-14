@@ -23,6 +23,15 @@ pub fn execute_link(
         .get_edge_type_id(&stmt.edge_type)
         .ok_or_else(|| MutationError::unknown_edge_type(&stmt.edge_type))?;
 
+    // If IF NOT EXISTS, check if edge already exists
+    if stmt.if_not_exists {
+        if let Some(existing_edge_id) = find_existing_edge(graph, edge_type_id, &target_ids) {
+            // Edge already exists - return it as a Created outcome with created=false metadata
+            // The RETURNING clause will handle extracting the id and created flag
+            return Ok(MutationOutcome::Created(CreatedEntity::edge(existing_edge_id)));
+        }
+    }
+
     // Validate arity and target types
     if let Some(edge_type) = registry.get_edge_type(edge_type_id) {
         let expected = edge_type.params.len();
@@ -115,6 +124,47 @@ fn ensure_acyclic(
     }
 
     Ok(())
+}
+
+/// Find an existing edge with the given type and exact targets.
+/// Returns the edge ID if found, None otherwise.
+fn find_existing_edge(graph: &Graph, edge_type_id: EdgeTypeId, target_ids: &[EntityId]) -> Option<EdgeId> {
+    // Get candidate edges based on first target type
+    let candidate_edges: Vec<_> = match target_ids.first() {
+        Some(EntityId::Node(source_id)) => {
+            graph.edges_from(*source_id, Some(edge_type_id)).collect()
+        }
+        Some(EntityId::Edge(source_edge_id)) => {
+            // For higher-order edges, check edges about this edge
+            graph
+                .edges_about(*source_edge_id)
+                .filter(|e| {
+                    graph
+                        .get_edge(*e)
+                        .map(|edge| edge.type_id == edge_type_id)
+                        .unwrap_or(false)
+                })
+                .collect()
+        }
+        None => return None,
+    };
+
+    // Check if any candidate has exact matching targets
+    for edge_id in candidate_edges {
+        if let Some(edge) = graph.get_edge(edge_id) {
+            if edge.targets.len() == target_ids.len() {
+                let matches = edge
+                    .targets
+                    .iter()
+                    .zip(target_ids.iter())
+                    .all(|(a, b)| a == b);
+                if matches {
+                    return Some(edge_id);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Check if a path exists from start to goal using edges of the given type.
