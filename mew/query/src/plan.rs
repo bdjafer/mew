@@ -72,6 +72,17 @@ pub enum PlanOp {
         right: Box<PlanOp>,
     },
 
+    /// Left outer join (for OPTIONAL MATCH).
+    /// Returns all rows from left, with nulls for right if no match.
+    LeftOuterJoin {
+        left: Box<PlanOp>,
+        right: Box<PlanOp>,
+        /// Optional condition for the join
+        condition: Option<Expr>,
+        /// Variables bound by the right side (for null binding when no match)
+        right_vars: Vec<String>,
+    },
+
     /// Transitive closure for WALK.
     TransitiveClosure {
         start_var: String,
@@ -141,6 +152,18 @@ impl<'r> QueryPlanner<'r> {
             plan = PlanOp::Filter {
                 input: Box::new(plan),
                 condition: cond.clone(),
+            };
+        }
+
+        // Handle OPTIONAL MATCH clauses (left outer joins)
+        for opt_match in &stmt.optional_matches {
+            let opt_plan = self.plan_pattern(&opt_match.pattern)?;
+            let right_vars = Self::extract_pattern_vars(&opt_match.pattern);
+            plan = PlanOp::LeftOuterJoin {
+                left: Box::new(plan),
+                right: Box::new(opt_plan),
+                condition: opt_match.where_clause.clone(),
+                right_vars,
             };
         }
 
@@ -349,6 +372,40 @@ impl<'r> QueryPlanner<'r> {
         }
     }
 
+    /// Extract variable names bound by a pattern.
+    fn extract_pattern_vars(pattern: &[mew_parser::PatternElem]) -> Vec<String> {
+        let mut vars = Vec::new();
+        for elem in pattern {
+            match elem {
+                mew_parser::PatternElem::Node(np) => {
+                    vars.push(np.var.clone());
+                }
+                mew_parser::PatternElem::Edge(ep) => {
+                    if let Some(alias) = &ep.alias {
+                        vars.push(alias.clone());
+                    }
+                }
+            }
+        }
+        vars
+    }
+
+    /// Plan a MATCH...WALK compound statement.
+    ///
+    /// Returns the pattern plan, the walk plan, and the WHERE clause.
+    /// The executor uses this to:
+    /// 1. Execute the pattern plan to get bindings
+    /// 2. Filter by WHERE clause
+    /// 3. Execute the walk plan for each binding
+    pub fn plan_match_walk(
+        &self,
+        stmt: &mew_parser::MatchWalkStmt,
+    ) -> QueryResult<(PlanOp, QueryPlan, Option<Expr>)> {
+        let pattern_plan = self.plan_pattern(&stmt.pattern)?;
+        let walk_plan = self.plan_walk(&stmt.walk)?;
+        Ok((pattern_plan, walk_plan, stmt.where_clause.clone()))
+    }
+
     /// Plan a WALK statement.
     pub fn plan_walk(&self, stmt: &WalkStmt) -> QueryResult<QueryPlan> {
         // Collect edge types and direction from FOLLOW clauses
@@ -395,9 +452,34 @@ impl<'r> QueryPlanner<'r> {
             plan
         };
 
+        // Determine column names based on return type and alias
+        let columns = match &stmt.return_type {
+            mew_parser::WalkReturnType::Path { alias } => {
+                let col = alias.clone().unwrap_or_else(|| "path".to_string());
+                vec![col]
+            }
+            mew_parser::WalkReturnType::Nodes { alias } => {
+                let col = alias.clone().unwrap_or_else(|| "node".to_string());
+                vec![col, "path".to_string()]
+            }
+            mew_parser::WalkReturnType::Edges { alias } => {
+                let col = alias.clone().unwrap_or_else(|| "edge".to_string());
+                vec![col, "path".to_string()]
+            }
+            mew_parser::WalkReturnType::Terminal { alias } => {
+                let col = alias.clone().unwrap_or_else(|| "terminal".to_string());
+                vec![col]
+            }
+            mew_parser::WalkReturnType::Projections(projs) => {
+                projs.iter().map(|p| {
+                    p.alias.clone().unwrap_or_else(|| "expr".to_string())
+                }).collect()
+            }
+        };
+
         Ok(QueryPlan {
             root: plan,
-            columns: vec!["node".to_string(), "path".to_string()],
+            columns,
         })
     }
 }
@@ -442,6 +524,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![mew_parser::Projection {
@@ -479,6 +562,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![mew_parser::Projection {
@@ -515,6 +599,7 @@ mod tests {
                 span: Span::default(),
             })],
             where_clause: None,
+            optional_matches: vec![],
             return_clause: ReturnClause {
                 distinct: false,
                 projections: vec![],

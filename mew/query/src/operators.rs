@@ -85,6 +85,13 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                 self.execute_cross_join(left, right, initial_bindings)
             }
 
+            PlanOp::LeftOuterJoin {
+                left,
+                right,
+                condition,
+                right_vars,
+            } => self.execute_left_outer_join(left, right, condition, right_vars, initial_bindings),
+
             PlanOp::TransitiveClosure {
                 start_var: _,
                 start_expr,
@@ -416,6 +423,63 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                 let mut merged_values = left_values.clone();
                 merged_values.extend(right_values.clone());
                 results.push((merged, merged_values));
+            }
+        }
+
+        Ok(results)
+    }
+
+    fn execute_left_outer_join(
+        &self,
+        left: &PlanOp,
+        right: &PlanOp,
+        condition: &Option<Expr>,
+        right_vars: &[String],
+        initial_bindings: Option<&Bindings>,
+    ) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
+        let left_results = self.execute_op(left, initial_bindings)?;
+        let mut results = Vec::new();
+
+        for (left_bindings, left_values) in &left_results {
+            // Execute right side with left bindings as context
+            let right_results = self.execute_op(right, Some(left_bindings))?;
+
+            // Filter right results by condition if present
+            let matching_right: Vec<_> = if let Some(cond) = condition {
+                right_results
+                    .into_iter()
+                    .filter(|(right_bindings, _)| {
+                        let mut merged = left_bindings.clone();
+                        for (k, v) in right_bindings.iter() {
+                            merged.insert(k, v.clone());
+                        }
+                        self.evaluator
+                            .eval_bool(cond, &merged, self.graph)
+                            .unwrap_or(false)
+                    })
+                    .collect()
+            } else {
+                right_results
+            };
+
+            if matching_right.is_empty() {
+                // No match: keep left row with null bindings for right side variables
+                let mut bindings = left_bindings.clone();
+                for var in right_vars {
+                    bindings.insert(var, mew_pattern::Binding::Null);
+                }
+                results.push((bindings, left_values.clone()));
+            } else {
+                // Has matches: produce a row for each match
+                for (right_bindings, right_values) in matching_right {
+                    let mut merged = left_bindings.clone();
+                    for (k, v) in right_bindings.iter() {
+                        merged.insert(k, v.clone());
+                    }
+                    let mut merged_values = left_values.clone();
+                    merged_values.extend(right_values);
+                    results.push((merged, merged_values));
+                }
             }
         }
 

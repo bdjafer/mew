@@ -50,6 +50,8 @@ impl Parser {
                 self.advance();
                 Ok(Stmt::Txn(TxnStmt::Rollback))
             }
+            TokenKind::Explain => self.parse_explain().map(Stmt::Explain),
+            TokenKind::Profile => self.parse_profile().map(Stmt::Profile),
             _ => Err(crate::ParseError::unexpected_token(
                 token.span,
                 "statement",
@@ -58,9 +60,32 @@ impl Parser {
         }
     }
 
+    /// Parse EXPLAIN statement.
+    fn parse_explain(&mut self) -> ParseResult<ExplainStmt> {
+        let start = self.expect(&TokenKind::Explain)?.span;
+        let inner = self.parse_stmt()?;
+        let span = self.span_from(start);
+        Ok(ExplainStmt {
+            statement: Box::new(inner),
+            span,
+        })
+    }
+
+    /// Parse PROFILE statement.
+    fn parse_profile(&mut self) -> ParseResult<ProfileStmt> {
+        let start = self.expect(&TokenKind::Profile)?.span;
+        let inner = self.parse_stmt()?;
+        let span = self.span_from(start);
+        Ok(ProfileStmt {
+            statement: Box::new(inner),
+            span,
+        })
+    }
+
     /// Parse MATCH, which can be either:
     /// - MATCH ... RETURN ... (query)
     /// - MATCH ... LINK/SET/KILL/UNLINK ... (compound mutation)
+    /// - MATCH ... WALK ... (compound walk)
     fn parse_match_or_mutate(&mut self) -> ParseResult<Stmt> {
         let start = self.expect(&TokenKind::Match)?.span;
 
@@ -75,7 +100,10 @@ impl Parser {
             None
         };
 
-        // Check what comes next: RETURN or mutation keyword
+        // Parse OPTIONAL MATCH clauses
+        let optional_matches = self.parse_optional_matches()?;
+
+        // Check what comes next: RETURN, mutation keyword, or WALK
         if self.check(&TokenKind::Return) {
             // Parse as normal MATCH query
             let return_clause = self.parse_return_clause()?;
@@ -110,6 +138,7 @@ impl Parser {
             Ok(Stmt::Match(MatchStmt {
                 pattern,
                 where_clause,
+                optional_matches,
                 return_clause,
                 order_by,
                 limit,
@@ -131,6 +160,18 @@ impl Parser {
                 mutations,
                 span,
             }))
+        } else if self.check(&TokenKind::Walk) {
+            // Parse as compound walk
+            let walk = self.parse_walk()?;
+
+            let span = self.span_from(start);
+
+            Ok(Stmt::MatchWalk(MatchWalkStmt {
+                pattern,
+                where_clause,
+                walk,
+                span,
+            }))
         } else {
             Err(crate::ParseError::unexpected_token(
                 self.peek().span,
@@ -138,6 +179,38 @@ impl Parser {
                 self.peek().kind.name(),
             ))
         }
+    }
+
+    /// Parse zero or more OPTIONAL MATCH clauses.
+    fn parse_optional_matches(&mut self) -> ParseResult<Vec<OptionalMatch>> {
+        let mut optional_matches = Vec::new();
+        while self.check(&TokenKind::Optional) {
+            optional_matches.push(self.parse_optional_match()?);
+        }
+        Ok(optional_matches)
+    }
+
+    /// Parse a single OPTIONAL MATCH clause.
+    fn parse_optional_match(&mut self) -> ParseResult<OptionalMatch> {
+        let start = self.expect(&TokenKind::Optional)?.span;
+        self.expect(&TokenKind::Match)?;
+
+        let pattern = self.parse_pattern()?;
+
+        let where_clause = if self.check(&TokenKind::Where) {
+            self.advance();
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
+
+        let span = self.span_from(start);
+
+        Ok(OptionalMatch {
+            pattern,
+            where_clause,
+            span,
+        })
     }
 
     /// Parse multiple statements until end of input.
@@ -166,6 +239,9 @@ impl Parser {
         } else {
             None
         };
+
+        // Parse OPTIONAL MATCH clauses
+        let optional_matches = self.parse_optional_matches()?;
 
         // Parse RETURN (required for query)
         let return_clause = self.parse_return_clause()?;
@@ -200,6 +276,7 @@ impl Parser {
         Ok(MatchStmt {
             pattern,
             where_clause,
+            optional_matches,
             return_clause,
             order_by,
             limit,
@@ -679,21 +756,37 @@ impl Parser {
     fn parse_walk_return(&mut self) -> ParseResult<WalkReturnType> {
         self.expect(&TokenKind::Return)?;
 
-        if self.check(&TokenKind::Path) {
+        let ret_type = if self.check(&TokenKind::Path) {
             self.advance();
-            Ok(WalkReturnType::Path)
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Path { alias }
         } else if self.check(&TokenKind::Nodes) {
             self.advance();
-            Ok(WalkReturnType::Nodes)
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Nodes { alias }
         } else if self.check(&TokenKind::Edges) {
             self.advance();
-            Ok(WalkReturnType::Edges)
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Edges { alias }
         } else if self.check(&TokenKind::Terminal) {
             self.advance();
-            Ok(WalkReturnType::Terminal)
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Terminal { alias }
         } else {
             let projections = self.parse_projections()?;
-            Ok(WalkReturnType::Projections(projections))
+            WalkReturnType::Projections(projections)
+        };
+
+        Ok(ret_type)
+    }
+
+    /// Parse optional AS alias.
+    fn parse_optional_as_alias(&mut self) -> ParseResult<Option<String>> {
+        if self.check(&TokenKind::As) {
+            self.advance();
+            Ok(Some(self.expect_ident()?))
+        } else {
+            Ok(None)
         }
     }
 

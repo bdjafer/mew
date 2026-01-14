@@ -27,6 +27,7 @@ impl Span {
 pub enum Stmt {
     Match(MatchStmt),
     MatchMutate(MatchMutateStmt),
+    MatchWalk(MatchWalkStmt),
     Spawn(SpawnStmt),
     Kill(KillStmt),
     Link(LinkStmt),
@@ -35,6 +36,24 @@ pub enum Stmt {
     Walk(WalkStmt),
     Inspect(InspectStmt),
     Txn(TxnStmt),
+    Explain(ExplainStmt),
+    Profile(ProfileStmt),
+}
+
+// ==================== EXPLAIN / PROFILE ====================
+
+/// EXPLAIN statement - shows execution plan without executing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExplainStmt {
+    pub statement: Box<Stmt>,
+    pub span: Span,
+}
+
+/// PROFILE statement - executes and shows performance metrics.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileStmt {
+    pub statement: Box<Stmt>,
+    pub span: Span,
 }
 
 // ==================== MATCH ====================
@@ -44,10 +63,20 @@ pub enum Stmt {
 pub struct MatchStmt {
     pub pattern: Vec<PatternElem>,
     pub where_clause: Option<Expr>,
+    /// OPTIONAL MATCH clauses (left outer joins)
+    pub optional_matches: Vec<OptionalMatch>,
     pub return_clause: ReturnClause,
     pub order_by: Option<Vec<OrderTerm>>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub span: Span,
+}
+
+/// An OPTIONAL MATCH clause (left outer join).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionalMatch {
+    pub pattern: Vec<PatternElem>,
+    pub where_clause: Option<Expr>,
     pub span: Span,
 }
 
@@ -58,6 +87,16 @@ pub struct MatchMutateStmt {
     pub pattern: Vec<PatternElem>,
     pub where_clause: Option<Expr>,
     pub mutations: Vec<MutationAction>,
+    pub span: Span,
+}
+
+/// MATCH followed by WALK (compound statement).
+/// E.g., MATCH e: Employee WHERE ... WALK FROM e FOLLOW ...
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchWalkStmt {
+    pub pattern: Vec<PatternElem>,
+    pub where_clause: Option<Expr>,
+    pub walk: WalkStmt,
     pub span: Span,
 }
 
@@ -270,10 +309,15 @@ pub enum WalkDirection {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WalkReturnType {
-    Path,
-    Nodes,
-    Edges,
-    Terminal,
+    /// RETURN PATH [AS alias]
+    Path { alias: Option<String> },
+    /// RETURN NODES [AS alias]
+    Nodes { alias: Option<String> },
+    /// RETURN EDGES [AS alias]
+    Edges { alias: Option<String> },
+    /// RETURN TERMINAL [AS alias]
+    Terminal { alias: Option<String> },
+    /// RETURN projections (already has alias in Projection)
     Projections(Vec<Projection>),
 }
 

@@ -129,6 +129,8 @@ impl<'r> Evaluator<'r> {
                     Ok(Value::Null)
                 }
             }
+            // Null propagation for OPTIONAL MATCH: accessing attr on null returns null
+            Value::Null => Ok(Value::Null),
             _ => Err(PatternError::type_error(format!(
                 "cannot access attribute on {:?}",
                 base_val

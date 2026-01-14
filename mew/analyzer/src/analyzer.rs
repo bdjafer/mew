@@ -32,6 +32,7 @@ impl<'r> Analyzer<'r> {
         match stmt {
             Stmt::Match(m) => self.analyze_match(m),
             Stmt::MatchMutate(mm) => self.analyze_match_mutate(mm),
+            Stmt::MatchWalk(mw) => self.analyze_match_walk(mw),
             Stmt::Spawn(s) => self.analyze_spawn(s),
             Stmt::Kill(k) => self.analyze_kill(k),
             Stmt::Link(l) => self.analyze_link(l),
@@ -40,6 +41,16 @@ impl<'r> Analyzer<'r> {
             Stmt::Walk(w) => self.analyze_walk(w),
             Stmt::Inspect(_) => Ok(Type::Any), // INSPECT returns entity data
             Stmt::Txn(_) => Ok(Type::Null), // Txn statements don't produce a value
+            Stmt::Explain(e) => {
+                // Analyze inner statement but return plan type
+                self.analyze_stmt(&e.statement)?;
+                Ok(Type::Any) // Returns plan structure
+            }
+            Stmt::Profile(p) => {
+                // Analyze inner statement but return metrics type
+                self.analyze_stmt(&p.statement)?;
+                Ok(Type::Any) // Returns execution metrics
+            }
         }
     }
 
@@ -81,6 +92,31 @@ impl<'r> Analyzer<'r> {
 
         // Returns a count of affected entities
         Ok(Type::Int)
+    }
+
+    /// Analyze a MATCH...WALK compound statement.
+    fn analyze_match_walk(&mut self, stmt: &mew_parser::MatchWalkStmt) -> AnalyzerResult<Type> {
+        // Push a new scope for pattern bindings
+        self.scope.push();
+
+        // Analyze pattern elements
+        for elem in &stmt.pattern {
+            self.analyze_pattern_elem(elem)?;
+        }
+
+        // Analyze WHERE clause if present
+        if let Some(ref where_expr) = stmt.where_clause {
+            self.analyze_expr(where_expr)?;
+        }
+
+        // Analyze the WALK statement (uses bound variables)
+        self.analyze_walk(&stmt.walk)?;
+
+        // Pop scope
+        self.scope.pop();
+
+        // Returns same as WALK
+        Ok(Type::Any)
     }
 
     /// Analyze a MATCH statement.

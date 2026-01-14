@@ -60,6 +60,8 @@ pub enum TokenKind {
     Terminal,
     Load,
     Ontology,
+    Explain,
+    Profile,
 
     // Literals
     Ident(String),
@@ -161,6 +163,8 @@ impl TokenKind {
             TokenKind::Terminal => "TERMINAL",
             TokenKind::Load => "LOAD",
             TokenKind::Ontology => "ONTOLOGY",
+            TokenKind::Explain => "EXPLAIN",
+            TokenKind::Profile => "PROFILE",
             TokenKind::Ident(_) => "identifier",
             TokenKind::Int(_) => "integer",
             TokenKind::Float(_) => "float",
@@ -256,6 +260,8 @@ impl TokenKind {
                 | TokenKind::Terminal
                 | TokenKind::Load
                 | TokenKind::Ontology
+                | TokenKind::Explain
+                | TokenKind::Profile
         )
     }
 }
@@ -599,6 +605,8 @@ impl<'a> Lexer<'a> {
             // DEPTH is context-specific (WALK) and handled as identifier
             "LOAD" => TokenKind::Load,
             "ONTOLOGY" => TokenKind::Ontology,
+            "EXPLAIN" => TokenKind::Explain,
+            "PROFILE" => TokenKind::Profile,
             _ => TokenKind::Ident(ident),
         }
     }
