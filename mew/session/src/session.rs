@@ -719,19 +719,35 @@ impl<'r> Session<'r> {
     }
 
     /// Execute a transaction statement.
+    ///
+    /// # ROLLBACK Semantics
+    ///
+    /// ROLLBACK currently only undoes SPAWN operations (node/edge creation).
+    /// SET mutations and DELETE operations within the transaction are NOT
+    /// automatically reverted. This is a known limitation - full MVCC or
+    /// undo-logging would be required for complete rollback support.
+    ///
+    /// Errors during rollback cleanup are intentionally ignored because:
+    /// - The entity may have already been deleted by a KILL within the transaction
+    /// - Partial rollback is better than failing and leaving the DB in an
+    ///   inconsistent state
     fn execute_txn(&mut self, stmt: &mew_parser::TxnStmt) -> SessionResult<StatementResult> {
         // For ROLLBACK, we need to undo created entities before processing
         if matches!(stmt, mew_parser::TxnStmt::Rollback) {
+            // Take ownership to avoid clone - clear_tracked() would clear anyway
+            let created_edges = std::mem::take(&mut self.txn_state.created_edges);
+            let created_nodes = std::mem::take(&mut self.txn_state.created_nodes);
+
             // Delete edges first (they may reference nodes)
-            for edge_id in self.txn_state.created_edges.clone() {
+            for edge_id in created_edges {
+                // Errors ignored intentionally - see doc comment above
                 let _ = self.graph.delete_edge(edge_id);
             }
             // Then delete nodes
-            for node_id in self.txn_state.created_nodes.clone() {
+            for node_id in created_nodes {
+                // Errors ignored intentionally - see doc comment above
                 let _ = self.graph.delete_node(node_id);
             }
-            // Clear tracked entities
-            self.txn_state.clear_tracked();
         }
 
         transaction::execute_txn(&mut self.txn_state, stmt)

@@ -288,4 +288,54 @@ mod tests {
         // THEN
         assert_eq!(result, Value::Float(6.0));
     }
+
+    #[test]
+    fn test_collect_values() {
+        // GIVEN
+        let evaluator = test_evaluator();
+        let graph = Graph::new();
+
+        // COLLECT of literal 7, evaluated 3 times = [7, 7, 7]
+        let agg = AggregateSpec {
+            name: "collect".to_string(),
+            kind: AggregateKind::Collect,
+            expr: make_literal_expr(7),
+            distinct: false,
+        };
+
+        let group = vec![
+            (Bindings::new(), vec![]),
+            (Bindings::new(), vec![]),
+            (Bindings::new(), vec![]),
+        ];
+
+        // WHEN
+        let result = compute_aggregate(&agg, &group, &evaluator, &graph).unwrap();
+
+        // THEN
+        assert_eq!(
+            result,
+            Value::List(vec![Value::Int(7), Value::Int(7), Value::Int(7)])
+        );
+    }
+
+    #[test]
+    fn test_collect_empty() {
+        // GIVEN
+        let evaluator = test_evaluator();
+        let graph = Graph::new();
+
+        let agg = AggregateSpec {
+            name: "collect".to_string(),
+            kind: AggregateKind::Collect,
+            expr: make_literal_expr(1),
+            distinct: false,
+        };
+
+        // WHEN
+        let result = compute_aggregate(&agg, &[], &evaluator, &graph).unwrap();
+
+        // THEN
+        assert_eq!(result, Value::List(vec![]));
+    }
 }
