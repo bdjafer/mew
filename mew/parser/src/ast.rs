@@ -291,10 +291,15 @@ pub enum WalkDirection {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WalkReturnType {
-    Path,
-    Nodes,
-    Edges,
-    Terminal,
+    /// RETURN PATH [AS alias]
+    Path { alias: Option<String> },
+    /// RETURN NODES [AS alias]
+    Nodes { alias: Option<String> },
+    /// RETURN EDGES [AS alias]
+    Edges { alias: Option<String> },
+    /// RETURN TERMINAL [AS alias]
+    Terminal { alias: Option<String> },
+    /// RETURN projections (already has alias in Projection)
     Projections(Vec<Projection>),
 }
 

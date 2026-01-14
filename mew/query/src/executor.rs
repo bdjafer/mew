@@ -57,21 +57,21 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
         &self,
         stmt: &mew_parser::MatchWalkStmt,
     ) -> QueryResult<QueryResults> {
-        // Build a plan for the pattern match to get initial bindings
+        // Plan the compound statement
         let planner = QueryPlanner::new(self.registry);
-        let pattern_plan = planner.plan_pattern(&stmt.pattern)?;
+        let (pattern_plan, walk_plan, where_clause) = planner.plan_match_walk(stmt)?;
 
         // Execute pattern to get bindings
         let ctx = OperatorContext::new(self.registry, self.graph, &self.evaluator);
         let pattern_results = ctx.execute_op(&pattern_plan, None)?;
 
         // Filter by WHERE clause if present
-        let filtered_bindings: Vec<_> = if let Some(ref where_clause) = stmt.where_clause {
+        let filtered_bindings: Vec<_> = if let Some(ref cond) = where_clause {
             pattern_results
                 .into_iter()
                 .filter(|(bindings, _)| {
                     self.evaluator
-                        .eval_bool(where_clause, bindings, self.graph)
+                        .eval_bool(cond, bindings, self.graph)
                         .unwrap_or(false)
                 })
                 .map(|(bindings, _)| bindings)
@@ -79,9 +79,6 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
         } else {
             pattern_results.into_iter().map(|(bindings, _)| bindings).collect()
         };
-
-        // Plan the WALK
-        let walk_plan = planner.plan_walk(&stmt.walk)?;
 
         // For each binding, execute the WALK
         let mut results = QueryResults::with_columns(walk_plan.columns.clone());
@@ -446,7 +443,7 @@ mod tests {
                 span: Span::default(),
             }],
             until: None,
-            return_type: mew_parser::WalkReturnType::Path,
+            return_type: mew_parser::WalkReturnType::Path { alias: None },
             span: Span::default(),
         };
 
@@ -490,7 +487,7 @@ mod tests {
                 span: Span::default(),
             }],
             until: None,
-            return_type: mew_parser::WalkReturnType::Path,
+            return_type: mew_parser::WalkReturnType::Path { alias: None },
             span: Span::default(),
         };
 
@@ -534,7 +531,7 @@ mod tests {
                 span: Span::default(),
             }],
             until: None,
-            return_type: mew_parser::WalkReturnType::Path,
+            return_type: mew_parser::WalkReturnType::Path { alias: None },
             span: Span::default(),
         };
 
@@ -556,6 +553,264 @@ mod tests {
         assert!(
             results.len() <= 2,
             "Expected at most 2 results (cycle should be cut), got {}",
+            results.len()
+        );
+    }
+
+    // ==================== OPTIONAL MATCH TESTS ====================
+
+    fn optional_match_test_registry() -> Registry {
+        let mut builder = RegistryBuilder::new();
+        builder
+            .add_type("Person")
+            .attr(AttrDef::new("name", "String"))
+            .done()
+            .unwrap();
+        builder
+            .add_type("Pet")
+            .attr(AttrDef::new("name", "String"))
+            .done()
+            .unwrap();
+        builder
+            .add_edge_type("owns")
+            .param("person", "Person")
+            .param("pet", "Pet")
+            .done()
+            .unwrap();
+        builder.build().unwrap()
+    }
+
+    #[test]
+    fn test_optional_match_with_match() {
+        // GIVEN - Alice owns Fluffy, Bob has no pet
+        let registry = optional_match_test_registry();
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+        let pet_type_id = registry.get_type_id("Pet").unwrap();
+        let owns_type_id = registry.get_edge_type_id("owns").unwrap();
+
+        let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+        let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+        let fluffy = graph.create_node(pet_type_id, attrs! { "name" => "Fluffy" });
+
+        graph.create_edge(owns_type_id, vec![alice.into(), fluffy.into()], attrs! {}).unwrap();
+
+        let executor = QueryExecutor::new(&registry, &graph);
+
+        // MATCH p: Person OPTIONAL MATCH pet: Pet, owns(p, pet) RETURN p.name, pet.name
+        let stmt = MatchStmt {
+            pattern: vec![PatternElem::Node(NodePattern {
+                var: "p".to_string(),
+                type_name: "Person".to_string(),
+                span: Span::default(),
+            })],
+            where_clause: None,
+            optional_matches: vec![mew_parser::OptionalMatch {
+                pattern: vec![
+                    PatternElem::Node(NodePattern {
+                        var: "pet".to_string(),
+                        type_name: "Pet".to_string(),
+                        span: Span::default(),
+                    }),
+                    PatternElem::Edge(mew_parser::EdgePattern {
+                        edge_type: "owns".to_string(),
+                        targets: vec!["p".to_string(), "pet".to_string()],
+                        alias: None,
+                        transitive: None,
+                        span: Span::default(),
+                    }),
+                ],
+                where_clause: None,
+                span: Span::default(),
+            }],
+            return_clause: ReturnClause {
+                distinct: false,
+                projections: vec![
+                    Projection {
+                        expr: mew_parser::Expr::AttrAccess(
+                            Box::new(mew_parser::Expr::Var("p".to_string(), Span::default())),
+                            "name".to_string(),
+                            Span::default(),
+                        ),
+                        alias: Some("person_name".to_string()),
+                        span: Span::default(),
+                    },
+                    Projection {
+                        expr: mew_parser::Expr::AttrAccess(
+                            Box::new(mew_parser::Expr::Var("pet".to_string(), Span::default())),
+                            "name".to_string(),
+                            Span::default(),
+                        ),
+                        alias: Some("pet_name".to_string()),
+                        span: Span::default(),
+                    },
+                ],
+                span: Span::default(),
+            },
+            order_by: None,
+            limit: None,
+            offset: None,
+            span: Span::default(),
+        };
+
+        // WHEN
+        let results = executor.execute_match(&stmt).unwrap();
+
+        // THEN - should get 2 rows: Alice with Fluffy, Bob with NULL
+        assert_eq!(results.len(), 2, "Expected 2 rows, got {}", results.len());
+
+        // Check that we have both Alice and Bob
+        let person_names: Vec<_> = results
+            .iter()
+            .filter_map(|r| r.get_by_name("person_name").cloned())
+            .collect();
+        assert!(person_names.contains(&Value::String("Alice".to_string())));
+        assert!(person_names.contains(&Value::String("Bob".to_string())));
+    }
+
+    #[test]
+    fn test_optional_match_no_match() {
+        // GIVEN - Bob has no pet
+        let registry = optional_match_test_registry();
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+
+        graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+
+        let executor = QueryExecutor::new(&registry, &graph);
+
+        // MATCH p: Person OPTIONAL MATCH pet: Pet, owns(p, pet) RETURN p.name, pet.name
+        let stmt = MatchStmt {
+            pattern: vec![PatternElem::Node(NodePattern {
+                var: "p".to_string(),
+                type_name: "Person".to_string(),
+                span: Span::default(),
+            })],
+            where_clause: None,
+            optional_matches: vec![mew_parser::OptionalMatch {
+                pattern: vec![
+                    PatternElem::Node(NodePattern {
+                        var: "pet".to_string(),
+                        type_name: "Pet".to_string(),
+                        span: Span::default(),
+                    }),
+                    PatternElem::Edge(mew_parser::EdgePattern {
+                        edge_type: "owns".to_string(),
+                        targets: vec!["p".to_string(), "pet".to_string()],
+                        alias: None,
+                        transitive: None,
+                        span: Span::default(),
+                    }),
+                ],
+                where_clause: None,
+                span: Span::default(),
+            }],
+            return_clause: ReturnClause {
+                distinct: false,
+                projections: vec![
+                    Projection {
+                        expr: mew_parser::Expr::AttrAccess(
+                            Box::new(mew_parser::Expr::Var("p".to_string(), Span::default())),
+                            "name".to_string(),
+                            Span::default(),
+                        ),
+                        alias: Some("person_name".to_string()),
+                        span: Span::default(),
+                    },
+                    Projection {
+                        expr: mew_parser::Expr::AttrAccess(
+                            Box::new(mew_parser::Expr::Var("pet".to_string(), Span::default())),
+                            "name".to_string(),
+                            Span::default(),
+                        ),
+                        alias: Some("pet_name".to_string()),
+                        span: Span::default(),
+                    },
+                ],
+                span: Span::default(),
+            },
+            order_by: None,
+            limit: None,
+            offset: None,
+            span: Span::default(),
+        };
+
+        // WHEN
+        let results = executor.execute_match(&stmt).unwrap();
+
+        // THEN - should get 1 row: Bob with NULL pet
+        assert_eq!(results.len(), 1, "Expected 1 row, got {}", results.len());
+
+        let row = &results.iter().next().unwrap();
+        assert_eq!(
+            row.get_by_name("person_name").cloned(),
+            Some(Value::String("Bob".to_string()))
+        );
+        assert_eq!(row.get_by_name("pet_name").cloned(), Some(Value::Null));
+    }
+
+    // ==================== MATCH-WALK TESTS ====================
+
+    #[test]
+    fn test_match_walk_compound() {
+        // GIVEN - A -> B -> C chain
+        let registry = walk_test_registry();
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+        let knows_type_id = registry.get_edge_type_id("knows").unwrap();
+
+        let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+        let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+        let carol = graph.create_node(person_type_id, attrs! { "name" => "Carol" });
+
+        graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {}).unwrap();
+        graph.create_edge(knows_type_id, vec![bob.into(), carol.into()], attrs! {}).unwrap();
+
+        let executor = QueryExecutor::new(&registry, &graph);
+
+        // MATCH p: Person WHERE p.name = "Alice" WALK FROM p FOLLOW knows RETURN NODES
+        let stmt = mew_parser::MatchWalkStmt {
+            pattern: vec![PatternElem::Node(NodePattern {
+                var: "p".to_string(),
+                type_name: "Person".to_string(),
+                span: Span::default(),
+            })],
+            where_clause: Some(mew_parser::Expr::BinaryOp(
+                mew_parser::BinaryOp::Eq,
+                Box::new(mew_parser::Expr::AttrAccess(
+                    Box::new(mew_parser::Expr::Var("p".to_string(), Span::default())),
+                    "name".to_string(),
+                    Span::default(),
+                )),
+                Box::new(mew_parser::Expr::Literal(mew_parser::Literal {
+                    kind: mew_parser::LiteralKind::String("Alice".to_string()),
+                    span: Span::default(),
+                })),
+                Span::default(),
+            )),
+            walk: WalkStmt {
+                from: mew_parser::Expr::Var("p".to_string(), Span::default()),
+                follow: vec![mew_parser::FollowClause {
+                    edge_types: vec!["knows".to_string()],
+                    direction: mew_parser::WalkDirection::Outbound,
+                    min_depth: Some(1),
+                    max_depth: Some(3),
+                    span: Span::default(),
+                }],
+                until: None,
+                return_type: mew_parser::WalkReturnType::Nodes { alias: None },
+                span: Span::default(),
+            },
+            span: Span::default(),
+        };
+
+        // WHEN
+        let results = executor.execute_match_walk(&stmt).unwrap();
+
+        // THEN - should find Bob and Carol
+        assert!(
+            results.len() >= 2,
+            "Expected at least 2 results (Bob and Carol), got {}",
             results.len()
         );
     }

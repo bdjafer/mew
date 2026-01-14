@@ -7,10 +7,44 @@ use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
 use mew_parser::{InspectStmt, MatchMutateStmt, MatchStmt, MatchWalkStmt, MutationAction, Target, TargetRef, TxnStmt, WalkStmt};
 use mew_pattern::{target, Binding, Bindings};
-use mew_query::QueryExecutor;
+use mew_query::{QueryExecutor, QueryResults};
 use mew_registry::Registry;
 
 use crate::format::format_value;
+
+/// Format query results as a table string.
+fn format_results(results: &QueryResults, empty_msg: &str, count_label: &str) -> String {
+    if results.is_empty() {
+        return format!("({})", empty_msg);
+    }
+
+    let mut output = String::new();
+
+    // Header
+    let columns = results.column_names();
+    output.push_str(&columns.join(" | "));
+    output.push('\n');
+    output.push_str(&"-".repeat(columns.len() * 15));
+    output.push('\n');
+
+    // Rows
+    for row in results.rows() {
+        let values: Vec<String> = columns
+            .iter()
+            .map(|c| {
+                row.get_by_name(c)
+                    .map(format_value)
+                    .unwrap_or_else(|| "NULL".to_string())
+            })
+            .collect();
+        output.push_str(&values.join(" | "));
+        output.push('\n');
+    }
+
+    output.push_str(&format!("\n({} {})", results.len(), count_label));
+
+    output
+}
 
 /// Execute a MATCH statement and return formatted results.
 pub fn execute_match(
@@ -25,124 +59,37 @@ pub fn execute_match(
         .execute_match_with_bindings(stmt, &initial_bindings)
         .map_err(|e| format!("Query error: {}", e))?;
 
-    if results.is_empty() {
-        return Ok("(no results)".to_string());
-    }
-
-    let mut output = String::new();
-
-    // Header
-    let columns = results.column_names();
-    output.push_str(&columns.join(" | "));
-    output.push('\n');
-    output.push_str(&"-".repeat(columns.len() * 15));
-    output.push('\n');
-
-    // Rows
-    for row in results.rows() {
-        let values: Vec<String> = columns
-            .iter()
-            .map(|c| {
-                row.get_by_name(c)
-                    .map(format_value)
-                    .unwrap_or_else(|| "NULL".to_string())
-            })
-            .collect();
-        output.push_str(&values.join(" | "));
-        output.push('\n');
-    }
-
-    output.push_str(&format!("\n({} rows)", results.len()));
-
-    Ok(output)
+    Ok(format_results(&results, "no results", "rows"))
 }
 
 /// Execute a WALK statement and return formatted results.
 pub fn execute_walk(
     registry: &Registry,
     graph: &Graph,
-    bindings: &HashMap<String, EntityId>,
+    _bindings: &HashMap<String, EntityId>,
     stmt: &WalkStmt,
 ) -> Result<String, String> {
     let executor = QueryExecutor::new(registry, graph);
-    let _initial_bindings = to_pattern_bindings(bindings);
     let results = executor
         .execute_walk(stmt)
         .map_err(|e| format!("Walk error: {}", e))?;
 
-    if results.is_empty() {
-        return Ok("(no paths found)".to_string());
-    }
-
-    let mut output = String::new();
-
-    // Header
-    let columns = results.column_names();
-    output.push_str(&columns.join(" | "));
-    output.push('\n');
-    output.push_str(&"-".repeat(columns.len() * 15));
-    output.push('\n');
-
-    // Rows
-    for row in results.rows() {
-        let values: Vec<String> = columns
-            .iter()
-            .map(|c| {
-                row.get_by_name(c)
-                    .map(format_value)
-                    .unwrap_or_else(|| "NULL".to_string())
-            })
-            .collect();
-        output.push_str(&values.join(" | "));
-        output.push('\n');
-    }
-
-    output.push_str(&format!("\n({} paths)", results.len()));
-
-    Ok(output)
+    Ok(format_results(&results, "no paths found", "paths"))
 }
 
 /// Execute a MATCH...WALK compound statement and return formatted results.
 pub fn execute_match_walk(
     registry: &Registry,
     graph: &Graph,
-    bindings: &HashMap<String, EntityId>,
+    _bindings: &HashMap<String, EntityId>,
     stmt: &MatchWalkStmt,
 ) -> Result<String, String> {
     let executor = QueryExecutor::new(registry, graph);
-    let _initial_bindings = to_pattern_bindings(bindings);
     let results = executor
         .execute_match_walk(stmt)
         .map_err(|e| format!("Walk error: {}", e))?;
 
-    if results.is_empty() {
-        return Ok("(no paths found)".to_string());
-    }
-
-    let mut output = String::new();
-
-    // Header
-    let columns = results.column_names();
-    output.push_str(&columns.join(" | "));
-    output.push('\n');
-
-    // Rows
-    for row in results.rows() {
-        let values: Vec<String> = columns
-            .iter()
-            .map(|c| {
-                row.get_by_name(c)
-                    .map(format_value)
-                    .unwrap_or_else(|| "NULL".to_string())
-            })
-            .collect();
-        output.push_str(&values.join(" | "));
-        output.push('\n');
-    }
-
-    output.push_str(&format!("\n({} paths)", results.len()));
-
-    Ok(output)
+    Ok(format_results(&results, "no paths found", "paths"))
 }
 
 /// Execute an INSPECT statement and return formatted results.

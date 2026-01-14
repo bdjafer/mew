@@ -89,7 +89,8 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                 left,
                 right,
                 condition,
-            } => self.execute_left_outer_join(left, right, condition, initial_bindings),
+                right_vars,
+            } => self.execute_left_outer_join(left, right, condition, right_vars, initial_bindings),
 
             PlanOp::TransitiveClosure {
                 start_var: _,
@@ -433,13 +434,11 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
         left: &PlanOp,
         right: &PlanOp,
         condition: &Option<Expr>,
+        right_vars: &[String],
         initial_bindings: Option<&Bindings>,
     ) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
         let left_results = self.execute_op(left, initial_bindings)?;
         let mut results = Vec::new();
-
-        // Extract variable names from the right side pattern so we can add null bindings when there's no match
-        let right_vars = Self::extract_plan_vars(right);
 
         for (left_bindings, left_values) in &left_results {
             // Execute right side with left bindings as context
@@ -466,7 +465,7 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
             if matching_right.is_empty() {
                 // No match: keep left row with null bindings for right side variables
                 let mut bindings = left_bindings.clone();
-                for var in &right_vars {
+                for var in right_vars {
                     bindings.insert(var, mew_pattern::Binding::Null);
                 }
                 results.push((bindings, left_values.clone()));
@@ -485,33 +484,6 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
         }
 
         Ok(results)
-    }
-
-    /// Extract variable names from a plan operator (for OPTIONAL MATCH null binding).
-    fn extract_plan_vars(op: &PlanOp) -> Vec<String> {
-        match op {
-            PlanOp::NodeScan { var, .. } => vec![var.clone()],
-            PlanOp::IndexScan { var, .. } => vec![var.clone()],
-            PlanOp::EdgeJoin { input, edge_var, .. } => {
-                let mut vars = Self::extract_plan_vars(input);
-                if let Some(alias) = edge_var {
-                    vars.push(alias.clone());
-                }
-                vars
-            }
-            PlanOp::CrossJoin { left, right } => {
-                let mut vars = Self::extract_plan_vars(left);
-                vars.extend(Self::extract_plan_vars(right));
-                vars
-            }
-            PlanOp::Filter { input, .. } => Self::extract_plan_vars(input),
-            PlanOp::LeftOuterJoin { left, right, .. } => {
-                let mut vars = Self::extract_plan_vars(left);
-                vars.extend(Self::extract_plan_vars(right));
-                vars
-            }
-            _ => vec![],
-        }
     }
 
     fn execute_transitive_closure(

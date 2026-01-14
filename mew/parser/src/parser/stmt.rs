@@ -734,28 +734,36 @@ impl Parser {
 
         let ret_type = if self.check(&TokenKind::Path) {
             self.advance();
-            WalkReturnType::Path
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Path { alias }
         } else if self.check(&TokenKind::Nodes) {
             self.advance();
-            WalkReturnType::Nodes
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Nodes { alias }
         } else if self.check(&TokenKind::Edges) {
             self.advance();
-            WalkReturnType::Edges
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Edges { alias }
         } else if self.check(&TokenKind::Terminal) {
             self.advance();
-            WalkReturnType::Terminal
+            let alias = self.parse_optional_as_alias()?;
+            WalkReturnType::Terminal { alias }
         } else {
             let projections = self.parse_projections()?;
             WalkReturnType::Projections(projections)
         };
 
-        // Skip optional AS alias (used for display, not stored)
+        Ok(ret_type)
+    }
+
+    /// Parse optional AS alias.
+    fn parse_optional_as_alias(&mut self) -> ParseResult<Option<String>> {
         if self.check(&TokenKind::As) {
             self.advance();
-            self.expect_ident()?; // Consume the alias name
+            Ok(Some(self.expect_ident()?))
+        } else {
+            Ok(None)
         }
-
-        Ok(ret_type)
     }
 
     // ==================== INSPECT ====================
