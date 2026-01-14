@@ -1,67 +1,5 @@
 # CLAUDE.md
 
-Project-level context for MEW (Minimum Executable World).
-
----
-
-## What This Is
-
-A self-describing hypergraph database. Nodes, edges, edges about edges. Schema stored as data. Rules and constraints. ACID transactions.
-
----
-
-## Project Structure
-
-```
-specs/                   # All specifications and implementation guidance
-  specification/         # Authoritative definitions (read carefully before modifying)
-    0_META_ONTOLOGY.md  # Layer 0 self-description
-    1_FOUNDATIONS.md    # Philosophical grounding
-    2_DSL.md            # Ontology definition language
-    3_GQL.md            # Query/mutation language
-  
-  architecture.md       # 13-component system design
-  meta-roadmap.md       # Navigation methodology
-  components/*.md       # Component contracts
-  tests/*.md            # Acceptance test suites (158 total)
-  glossary/             # Term definitions and clarifications
-  plans/                # Design documents for specific features
-  
-  v2/                   # Planned v2 features
-  v3+/                  # Future version features
-
-mew/                    # Rust workspace (your code goes here)
-  Cargo.toml
-  graph/                # Each component is a crate
-  parser/
-  ...
-
-examples/               # Test ontologies by complexity
-  level-1/              # Simple (contacts, library)
-    contacts/
-      ontology.mew      # Schema definition
-      seeds/            # Test data (empty, minimal, populated)
-      operations/       # CRUD, queries, error tests
-  level-5/              # Complex (cognitive agents, BDI)
-
-ontologies/             # Reference ontologies organized by complexity level
-  level-1/              # Small (S), Medium (M), Large (L)
-  level-2/              # Increasing complexity
-  ...
-  level-5/
-
-.claude/skills/         # Learned procedures (create more as needed)
-```
-
----
-
-## Implementation Language
-
-**Rust.** Cargo workspace in `mew/`.
-
-Each component is a separate crate: `mew-graph`, `mew-parser`, etc.
-Shared types go in `mew-core` (create if needed).
-
 ---
 
 ## Commands
@@ -69,10 +7,8 @@ Shared types go in `mew-core` (create if needed).
 ```bash
 # Build
 cd mew && cargo build --workspace
-
 # Format
 cd mew && cargo fmt --all
-
 # Lint
 cd mew && cargo clippy --workspace
 ```
@@ -86,34 +22,6 @@ Use the unified test runner `test.sh` at the project root:
 ```bash
 # Run ALL tests (unit + integration + testgen)
 ./test.sh
-
-# Run only unit tests
-./test.sh unit
-
-# Run only integration tests (scenarios from examples/)
-./test.sh integration
-
-# Run only generated tests
-./test.sh testgen
-
-# Quick check (unit + integration, skip testgen)
-./test.sh quick
-
-# Test specific package
-./test.sh unit -p mew-graph
-
-# Verbose output
-./test.sh unit -v
-
-# Testgen for specific level or ontology (executes by default)
-./test.sh testgen --level 1
-./test.sh testgen --ontology contacts
-
-# Generate tests only (skip execution)
-./test.sh testgen --no-execute
-
-# Show help
-./test.sh --help
 ```
 
 **Test types:**
@@ -151,38 +59,10 @@ When documents conflict, higher level wins:
 
 ---
 
-## Code Style
-
-```rust
-// Prefer explicit, simple, readable
-pub fn get_node(&self, id: NodeId) -> Option<&Node> { ... }
-
-// Avoid clever, implicit, compact
-pub fn node(&self, id: impl Into<NodeId>) -> impl Deref<Target=Node> { ... }
-```
-
-- All public APIs return `Result<T, E>` — never panic on user input
-- Errors include: what, where, why
-- No unsafe without justifying comment
-- No dependencies unless necessary
-
+## Code Style (unspecified)
 ---
 
-## Test Style
-
-```rust
-#[test]
-fn test_name_matches_acceptance_test() {
-    // GIVEN
-    let mut graph = Graph::new();
-    
-    // WHEN
-    let id = graph.create_node(TypeId(1), attrs![]);
-    
-    // THEN
-    assert!(graph.get_node(id).is_some());
-}
-```
+## Test Style (unspecified)
 
 ---
 
@@ -202,3 +82,18 @@ Specifications can contain errors discovered during implementation.
 ---
 
 ## Commit Messages (unspecified)
+
+
+---
+
+NEVER:
+- comment out some tests just because they "fail" and features not yet implemented => its the goal of leaving the test to fail until we implement what's needed
+- simplify the test to make it pass, because we're lazy, or doesn't feel implementing everything / rewriting the test to make it simpler
+example: a test was trying to test multiple chained "spawn" like:
+SPAWN ...
+SPAWN ...
+SPAWN ...
+and the AI separate this test into 3 separete tests, testing each spawn individually (like completely cheating)
+=> basically should never try to max GAMING
+
+

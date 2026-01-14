@@ -41,14 +41,6 @@ just lint                   # Clippy
 just fmt                    # Format
 ```
 
-## Documentation
-
-- [Foundations](specs/1_FOUNDATIONS.md) — Core concepts
-- [DSL](specs/2_DSL.md) — Ontology language
-- [GQL](specs/3_GQL.md) — Query language
-- [Architecture](specs/architecture.md) — System design
-- [AGENTS.md](AGENTS.md) — AI agent operation
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Run `just ci` before submitting PRs.

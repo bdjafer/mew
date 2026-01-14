@@ -39,3 +39,14 @@
    - When a category of bugs is fixed, commit
    - Message: what changed, why, test counts
    - Push to preserve progress
+
+## ⛔ NEVER CHEAT TO MAKE TESTS PASS
+
+FORBIDDEN shortcuts:
+- Commenting out or `#[ignore]`/`skip` failing tests
+- Simplifying assertions or weakening expected values
+- Breaking multi-step tests into single steps (e.g., splitting `SPAWN; SPAWN; SPAWN` into 3 separate tests)
+
+**Make code match the test, not the other way around.**
+
+If you believe a test is genuinely incorrect, you CAN challenge it — but you must carefully articulate WHY it's wrong and document the reasoning in the PR. The bar is high: the test must be wrong, not just inconvenient to implement.
