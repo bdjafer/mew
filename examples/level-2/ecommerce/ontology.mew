@@ -80,6 +80,15 @@ ontology Ecommerce {
     is_primary: Bool = false
   }
 
+  --- A brand that products belong to
+  node Brand {
+    name: String [required],
+    handle: String [required, unique, format: slug],
+    website: String? [format: url],
+    description: String?,
+    is_active: Bool = true
+  }
+
   -- =========================================================================
   -- EDGE TYPES
   -- =========================================================================
@@ -101,5 +110,8 @@ ontology Ecommerce {
 
   --- Related products
   edge related_to(product1: Product, product2: Product) [no_self]
+
+  --- Product belongs to a brand
+  edge branded_by(product: Product, brand: Brand)
 
 }
