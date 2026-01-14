@@ -22,8 +22,8 @@ mod deep_inheritance {
             .ontology("level-2/humanresources/ontology.mew")
             .seed("level-2/humanresources/seeds/populated.mew")
             .operations("level-2/humanresources/operations/deep_inheritance.mew")
-            // Query all Persons: alice, bob, charlie, diana = 4 (eve is Contractor, not in Employee hierarchy)
-            .step("test_query_all_persons", |a| a.rows(4))
+            // Query all Persons: alice, bob, charlie, diana, eve = 5 (eve is Contractor : Person)
+            .step("test_query_all_persons", |a| a.rows(5))
             // Query all Employees: alice, bob, charlie, diana = 4
             .step("test_query_all_employees", |a| a.rows(4))
             // Query only Managers: charlie, diana = 2
@@ -56,8 +56,8 @@ mod deep_inheritance {
             .step("test_new_manager_queryable_as_employee", |a| a.rows(1))
             // New executive queryable as Manager
             .step("test_new_executive_queryable_as_manager", |a| a.rows(1))
-            // Count all Persons: 4 + 3 = 7
-            .step("test_count_persons_includes_all", |a| a.scalar("person_count", 7i64))
+            // Count all Persons: 5 + 3 = 8 (includes eve/Contractor)
+            .step("test_count_persons_includes_all", |a| a.scalar("person_count", 8i64))
             // Count all Employees: 4 + 3 = 7
             .step("test_count_employees_includes_subtypes", |a| a.scalar("employee_count", 7i64))
             // Count all Managers: 2 + 2 (new manager + new executive) = 4
