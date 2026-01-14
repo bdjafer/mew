@@ -1,0 +1,187 @@
+-- ===========================================================================
+-- SCENARIO: Format Slug Validation
+-- DESCRIPTION: Tests [format: slug] built-in format validator
+-- FOCUS: Level-2 [format: slug] modifier (URL-safe slugs: lowercase-with-hyphens)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- VALID SLUG PATTERNS
+-- Per spec: "lowercase-with-hyphens" - URL-safe slug format
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_slug_simple
+SPAWN brand1: Brand {
+  name = "Acme Corp",
+  handle = "acme-corp"
+}
+--@ expect:ok
+
+--# test_spawn_valid_slug_single_word
+SPAWN brand2: Brand {
+  name = "Nike",
+  handle = "nike"
+}
+--@ expect:ok
+
+--# test_spawn_valid_slug_with_numbers
+SPAWN brand3: Brand {
+  name = "Brand 42",
+  handle = "brand-42"
+}
+--@ expect:ok
+
+--# test_spawn_valid_slug_numbers_only
+SPAWN brand4: Brand {
+  name = "2024 Collection",
+  handle = "2024"
+}
+--@ expect:ok
+
+--# test_spawn_valid_slug_multi_hyphen
+SPAWN brand5: Brand {
+  name = "My Super Brand",
+  handle = "my-super-brand"
+}
+--@ expect:ok
+
+--# test_spawn_valid_slug_alphanumeric_mix
+SPAWN brand6: Brand {
+  name = "Tech 9 Solutions",
+  handle = "tech-9-solutions"
+}
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- INVALID SLUG PATTERNS - Should fail validation
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_invalid_slug_uppercase_fails
+SPAWN invalid_brand1: Brand {
+  name = "Invalid Brand",
+  handle = "Invalid-Brand"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_spaces_fails
+SPAWN invalid_brand2: Brand {
+  name = "Invalid Brand",
+  handle = "invalid brand"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_underscore_fails
+SPAWN invalid_brand3: Brand {
+  name = "Invalid Brand",
+  handle = "invalid_brand"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_special_chars_fails
+SPAWN invalid_brand4: Brand {
+  name = "Invalid Brand",
+  handle = "invalid@brand!"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_leading_hyphen_fails
+SPAWN invalid_brand5: Brand {
+  name = "Invalid Brand",
+  handle = "-invalid"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_trailing_hyphen_fails
+SPAWN invalid_brand6: Brand {
+  name = "Invalid Brand",
+  handle = "invalid-"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_consecutive_hyphens_fails
+SPAWN invalid_brand7: Brand {
+  name = "Invalid Brand",
+  handle = "invalid--brand"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_dot_fails
+SPAWN invalid_brand8: Brand {
+  name = "Invalid Brand",
+  handle = "invalid.brand"
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_spawn_invalid_slug_empty_fails
+SPAWN invalid_brand9: Brand {
+  name = "Invalid Brand",
+  handle = ""
+}
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- SET VALIDATION: Updating slug to invalid values should fail
+-- ---------------------------------------------------------------------------
+
+--# test_set_valid_slug_succeeds
+MATCH b: Brand
+WHERE b.handle = "acme-corp"
+SET b { handle = "acme-corporation" }
+--@ expect:ok
+
+--# test_verify_slug_updated
+MATCH b: Brand
+WHERE b.name = "Acme Corp"
+RETURN b.handle
+--@ expect:rows = 1
+--@ expect:has_row { handle = "acme-corporation" }
+
+--# test_set_invalid_slug_uppercase_fails
+MATCH b: Brand
+WHERE b.handle = "nike"
+SET b { handle = "Nike" }
+--@ expect:error
+--@ expect:constraint_violation
+
+--# test_set_invalid_slug_special_fails
+MATCH b: Brand
+WHERE b.handle = "brand-42"
+SET b { handle = "brand#42" }
+--@ expect:error
+--@ expect:constraint_violation
+
+-- ---------------------------------------------------------------------------
+-- QUERY WITH SLUG VALUES
+-- ---------------------------------------------------------------------------
+
+--# test_query_brands_by_handle
+MATCH b: Brand
+WHERE b.handle = "acme-corporation"
+RETURN b.name, b.handle
+--@ expect:rows = 1
+--@ expect:has_row { name = "Acme Corp", handle = "acme-corporation" }
+
+--# test_query_brands_handle_starts_with
+MATCH b: Brand
+WHERE starts_with(b.handle, "brand")
+RETURN b.handle
+--@ expect:rows = 1
+--@ expect:has_row { handle = "brand-42" }
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_brands
+MATCH b: Brand
+WHERE b.handle IN ["acme-corporation", "nike", "brand-42", "2024", "my-super-brand", "tech-9-solutions"]
+KILL b
+--@ expect:ok

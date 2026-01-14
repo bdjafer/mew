@@ -372,3 +372,45 @@ mod type_aliases {
         scenario().run().unwrap();
     }
 }
+
+mod format_slug {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("format_slug")
+            .ontology("level-2/ecommerce/ontology.mew")
+            .operations("level-2/ecommerce/operations/format_slug.mew")
+            // Valid slug patterns
+            .step("test_spawn_valid_slug_simple", |a| a.created(1))
+            .step("test_spawn_valid_slug_single_word", |a| a.created(1))
+            .step("test_spawn_valid_slug_with_numbers", |a| a.created(1))
+            .step("test_spawn_valid_slug_numbers_only", |a| a.created(1))
+            .step("test_spawn_valid_slug_multi_hyphen", |a| a.created(1))
+            .step("test_spawn_valid_slug_alphanumeric_mix", |a| a.created(1))
+            // Invalid slug patterns
+            .step("test_spawn_invalid_slug_uppercase_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_spaces_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_underscore_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_special_chars_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_leading_hyphen_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_trailing_hyphen_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_consecutive_hyphens_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_dot_fails", |a| a.error("constraint"))
+            .step("test_spawn_invalid_slug_empty_fails", |a| a.error("constraint"))
+            // SET validation
+            .step("test_set_valid_slug_succeeds", |a| a.modified(1))
+            .step("test_verify_slug_updated", |a| a.rows(1))
+            .step("test_set_invalid_slug_uppercase_fails", |a| a.error("constraint"))
+            .step("test_set_invalid_slug_special_fails", |a| a.error("constraint"))
+            // Query tests
+            .step("test_query_brands_by_handle", |a| a.rows(1))
+            .step("test_query_brands_handle_starts_with", |a| a.rows(1))
+            // Cleanup
+            .step("test_cleanup_brands", |a| a.deleted(6))
+    }
+
+    #[test]
+    fn test_format_slug_validation() {
+        scenario().run().unwrap();
+    }
+}

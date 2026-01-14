@@ -20,7 +20,7 @@ Specification coverage for Level 2: Structure features.
 | [format: email] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_validation |
 | [format: url] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_validation |
 | [format: uuid] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_validation |
-| [format: slug] | 3_SCHEMA.md §5.3.7 | ✗ | — |
+| [format: slug] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_slug |
 | [format: phone] | 3_SCHEMA.md §5.3.7 | ✗ | — |
 | [format: iso_date] | 3_SCHEMA.md §5.3.7 | ✗ | — |
 | [format: iso_datetime] | 3_SCHEMA.md §5.3.7 | ✗ | — |
@@ -142,14 +142,14 @@ Specification coverage for Level 2: Structure features.
 
 | Category | Covered | Total | Coverage |
 |----------|---------|-------|----------|
-| Schema | 26 | 31 | 84% |
+| Schema | 27 | 31 | 87% |
 | Queries | 24 | 24 | 100% |
 | Mutations | 21 | 21 | 100% |
 | Parameters | 16 | 16 | 100% |
 | Time | 1 | 2 | 50% |
 | Authorization | 0 | 2 | 0% |
 | Errors | 9 | 9 | 100% |
-| **Total** | **97** | **105** | **92%** |
+| **Total** | **98** | **105** | **93%** |
 
 ## Gaps to Address
 
@@ -159,7 +159,6 @@ Specification coverage for Level 2: Structure features.
 - `current_actor()` function - no scenarios
 
 ### Medium Priority
-- [format: slug] - missing format type
 - [format: phone] - missing format type
 - [format: iso_date] - missing format type
 - [format: iso_datetime] - missing format type
