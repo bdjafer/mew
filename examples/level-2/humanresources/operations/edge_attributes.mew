@@ -13,7 +13,7 @@ SPAWN test_emp: Employee {
   first_name = "Test",
   last_name = "User",
   email = "test@company.com",
-  employee_id = "TEST001",
+  employee_id = "EMP100001",
   hire_date = now(),
   salary = 85000.0
 }
@@ -43,7 +43,7 @@ LINK has_skill(test_emp, test_skill) {
 
 --# test_query_edge_attributes
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 RETURN e.first_name, s.name, r.level, r.years_experience
 --@ expect:rows = 1
 --@ expect:has_row { first_name = "Test", name = "Testing", level = "intermediate", years_experience = 2 }
@@ -54,13 +54,13 @@ RETURN e.first_name, s.name, r.level, r.years_experience
 
 --# test_update_edge_attribute
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001" AND s.name = "Testing"
+WHERE e.employee_id = "EMP100001" AND s.name = "Testing"
 SET r { level = "expert", years_experience = 5 }
 --@ expect:ok
 
 --# test_verify_edge_attribute_updated
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 RETURN r.level, r.years_experience
 --@ expect:rows = 1
 --@ expect:has_row { level = "expert", years_experience = 5 }
@@ -158,13 +158,13 @@ ORDER BY r.years_experience DESC
 
 --# test_set_edge_attribute_null
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 SET r { years_experience = NULL }
 --@ expect:ok
 
 --# test_verify_edge_attribute_null
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 RETURN r.years_experience
 --@ expect:rows = 1
 --@ expect:has_row { years_experience = NULL }
@@ -175,13 +175,13 @@ RETURN r.years_experience
 
 --# test_unlink_edge_with_attributes
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 UNLINK r
 --@ expect:ok
 
 --# test_verify_edge_deleted
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 RETURN count(r) AS edge_count
 --@ expect:rows = 1
 --@ expect:has_row { edge_count = 0 }
@@ -198,7 +198,7 @@ LINK has_skill(test_emp, test_skill) {
 
 --# test_verify_partial_attributes
 MATCH e: Employee, s: Skill, has_skill(e, s) AS r
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 RETURN r.level, r.years_experience
 --@ expect:rows = 1
 --@ expect:has_row { level = "beginner", years_experience = NULL }
@@ -209,7 +209,7 @@ RETURN r.level, r.years_experience
 
 --# test_cleanup_test_entities
 MATCH e: Employee
-WHERE e.employee_id = "TEST001"
+WHERE e.employee_id = "EMP100001"
 KILL e
 --@ expect:ok
 

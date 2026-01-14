@@ -10,3 +10,4 @@ mew-parser.workspace = true
 mew-pattern.workspace = true
 mew-registry.workspace = true
 thiserror.workspace = true
+regex-lite.workspace = true  # For match pattern and format constraint validation

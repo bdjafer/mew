@@ -72,6 +72,33 @@ pub enum MutationError {
         value: String,
         range_desc: String,
     },
+
+    #[error("unique constraint violated: {attr} value '{value}' already exists on type {type_name}")]
+    UniqueConstraintViolation {
+        type_name: String,
+        attr: String,
+        value: String,
+    },
+
+    #[error("format constraint violated: {attr} value '{value}' does not match format '{format}'")]
+    FormatConstraintViolation {
+        attr: String,
+        value: String,
+        format: String,
+    },
+
+    #[error("pattern constraint violated: {attr} value '{value}' does not match pattern '{pattern}'")]
+    PatternConstraintViolation {
+        attr: String,
+        value: String,
+        pattern: String,
+    },
+
+    #[error("constraint violated: {attr} value '{value}' is not one of the allowed values")]
+    AllowedValuesViolation {
+        attr: String,
+        value: String,
+    },
 }
 
 impl MutationError {
@@ -173,6 +200,52 @@ impl MutationError {
             attr: attr.into(),
             value: value.into(),
             range_desc: range_desc.into(),
+        }
+    }
+
+    pub fn unique_constraint_violation(
+        type_name: impl Into<String>,
+        attr: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        Self::UniqueConstraintViolation {
+            type_name: type_name.into(),
+            attr: attr.into(),
+            value: value.into(),
+        }
+    }
+
+    pub fn format_constraint_violation(
+        attr: impl Into<String>,
+        value: impl Into<String>,
+        format: impl Into<String>,
+    ) -> Self {
+        Self::FormatConstraintViolation {
+            attr: attr.into(),
+            value: value.into(),
+            format: format.into(),
+        }
+    }
+
+    pub fn pattern_constraint_violation(
+        attr: impl Into<String>,
+        value: impl Into<String>,
+        pattern: impl Into<String>,
+    ) -> Self {
+        Self::PatternConstraintViolation {
+            attr: attr.into(),
+            value: value.into(),
+            pattern: pattern.into(),
+        }
+    }
+
+    pub fn allowed_values_violation(
+        attr: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        Self::AllowedValuesViolation {
+            attr: attr.into(),
+            value: value.into(),
         }
     }
 }

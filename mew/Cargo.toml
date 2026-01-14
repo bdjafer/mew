@@ -47,3 +47,6 @@ mew-testgen = { path = "testgen" }
 
 # External dependencies
 thiserror = "1.0"
+# Lightweight regex for attribute constraint validation (match patterns, UUID format).
+# Chosen over full `regex` crate: smaller binary, no Unicode overhead, sufficient for schema validation.
+regex-lite = "0.1"

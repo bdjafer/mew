@@ -71,8 +71,7 @@ mod errors {
             .ontology("level-3/workflow/ontology.mew")
             .operations("level-3/workflow/operations/errors.mew")
             .step("spawn_missing_name", |a| a.error("required"))
-            // Note: type alias constraints are not enforced at runtime
-            .step("spawn_invalid_status", |a| a.created(1))
+            .step("spawn_invalid_status", |a| a.error("constraint"))
             .step("spawn_valid", |a| a.created(1))
     }
 

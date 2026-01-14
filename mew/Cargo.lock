@@ -108,6 +108,7 @@ dependencies = [
  "mew-parser",
  "mew-pattern",
  "mew-registry",
+ "regex-lite",
  "thiserror",
 ]
 
