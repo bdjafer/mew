@@ -63,6 +63,7 @@ pub enum TokenKind {
     Ontology,
     Explain,
     Profile,
+    Is,
 
     // Literals
     Ident(String),
@@ -167,6 +168,7 @@ impl TokenKind {
             TokenKind::Ontology => "ONTOLOGY",
             TokenKind::Explain => "EXPLAIN",
             TokenKind::Profile => "PROFILE",
+            TokenKind::Is => "IS",
             TokenKind::Ident(_) => "identifier",
             TokenKind::Int(_) => "integer",
             TokenKind::Float(_) => "float",
@@ -265,6 +267,7 @@ impl TokenKind {
                 | TokenKind::Ontology
                 | TokenKind::Explain
                 | TokenKind::Profile
+                | TokenKind::Is
         )
     }
 }
@@ -611,6 +614,7 @@ impl<'a> Lexer<'a> {
             "ONTOLOGY" => TokenKind::Ontology,
             "EXPLAIN" => TokenKind::Explain,
             "PROFILE" => TokenKind::Profile,
+            "IS" => TokenKind::Is,
             _ => TokenKind::Ident(ident),
         }
     }

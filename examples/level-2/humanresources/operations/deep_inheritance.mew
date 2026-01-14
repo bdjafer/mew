@@ -106,7 +106,7 @@ SPAWN new_executive: Executive {
   employee_id = "EMP000007",
   hire_date = now(),
   salary = 300000.0,
-  management_level = 6,
+  management_level = 5,
   budget_authority = 5000000.0,
   title = "CTO"
 }

@@ -481,6 +481,11 @@ impl<'r> Analyzer<'r> {
                 }
                 Ok(Type::Any) // List type - could be refined to Type::List in future
             }
+            Expr::TypeCheck(base, _type_name, _) => {
+                // Type check: expr:Type - returns bool
+                self.analyze_expr(base)?;
+                Ok(Type::Bool)
+            }
         }
     }
 
