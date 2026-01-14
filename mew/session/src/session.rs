@@ -264,8 +264,11 @@ impl<'r> Session<'r> {
         let matcher = Matcher::new(self.registry, &self.graph);
         let bindings_list = matcher.find_all(&pattern)?;
 
-        let mut total_nodes = 0usize;
-        let mut total_edges = 0usize;
+        let mut nodes_modified = 0usize;
+        let mut edges_modified = 0usize;
+        let mut edges_created = 0usize;
+        let mut nodes_deleted = 0usize;
+        let mut edges_deleted = 0usize;
 
         // For each set of bindings from the match, execute the mutations
         for pattern_bindings in bindings_list {
@@ -312,23 +315,30 @@ impl<'r> Session<'r> {
                         }
 
                         if result.created_edge().is_some() {
-                            total_edges += 1;
+                            edges_created += 1;
                         }
                     }
                     MutationAction::Set(set_stmt) => {
                         let target_id =
                             self.resolve_target_with_bindings(&set_stmt.target, &local_bindings)?;
-                        let node_id = target_id.as_node().ok_or_else(|| {
-                            SessionError::invalid_statement_type(messages::ERR_SET_REQUIRES_NODE)
-                        })?;
-
                         let pb = Bindings::new();
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
-                        let result = executor.execute_set(set_stmt, vec![node_id], &pb)?;
 
                         use mew_mutation::MutationOutcome;
-                        if let MutationOutcome::Updated(ref u) = result {
-                            total_nodes += u.node_ids.len();
+                        if let Some(node_id) = target_id.as_node() {
+                            let result = executor.execute_set(set_stmt, vec![node_id], &pb)?;
+                            if let MutationOutcome::Updated(ref u) = result {
+                                nodes_modified += u.node_ids.len();
+                            }
+                        } else if let Some(edge_id) = target_id.as_edge() {
+                            let result = executor.execute_set_edge(set_stmt, vec![edge_id], &pb)?;
+                            if let MutationOutcome::Updated(ref u) = result {
+                                edges_modified += u.edge_ids.len();
+                            }
+                        } else {
+                            return Err(SessionError::invalid_statement_type(
+                                messages::ERR_SET_REQUIRES_NODE,
+                            ));
                         }
                     }
                     MutationAction::Kill(kill_stmt) => {
@@ -341,8 +351,8 @@ impl<'r> Session<'r> {
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
                         let result = executor.execute_kill(kill_stmt, node_id)?;
 
-                        total_nodes += result.deleted_nodes();
-                        total_edges += result.deleted_edges();
+                        nodes_deleted += result.deleted_nodes();
+                        edges_deleted += result.deleted_edges();
                     }
                     MutationAction::Unlink(unlink_stmt) => {
                         let target_id = self
@@ -354,13 +364,20 @@ impl<'r> Session<'r> {
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
                         let result = executor.execute_unlink(unlink_stmt, edge_id)?;
 
-                        total_edges += result.deleted_edges();
+                        edges_deleted += result.deleted_edges();
                     }
                 }
             }
         }
 
-        Ok(MutationSummary::new(total_nodes, total_edges))
+        Ok(MutationSummary {
+            nodes_modified,
+            edges_modified,
+            edges_created,
+            nodes_deleted,
+            edges_deleted,
+            ..Default::default()
+        })
     }
 
     /// Resolve a target using provided bindings.
@@ -511,6 +528,11 @@ impl<'r> Session<'r> {
 
     /// Execute a KILL statement.
     fn execute_kill(&mut self, stmt: &mew_parser::KillStmt) -> SessionResult<MutationSummary> {
+        // Handle pattern-based KILL specially
+        if let mew_parser::Target::Pattern(match_stmt) = &stmt.target {
+            return self.execute_kill_pattern(stmt, match_stmt);
+        }
+
         // Resolve the target
         let target_id = self.resolve_target(&stmt.target)?;
         let node_id = target_id
@@ -523,6 +545,46 @@ impl<'r> Session<'r> {
         Ok(MutationSummary {
             nodes_deleted: result.deleted_nodes(),
             edges_deleted: result.deleted_edges(),
+            ..Default::default()
+        })
+    }
+
+    /// Execute a KILL statement with a pattern target.
+    /// Runs the MATCH query first, then deletes all matching nodes.
+    fn execute_kill_pattern(
+        &mut self,
+        stmt: &mew_parser::KillStmt,
+        match_stmt: &MatchStmt,
+    ) -> SessionResult<MutationSummary> {
+        // Execute the MATCH query to get matching entities
+        let executor = QueryExecutor::new(self.registry, &self.graph);
+        let query_result = executor.execute_match(match_stmt)?;
+
+        // Collect all node IDs to delete
+        let mut node_ids = Vec::new();
+        for row in query_result.rows() {
+            // Get the first column value which should be the node reference
+            if let Some(value) = row.get(0) {
+                if let Some(node_id) = value.as_node_ref() {
+                    node_ids.push(node_id);
+                }
+            }
+        }
+
+        // Delete each node
+        let mut total_nodes_deleted = 0usize;
+        let mut total_edges_deleted = 0usize;
+
+        for node_id in node_ids {
+            let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+            let result = executor.execute_kill(stmt, node_id)?;
+            total_nodes_deleted += result.deleted_nodes();
+            total_edges_deleted += result.deleted_edges();
+        }
+
+        Ok(MutationSummary {
+            nodes_deleted: total_nodes_deleted,
+            edges_deleted: total_edges_deleted,
             ..Default::default()
         })
     }
@@ -577,23 +639,38 @@ impl<'r> Session<'r> {
     /// Execute a SET statement.
     fn execute_set(&mut self, stmt: &mew_parser::SetStmt) -> SessionResult<MutationSummary> {
         let target_id = self.resolve_target(&stmt.target)?;
-        let node_id = target_id
-            .as_node()
-            .ok_or_else(|| SessionError::invalid_statement_type(messages::ERR_SET_REQUIRES_NODE))?;
-
         let pattern_bindings = Bindings::new();
-        let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
-        let result = executor.execute_set(stmt, vec![node_id], &pattern_bindings)?;
 
-        let nodes_modified = match result {
-            MutationOutcome::Updated(ref u) => u.node_ids.len(),
-            _ => 0,
-        };
+        // Handle both node and edge targets
+        if let Some(node_id) = target_id.as_node() {
+            let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+            let result = executor.execute_set(stmt, vec![node_id], &pattern_bindings)?;
 
-        Ok(MutationSummary {
-            nodes_modified,
-            ..Default::default()
-        })
+            let nodes_modified = match result {
+                MutationOutcome::Updated(ref u) => u.node_ids.len(),
+                _ => 0,
+            };
+
+            Ok(MutationSummary {
+                nodes_modified,
+                ..Default::default()
+            })
+        } else if let Some(edge_id) = target_id.as_edge() {
+            let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+            let result = executor.execute_set_edge(stmt, vec![edge_id], &pattern_bindings)?;
+
+            let edges_modified = match result {
+                MutationOutcome::Updated(ref u) => u.edge_ids.len(),
+                _ => 0,
+            };
+
+            Ok(MutationSummary {
+                edges_modified,
+                ..Default::default()
+            })
+        } else {
+            Err(SessionError::invalid_statement_type(messages::ERR_SET_REQUIRES_NODE))
+        }
     }
 
     /// Resolve a target to an EntityId.

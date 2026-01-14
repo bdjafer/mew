@@ -23,6 +23,7 @@ pub fn compute_aggregate(
         AggregateKind::Avg => compute_avg(agg, group, evaluator, graph),
         AggregateKind::Min => compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Less),
         AggregateKind::Max => compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Greater),
+        AggregateKind::Collect => compute_collect(agg, group, evaluator, graph),
     }
 }
 
@@ -148,6 +149,27 @@ fn compute_min_max(
     }
 
     Ok(result.unwrap_or(Value::Null))
+}
+
+/// Compute COLLECT aggregate - collects all values into a list.
+fn compute_collect(
+    agg: &AggregateSpec,
+    group: &[(Bindings, Vec<Value>)],
+    evaluator: &Evaluator<'_>,
+    graph: &Graph,
+) -> QueryResult<Value> {
+    let mut result = Vec::new();
+
+    for (bindings, _) in group {
+        if let Ok(val) = evaluator.eval(&agg.expr, bindings, graph) {
+            // Skip null values
+            if !matches!(val, Value::Null) {
+                result.push(val);
+            }
+        }
+    }
+
+    Ok(Value::List(result))
 }
 
 #[cfg(test)]

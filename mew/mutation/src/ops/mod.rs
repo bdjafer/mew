@@ -11,6 +11,6 @@ mod unlink;
 
 pub use kill::execute_kill;
 pub use link::execute_link;
-pub use set::execute_set;
+pub use set::{execute_set, execute_set_edge};
 pub use spawn::execute_spawn;
 pub use unlink::execute_unlink;

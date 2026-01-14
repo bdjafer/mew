@@ -70,7 +70,7 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         ops::execute_unlink(self.graph, stmt, target_id)
     }
 
-    /// Execute a SET statement (attribute update).
+    /// Execute a SET statement (attribute update) for nodes.
     pub fn execute_set(
         &mut self,
         stmt: &SetStmt,
@@ -83,6 +83,23 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
             &self.evaluator,
             stmt,
             node_ids,
+            bindings,
+        )
+    }
+
+    /// Execute a SET statement (attribute update) for edges.
+    pub fn execute_set_edge(
+        &mut self,
+        stmt: &SetStmt,
+        edge_ids: Vec<EdgeId>,
+        bindings: &Bindings,
+    ) -> MutationResult<MutationOutcome> {
+        ops::execute_set_edge(
+            self.registry,
+            self.graph,
+            &self.evaluator,
+            stmt,
+            edge_ids,
             bindings,
         )
     }

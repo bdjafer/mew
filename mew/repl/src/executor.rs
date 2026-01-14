@@ -264,21 +264,32 @@ pub fn execute_set(
     stmt: &mew_parser::SetStmt,
 ) -> Result<String, String> {
     let target_id = resolve_target(&stmt.target, bindings)?;
-    let node_id = target_id
-        .as_node()
-        .ok_or_else(|| messages::ERR_SET_REQUIRES_NODE.to_string())?;
-
     let pattern_bindings = to_pattern_bindings(bindings);
     let mut executor = MutationExecutor::new(registry, graph);
-    let result = executor
-        .execute_set(stmt, vec![node_id], &pattern_bindings)
-        .map_err(|e| format!("Set error: {}", e))?;
 
-    let updated = match result {
-        mew_mutation::MutationOutcome::Updated(ref updated) => updated.node_ids.len(),
-        _ => 0,
-    };
-    Ok(format!("Updated {} nodes", updated))
+    if let Some(node_id) = target_id.as_node() {
+        let result = executor
+            .execute_set(stmt, vec![node_id], &pattern_bindings)
+            .map_err(|e| format!("Set error: {}", e))?;
+
+        let updated = match result {
+            mew_mutation::MutationOutcome::Updated(ref updated) => updated.node_ids.len(),
+            _ => 0,
+        };
+        Ok(format!("Updated {} nodes", updated))
+    } else if let Some(edge_id) = target_id.as_edge() {
+        let result = executor
+            .execute_set_edge(stmt, vec![edge_id], &pattern_bindings)
+            .map_err(|e| format!("Set error: {}", e))?;
+
+        let updated = match result {
+            mew_mutation::MutationOutcome::Updated(ref updated) => updated.edge_ids.len(),
+            _ => 0,
+        };
+        Ok(format!("Updated {} edges", updated))
+    } else {
+        Err(messages::ERR_SET_REQUIRES_NODE.to_string())
+    }
 }
 
 /// Execute a transaction statement.
@@ -423,19 +434,26 @@ pub fn execute_match_mutate(
                 }
                 MutationAction::Set(set_stmt) => {
                     let target_id = resolve_target(&set_stmt.target, &local_bindings)?;
-                    let node_id = target_id
-                        .as_node()
-                        .ok_or_else(|| messages::ERR_SET_REQUIRES_NODE.to_string())?;
-
                     let pb = Bindings::new();
                     let mut executor = MutationExecutor::new(registry, graph);
-                    let result = executor
-                        .execute_set(set_stmt, vec![node_id], &pb)
-                        .map_err(|e| format!("Set error: {}", e))?;
 
                     use mew_mutation::MutationOutcome;
-                    if let MutationOutcome::Updated(ref u) = result {
-                        total_nodes += u.node_ids.len();
+                    if let Some(node_id) = target_id.as_node() {
+                        let result = executor
+                            .execute_set(set_stmt, vec![node_id], &pb)
+                            .map_err(|e| format!("Set error: {}", e))?;
+                        if let MutationOutcome::Updated(ref u) = result {
+                            total_nodes += u.node_ids.len();
+                        }
+                    } else if let Some(edge_id) = target_id.as_edge() {
+                        let result = executor
+                            .execute_set_edge(set_stmt, vec![edge_id], &pb)
+                            .map_err(|e| format!("Set error: {}", e))?;
+                        if let MutationOutcome::Updated(ref u) = result {
+                            total_edges += u.edge_ids.len();
+                        }
+                    } else {
+                        return Err(messages::ERR_SET_REQUIRES_NODE.to_string());
                     }
                 }
                 MutationAction::Kill(kill_stmt) => {
