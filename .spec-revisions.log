@@ -14,3 +14,21 @@ Resolution:
 Propagated to: specification/4_QUERIES.md (complete)
 Hierarchy check: 1_LANGUAGE.md does not specify MATCH/RETURN behavior - no higher-level changes needed
 ---
+---
+Date: 2026-01-14
+Document: specs/specification/5_MUTATIONS.md
+Section: LinkStmt AST definition
+Problem: Implementation adds if_not_exists: bool field for LINK IF NOT EXISTS syntax, but spec doesn't include it
+Evidence: PR implements LINK IF NOT EXISTS feature, spec/impl mismatch discovered during review
+---
+Date: 2026-01-14
+Document: specs/specification/4_QUERIES.md  
+Section: MutationOp grammar and AST
+Problem: Implementation allows SPAWN in compound MATCH...SPAWN...LINK statements, but spec only lists link/unlink/set/kill
+Evidence: PR adds Spawn to MutationAction enum, spec/impl mismatch discovered during review
+Resolution: Added ifNotExists: boolean field to LinkStmt AST definition
+Propagated to: None needed (implementation already has this field)
+---
+Resolution: Added "spawn" SpawnExpr to MutationOp grammar and "Spawn" to MutationOp AST kind union
+Propagated to: None needed (implementation already has this variant)
+---
