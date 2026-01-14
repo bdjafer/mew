@@ -498,7 +498,18 @@ pub struct FnCall {
     pub name: String,
     pub args: Vec<Expr>,
     pub distinct: bool, // For count(DISTINCT ...) style calls
+    /// For COLLECT [limit: N] syntax
+    pub limit: Option<CollectLimit>,
     pub span: Span,
+}
+
+/// Limit specification for COLLECT aggregation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CollectLimit {
+    /// Explicit numeric limit
+    Value(i64),
+    /// "none" for unlimited collection
+    None,
 }
 
 // ==================== ONTOLOGY ====================

@@ -142,35 +142,50 @@ impl<'r, 'g> Matcher<'r, 'g> {
                 target_vars,
             } => {
                 // Check that an edge exists between the bound variables
-                // Get all bound node IDs from target_vars
-                let mut target_ids = Vec::new();
+                // Build a vector of Option<NodeId> where None represents wildcards
+                let mut target_ids: Vec<Option<NodeId>> = Vec::new();
                 for var in target_vars {
-                    let binding = bindings
-                        .get(var)
-                        .ok_or_else(|| crate::PatternError::unbound_variable(var))?;
-                    let node_id = binding
-                        .as_node()
-                        .ok_or_else(|| crate::PatternError::type_error("expected node binding"))?;
-                    target_ids.push(node_id);
+                    // Wildcards become None
+                    if var == "_" {
+                        target_ids.push(None);
+                    } else {
+                        let binding = bindings
+                            .get(var)
+                            .ok_or_else(|| crate::PatternError::unbound_variable(var))?;
+                        let node_id = binding
+                            .as_node()
+                            .ok_or_else(|| crate::PatternError::type_error("expected node binding"))?;
+                        target_ids.push(Some(node_id));
+                    }
                 }
 
-                // Check if such an edge exists
-                if target_ids.len() >= 2 {
+                // Find the first non-wildcard node to use as source for edge lookup
+                let first_bound_idx = target_ids.iter().position(|id| id.is_some());
+
+                if let Some(idx) = first_bound_idx {
+                    let source_id = target_ids[idx].unwrap();
                     let edges: Vec<_> = self
                         .graph
-                        .edges_from(target_ids[0], Some(*edge_type_id))
+                        .edges_from(source_id, Some(*edge_type_id))
                         .collect();
 
                     for edge_id in edges {
                         if let Some(edge) = self.graph.get_edge(edge_id) {
-                            // Check all targets match
+                            // Check all non-wildcard targets match
                             let mut all_match = true;
-                            for (i, &expected_id) in target_ids.iter().enumerate() {
-                                if i < edge.targets.len()
-                                    && edge.targets[i].as_node() != Some(expected_id) {
+                            for (i, expected_id_opt) in target_ids.iter().enumerate() {
+                                if let Some(expected_id) = expected_id_opt {
+                                    if i < edge.targets.len() {
+                                        if edge.targets[i].as_node() != Some(*expected_id) {
+                                            all_match = false;
+                                            break;
+                                        }
+                                    } else {
                                         all_match = false;
                                         break;
                                     }
+                                }
+                                // If None (wildcard), accept any value
                             }
                             if all_match {
                                 return Ok(vec![bindings.clone()]);
