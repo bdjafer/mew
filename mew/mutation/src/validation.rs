@@ -104,7 +104,7 @@ pub fn check_required_attributes(
     Ok(())
 }
 
-/// Apply default values to missing attributes.
+/// Apply default values to missing node attributes.
 pub fn apply_defaults(
     registry: &Registry,
     type_id: TypeId,
@@ -115,6 +115,24 @@ pub fn apply_defaults(
         if !attrs.contains_key(&attr_def.name) {
             if let Some(ref default_value) = attr_def.default {
                 attrs.insert(attr_def.name.clone(), default_value.clone());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Apply default values to missing edge attributes.
+pub fn apply_edge_defaults(
+    registry: &Registry,
+    edge_type_id: mew_core::EdgeTypeId,
+    attrs: &mut mew_core::Attributes,
+) -> MutationResult<()> {
+    if let Some(edge_type) = registry.get_edge_type(edge_type_id) {
+        for (name, attr_def) in &edge_type.attributes {
+            if !attrs.contains_key(name) {
+                if let Some(ref default_value) = attr_def.default {
+                    attrs.insert(name.clone(), default_value.clone());
+                }
             }
         }
     }

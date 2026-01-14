@@ -103,8 +103,10 @@ impl<'r> Session<'r> {
     }
 
     /// Execute multiple statements from a string.
-    /// Returns aggregated mutation results (sums created/deleted nodes and edges),
-    /// or aggregated query results (combined rows from all MATCH statements).
+    ///
+    /// Aggregation behavior:
+    /// - Mutations: sums all created/deleted/modified counts
+    /// - Queries: combines rows when columns match; different columns replace accumulated result
     pub fn execute_all(&mut self, input: &str) -> SessionResult<StatementResult> {
         let stmts = parse_stmts(input)?;
 

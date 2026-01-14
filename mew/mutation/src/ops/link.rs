@@ -75,6 +75,9 @@ pub fn execute_link(
         attrs.insert(assign.name.clone(), value);
     }
 
+    // Apply default values for missing edge attributes
+    crate::validation::apply_edge_defaults(registry, edge_type_id, &mut attrs)?;
+
     // Create the edge
     let edge_id = graph
         .create_edge(edge_type_id, target_ids, attrs)
