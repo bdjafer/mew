@@ -416,6 +416,17 @@ impl Parser {
                 Ok(Expr::List(elements, span))
             }
 
+            // Handle 'node' and 'edge' keywords as special built-in variables
+            // These are used in WALK UNTIL clauses: UNTIL node.status = "done"
+            TokenKind::Node => {
+                self.advance();
+                Ok(Expr::Var("node".to_string(), token.span))
+            }
+            TokenKind::Edge => {
+                self.advance();
+                Ok(Expr::Var("edge".to_string(), token.span))
+            }
+
             // Identifier (variable or function call)
             TokenKind::Ident(name) => {
                 let name = name.clone();
@@ -432,7 +443,11 @@ impl Parser {
                     }
 
                     let mut args = Vec::new();
-                    if !self.check(&TokenKind::RParen) {
+                    // Handle count(*) - treat * as "count all rows" (empty args)
+                    if self.check(&TokenKind::Star) {
+                        self.advance(); // consume the *
+                        // args remains empty - represents count(*)
+                    } else if !self.check(&TokenKind::RParen) {
                         args.push(self.parse_expr()?);
                         while self.check(&TokenKind::Comma) {
                             self.advance();

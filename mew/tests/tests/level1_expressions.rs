@@ -316,7 +316,8 @@ mod returning_clause {
             .step("kill_returning_id", |a| a.deleted(1))
             .step("kill_bulk_returning", |a| a.deleted(2))
             // Verification
-            .step("verify_spawned_records", |a| a.scalar("count", 8i64))
+            // 4 ret_* + 4 link_* + 1 set_* = 9 records
+            .step("verify_spawned_records", |a| a.scalar("count", 9i64))
             .step("verify_links_created", |a| a.scalar("count", 2i64))
     }
 
