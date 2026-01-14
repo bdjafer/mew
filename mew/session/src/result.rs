@@ -147,7 +147,7 @@ impl MutationSummary {
 
     /// Total edges affected.
     pub fn edges_affected(&self) -> usize {
-        self.edges_created + self.edges_deleted
+        self.edges_created + self.edges_modified + self.edges_deleted
     }
 
     /// Get total affected count.
@@ -161,6 +161,7 @@ impl MutationSummary {
         self.nodes_modified += other.nodes_modified;
         self.nodes_deleted += other.nodes_deleted;
         self.edges_created += other.edges_created;
+        self.edges_modified += other.edges_modified;
         self.edges_deleted += other.edges_deleted;
     }
 }
