@@ -264,7 +264,7 @@ MEWKeyword =
   | "in" | "app" | "scope" | "using"
     
     /* Logic */
-  | "and" | "or" | "not" | "exists"
+  | "and" | "or" | "not" | "exists" | "is"
   | "true" | "false" | "null"
 ```
 
@@ -282,14 +282,15 @@ begin       branch      by          checkout    coalesce
 collect     commit      constraint  depth       desc
 diff        distinct    drop        edge        exists
 explain     extend      false       follow      from
-in          index       indexes     inspect     kill
-limit       link        load        match       merge
-node        not         null        offset      on
-ontology    or          order       profile     required
-return      rollback    rule        rules       scope
-sealed      set         show        snapshot    spawn
-switch      true        types       unique      unlink
-until       using       versions    walk        where
+in          index       indexes     inspect     is
+kill        limit       link        load        match
+merge       node        not         null        offset
+on          ontology    or          order       profile
+required    return      rollback    rule        rules
+scope       sealed      set         show        snapshot
+spawn       switch      true        types       unique
+unlink      until       using       versions    walk
+where
 ```
 
 **Removed keywords** (no conditional expressions): `case`, `else`, `end`, `if`, `then`, `when`
@@ -1356,9 +1357,110 @@ not (x and y)
 
 ---
 
-## 5.10 Null Handling Expressions
+## 5.10 Type Check Expression
 
-### 5.10.1 COALESCE Expression
+```
+TypeCheckExpr = Expr ":" Identifier
+```
+
+Checks if an expression value is of a specified type.
+
+**Syntax:**
+```
+expr:TypeName
+```
+
+**Semantics:**
+- Returns `true` if the expression evaluates to a node of the specified type or a subtype
+- Returns `false` otherwise
+- For non-node values, always returns `false`
+- Type checking follows the inheritance hierarchy defined in the ontology
+
+**Examples:**
+```
+-- Check if a node is a specific type
+MATCH n: TeamLead
+WHERE n:Person          -- true: TeamLead inherits from Employee which inherits from Person
+RETURN n
+
+-- Check multiple type conditions
+MATCH n: Node
+WHERE n:Employee AND n:Mentorship
+RETURN n                -- Returns nodes that satisfy both types (e.g., TeamLead)
+
+-- Use in compound conditions
+MATCH tl: TeamLead
+WHERE tl:Person AND tl.salary > 100000
+RETURN tl
+```
+
+**Type rules:**
+- Left side: Any expression (typically a variable bound to a node)
+- Right side: A type name (identifier)
+- Result type: `Bool`
+
+**AST:**
+```typescript
+interface TypeCheckExpr {
+  kind: "TypeCheck"
+  expr: Expr
+  typeName: string
+}
+```
+
+**Implementation note:**
+Type checking uses the registry to look up the type ID and check if the node's type equals or is a subtype of the target type.
+
+---
+
+## 5.11 Null Handling Expressions
+
+### 5.11.1 IS [NOT] NULL Operator
+
+Checks if an expression is null or not null (SQL-style syntax):
+
+```
+NullCheckExpr = Expr "is" "null"
+              | Expr "is" "not" "null"
+```
+
+**Syntax:**
+```
+expr IS NULL
+expr IS NOT NULL
+```
+
+**Semantics:**
+- `expr IS NULL` returns `true` if expr evaluates to null, `false` otherwise
+- `expr IS NOT NULL` returns `true` if expr evaluates to non-null, `false` otherwise
+- Equivalent to: `expr = null` and `expr != null` respectively
+
+**Examples:**
+```
+-- Find nodes with missing optional attributes
+MATCH t: Task
+WHERE t.due_date IS NULL
+RETURN t
+
+-- Find nodes with values present
+MATCH p: Person
+WHERE p.email IS NOT NULL
+RETURN p
+
+-- Combine with other conditions
+MATCH e: Employee
+WHERE e.manager_id IS NOT NULL AND e.status = "active"
+RETURN e
+```
+
+**Type rules:**
+- Left side: Any expression
+- Result type: `Bool`
+
+**Implementation note:**
+The parser transforms `IS NULL` to `= null` and `IS NOT NULL` to `!= null` comparison expressions.
+
+### 5.11.2 COALESCE Expression
 
 Returns the first non-null value:
 
@@ -1390,7 +1492,7 @@ COALESCE(t.nickname, t.name, "default")  -- Type: String (last is non-null)
 COALESCE(t.nickname, t.alt_name)  -- Type: String? (both nullable)
 ```
 
-### 5.10.2 Design Note: No IF/ELSE or CASE Expressions
+### 5.11.3 Design Note: No IF/ELSE or CASE Expressions
 
 **This language intentionally omits conditional expressions (IF/THEN/ELSE, CASE/WHEN).**
 
@@ -1438,9 +1540,9 @@ rule classify_low:
 
 ---
 
-## 5.11 Expression Type Rules
+## 5.12 Expression Type Rules
 
-### 5.11.1 Type Inference
+### 5.12.1 Type Inference
 
 Each expression has a static type determined by its form:
 
@@ -1458,8 +1560,10 @@ Each expression has a static type determined by its form:
 | `a and b` | Bool |
 | `f(args)` | Return type of f |
 | `exists(...)` | Bool |
+| `x:Type` | Bool |
+| `x IS NULL` | Bool |
 
-### 5.11.2 Type Checking Errors
+### 5.12.2 Type Checking Errors
 
 Type errors are reported at compile time:
 
