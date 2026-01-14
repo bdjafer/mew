@@ -2,7 +2,7 @@
 
 Your goal: maintain an accurate coverage map for a single level.
 
-You produce `examples/LEVEL{N}_SPECS.md`—a truth table showing which spec features are tested and where.
+You produce `examples/level-{N}/SPECS.md`—a truth table showing which spec features are tested and where.
 
 ## Process
 
@@ -55,4 +55,4 @@ You produce `examples/LEVEL{N}_SPECS.md`—a truth table showing which spec feat
 
 ## Output
 
-`examples/LEVEL{N}_SPECS.md` — complete, accurate, ready for `/build-scenario` to consume.
+`examples/level-{N}/SPECS.md` — complete, accurate, ready for `/build-scenario` to consume.

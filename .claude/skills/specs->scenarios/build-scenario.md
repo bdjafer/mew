@@ -4,7 +4,7 @@ Your goal: write one scenario that covers an untested spec feature.
 
 ## Input
 
-You receive a level number. Read `examples/LEVEL{N}_SPECS.md` to see what's missing.
+You receive a level number. Read `examples/level-{N}/SPECS.md` to see what's missing.
 
 ## Process
 
@@ -27,7 +27,7 @@ You receive a level number. Read `examples/LEVEL{N}_SPECS.md` to see what's miss
 
 6. **Run `/verify-scenario`** before considering it done.
 
-7. **Update `examples/LEVEL{N}_SPECS.md`** — mark the feature as covered with your new scenario name.
+7. **Update `examples/level-{N}/SPECS.md`** — mark the feature as covered with your new scenario name.
 
 ## Constraints
 
