@@ -103,7 +103,8 @@ impl<'r> Session<'r> {
     }
 
     /// Execute multiple statements from a string.
-    /// Returns aggregated mutation results (sums created/deleted nodes and edges).
+    /// Returns aggregated mutation results (sums created/deleted nodes and edges),
+    /// or aggregated query results (combined rows from all MATCH statements).
     pub fn execute_all(&mut self, input: &str) -> SessionResult<StatementResult> {
         let stmts = parse_stmts(input)?;
 
@@ -117,26 +118,43 @@ impl<'r> Session<'r> {
         }
 
         // Execute all statements and aggregate results
-        let mut total = MutationSummary::default();
-        let mut last_result = None;
+        let mut total_mutations = MutationSummary::default();
+        let mut combined_query: Option<QueryResult> = None;
 
         for stmt in &stmts {
             let result = self.execute_statement(stmt)?;
-            match &result {
+            match result {
                 StatementResult::Mutation(m) => {
-                    total.merge(m);
+                    total_mutations.merge(&m);
+                }
+                StatementResult::Query(q) => {
+                    // Combine query results: append rows if columns match, or replace if different
+                    combined_query = Some(match combined_query {
+                        None => q,
+                        Some(mut existing) => {
+                            if existing.columns == q.columns {
+                                // Same columns - append rows
+                                existing.rows.extend(q.rows);
+                                existing
+                            } else {
+                                // Different columns - use the new result
+                                q
+                            }
+                        }
+                    });
                 }
                 _ => {}
             }
-            last_result = Some(result);
         }
 
         // Return aggregated mutation result if any mutations happened
-        if total.total_affected() > 0 {
-            Ok(StatementResult::Mutation(total))
+        if total_mutations.total_affected() > 0 {
+            Ok(StatementResult::Mutation(total_mutations))
+        } else if let Some(query_result) = combined_query {
+            // Return combined query results
+            Ok(StatementResult::Query(query_result))
         } else {
-            // Otherwise return the last statement's result
-            Ok(last_result.unwrap_or(StatementResult::Mutation(MutationSummary::default())))
+            Ok(StatementResult::Mutation(MutationSummary::default()))
         }
     }
 
