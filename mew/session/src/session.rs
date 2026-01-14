@@ -1,5 +1,6 @@
 //! Session manager.
 
+use mew_constraint::ConstraintChecker;
 use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::{MutationExecutor, MutationOutcome};
@@ -251,6 +252,10 @@ impl<'r> Session<'r> {
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
                         let result = executor.execute_link(link_stmt, targets)?;
 
+                        if let Some(edge_id) = result.created_edge() {
+                            self.check_edge_constraints(edge_id)?;
+                        }
+
                         // Store edge binding if variable present
                         if let Some(ref var) = link_stmt.var {
                             if let Some(edge_id) = result.created_edge() {
@@ -478,6 +483,8 @@ impl<'r> Session<'r> {
 
         // Store the created edge ID with the variable name if present
         let edges_created = if let Some(edge_id) = result.created_edge() {
+            self.check_edge_constraints(edge_id)?;
+
             if let Some(ref var) = stmt.var {
                 self.bindings.insert(var.clone(), edge_id.into());
             }
@@ -534,6 +541,27 @@ impl<'r> Session<'r> {
     /// Resolve a target to an EntityId.
     fn resolve_target(&self, t: &mew_parser::Target) -> SessionResult<EntityId> {
         Ok(target::resolve_target(t, &self.bindings, self.registry, &self.graph)?)
+    }
+
+    /// Check edge constraints and rollback if violated.
+    ///
+    /// Note: We check AFTER creation because the constraint checker needs
+    /// the edge to exist in the graph to inspect its endpoints.
+    fn check_edge_constraints(&mut self, edge_id: mew_core::EdgeId) -> SessionResult<()> {
+        let checker = ConstraintChecker::new(self.registry, &self.graph);
+        let violations = checker
+            .check_edge_immediate(edge_id)
+            .map_err(|e| SessionError::constraint_error(e.to_string()))?;
+
+        if !violations.is_empty() {
+            let _ = self.graph.delete_edge(edge_id);
+            let first = &violations.all()[0];
+            return Err(SessionError::constraint_error(format!(
+                "{}: {}",
+                first.constraint_name, first.message
+            )));
+        }
+        Ok(())
     }
 
     /// Resolve a target reference to an EntityId.

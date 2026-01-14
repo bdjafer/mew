@@ -463,6 +463,23 @@ impl<'r, 'g> TransactionManager<'r, 'g> {
             }
         }
 
+        // Check constraints on created edges (e.g., no_self)
+        for pending in self.buffer.created_edges() {
+            // Skip edges that were subsequently deleted
+            if self.graph.get_edge(pending.id).is_none() {
+                continue;
+            }
+
+            let violations = checker.check_edge_immediate(pending.id)?;
+            if !violations.is_empty() {
+                let first = &violations.all()[0];
+                return Err(TransactionError::constraint_violation(format!(
+                    "{}: {}",
+                    first.constraint_name, first.message
+                )));
+            }
+        }
+
         Ok(())
     }
 

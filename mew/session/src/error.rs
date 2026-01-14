@@ -40,9 +40,18 @@ pub enum SessionError {
     /// Invalid statement type.
     #[error("invalid statement type: {message}")]
     InvalidStatementType { message: String },
+
+    /// Constraint violation.
+    #[error("constraint violation: {message}")]
+    ConstraintViolation { message: String },
 }
 
 impl SessionError {
+    pub fn constraint_error(message: impl Into<String>) -> Self {
+        Self::ConstraintViolation {
+            message: message.into(),
+        }
+    }
     pub fn analysis_error(message: impl Into<String>) -> Self {
         Self::AnalysisError {
             message: message.into(),

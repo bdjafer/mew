@@ -362,9 +362,15 @@ impl SchemaAnalyzer {
             if !before_colon.contains('{') {
                 let after_colon = &rest[colon_pos + 1..];
                 let parent_end = after_colon.find('{').unwrap_or(after_colon.len());
-                let parent = after_colon[..parent_end].trim();
-                if !parent.is_empty() && !parent.contains(':') {
-                    parents.push(parent.to_string());
+                let parent_str = after_colon[..parent_end].trim();
+                if !parent_str.is_empty() && !parent_str.contains(':') {
+                    // Handle multiple inheritance: "Parent1, Parent2"
+                    for parent in parent_str.split(',') {
+                        let parent = parent.trim();
+                        if !parent.is_empty() {
+                            parents.push(parent.to_string());
+                        }
+                    }
                 }
             }
         }

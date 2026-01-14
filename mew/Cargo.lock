@@ -184,6 +184,7 @@ version = "0.1.0"
 dependencies = [
  "mew-analyzer",
  "mew-compiler",
+ "mew-constraint",
  "mew-core",
  "mew-graph",
  "mew-mutation",

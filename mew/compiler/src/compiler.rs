@@ -416,10 +416,11 @@ impl Compiler {
                 }
                 EdgeModifier::NoSelf => {
                     // Generate no-self constraint
+                    // Use "no_self" condition which the constraint checker recognizes
                     self.generated_edge_constraints.push(GeneratedConstraint {
                         name: format!("_{}_no_self", edge_def.name),
                         on_type: edge_def.name.clone(),
-                        condition: "source != target".to_string(),
+                        condition: "no_self".to_string(),
                     });
                 }
                 EdgeModifier::Symmetric => {
