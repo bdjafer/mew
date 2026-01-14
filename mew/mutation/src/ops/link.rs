@@ -80,6 +80,17 @@ pub fn execute_link(
 
     for assign in &stmt.attrs {
         let value = evaluator.eval(&assign.value, &bindings, graph)?;
+
+        // Validate attribute exists and type matches
+        crate::validation::validate_edge_attribute(
+            registry,
+            &stmt.edge_type,
+            edge_type_id,
+            &assign.name,
+            &value,
+            false,
+        )?;
+
         attrs.insert(assign.name.clone(), value);
     }
 
