@@ -194,6 +194,16 @@ impl<'r> Session<'r> {
             }
 
             Stmt::Txn(txn_stmt) => self.execute_txn(txn_stmt),
+
+            Stmt::Explain(explain_stmt) => {
+                let result = self.execute_explain(explain_stmt)?;
+                Ok(StatementResult::Query(result))
+            }
+
+            Stmt::Profile(profile_stmt) => {
+                let result = self.execute_profile(profile_stmt)?;
+                Ok(StatementResult::Query(result))
+            }
         }
     }
 
@@ -587,6 +597,63 @@ impl<'r> Session<'r> {
     /// Execute a transaction statement.
     fn execute_txn(&mut self, stmt: &mew_parser::TxnStmt) -> SessionResult<StatementResult> {
         transaction::execute_txn(&mut self.txn_state, stmt)
+    }
+
+    /// Execute an EXPLAIN statement - returns the query plan without executing.
+    fn execute_explain(&self, stmt: &mew_parser::ExplainStmt) -> SessionResult<QueryResult> {
+        use mew_query::QueryPlanner;
+
+        // Get the plan based on the inner statement type
+        let plan_str = match stmt.statement.as_ref() {
+            Stmt::Match(m) => {
+                let planner = QueryPlanner::new(self.registry);
+                match planner.plan_match(m) {
+                    Ok(plan) => format!("{:#?}", plan),
+                    Err(e) => format!("Plan error: {}", e),
+                }
+            }
+            Stmt::Walk(w) => {
+                let planner = QueryPlanner::new(self.registry);
+                match planner.plan_walk(w) {
+                    Ok(plan) => format!("{:#?}", plan),
+                    Err(e) => format!("Plan error: {}", e),
+                }
+            }
+            other => format!("EXPLAIN not supported for {:?}", std::mem::discriminant(other)),
+        };
+
+        Ok(QueryResult {
+            columns: vec!["plan".to_string()],
+            types: vec!["String".to_string()],
+            rows: vec![vec![Value::String(plan_str)]],
+        })
+    }
+
+    /// Execute a PROFILE statement - executes and returns actual results.
+    /// PROFILE returns the query results (same as running the inner query directly).
+    /// Future enhancement: add execution timing/metrics to output.
+    fn execute_profile(&mut self, stmt: &mew_parser::ProfileStmt) -> SessionResult<QueryResult> {
+        // Execute the inner statement and return its result
+        let result = self.execute_statement(&stmt.statement)?;
+
+        match result {
+            StatementResult::Query(qr) => Ok(qr),
+            StatementResult::Mutation(_) => {
+                // For mutations, return empty query result
+                Ok(QueryResult {
+                    columns: vec![],
+                    types: vec![],
+                    rows: vec![],
+                })
+            }
+            StatementResult::Transaction(_) | StatementResult::Empty => {
+                Ok(QueryResult {
+                    columns: vec![],
+                    types: vec![],
+                    rows: vec![],
+                })
+            }
+        }
     }
 }
 

@@ -41,6 +41,16 @@ impl<'r> Analyzer<'r> {
             Stmt::Walk(w) => self.analyze_walk(w),
             Stmt::Inspect(_) => Ok(Type::Any), // INSPECT returns entity data
             Stmt::Txn(_) => Ok(Type::Null), // Txn statements don't produce a value
+            Stmt::Explain(e) => {
+                // Analyze inner statement but return plan type
+                self.analyze_stmt(&e.statement)?;
+                Ok(Type::Any) // Returns plan structure
+            }
+            Stmt::Profile(p) => {
+                // Analyze inner statement but return metrics type
+                self.analyze_stmt(&p.statement)?;
+                Ok(Type::Any) // Returns execution metrics
+            }
         }
     }
 

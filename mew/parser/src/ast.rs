@@ -36,6 +36,24 @@ pub enum Stmt {
     Walk(WalkStmt),
     Inspect(InspectStmt),
     Txn(TxnStmt),
+    Explain(ExplainStmt),
+    Profile(ProfileStmt),
+}
+
+// ==================== EXPLAIN / PROFILE ====================
+
+/// EXPLAIN statement - shows execution plan without executing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExplainStmt {
+    pub statement: Box<Stmt>,
+    pub span: Span,
+}
+
+/// PROFILE statement - executes and shows performance metrics.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileStmt {
+    pub statement: Box<Stmt>,
+    pub span: Span,
 }
 
 // ==================== MATCH ====================

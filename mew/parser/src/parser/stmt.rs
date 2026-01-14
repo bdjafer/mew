@@ -50,12 +50,36 @@ impl Parser {
                 self.advance();
                 Ok(Stmt::Txn(TxnStmt::Rollback))
             }
+            TokenKind::Explain => self.parse_explain().map(Stmt::Explain),
+            TokenKind::Profile => self.parse_profile().map(Stmt::Profile),
             _ => Err(crate::ParseError::unexpected_token(
                 token.span,
                 "statement",
                 token.kind.name(),
             )),
         }
+    }
+
+    /// Parse EXPLAIN statement.
+    fn parse_explain(&mut self) -> ParseResult<ExplainStmt> {
+        let start = self.expect(&TokenKind::Explain)?.span;
+        let inner = self.parse_stmt()?;
+        let span = self.span_from(start);
+        Ok(ExplainStmt {
+            statement: Box::new(inner),
+            span,
+        })
+    }
+
+    /// Parse PROFILE statement.
+    fn parse_profile(&mut self) -> ParseResult<ProfileStmt> {
+        let start = self.expect(&TokenKind::Profile)?.span;
+        let inner = self.parse_stmt()?;
+        let span = self.span_from(start);
+        Ok(ProfileStmt {
+            statement: Box::new(inner),
+            span,
+        })
     }
 
     /// Parse MATCH, which can be either:
