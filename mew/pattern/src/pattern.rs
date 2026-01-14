@@ -132,9 +132,9 @@ fn compile_edge_pattern(
         .get_edge_type_id(&edge.edge_type)
         .ok_or_else(|| PatternError::unknown_edge_type(&edge.edge_type))?;
 
-    // Check that all target variables are bound
+    // Check that all target variables are bound (except "_" which is a wildcard)
     for target in &edge.targets {
-        if !bound_vars.contains(target) {
+        if target != "_" && !bound_vars.contains(target) {
             return Err(PatternError::unbound_variable(target));
         }
     }
