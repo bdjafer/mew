@@ -4,7 +4,7 @@ use mew_constraint::ConstraintChecker;
 use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::{MutationExecutor, MutationOutcome};
-use mew_parser::{parse_stmt, parse_stmts, DropPreparedStmt, ExecuteStmt, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, PrepareStmt, Stmt, TargetRef, WalkStmt};
+use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, WalkStmt};
 use mew_pattern::{target, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -32,8 +32,6 @@ pub struct Session<'r> {
     txn_state: TransactionState,
     /// Variable bindings (var_name -> EntityId) for mutation targets.
     bindings: HashMap<String, EntityId>,
-    /// Prepared statements (name -> statement).
-    prepared_statements: HashMap<String, Stmt>,
 }
 
 impl<'r> Session<'r> {
@@ -46,7 +44,6 @@ impl<'r> Session<'r> {
             auto_commit: true,
             txn_state: TransactionState::new(),
             bindings: HashMap::new(),
-            prepared_statements: HashMap::new(),
         }
     }
 
@@ -59,7 +56,6 @@ impl<'r> Session<'r> {
             auto_commit: true,
             txn_state: TransactionState::new(),
             bindings: HashMap::new(),
-            prepared_statements: HashMap::new(),
         }
     }
 
@@ -262,21 +258,6 @@ impl<'r> Session<'r> {
             Stmt::Profile(profile_stmt) => {
                 let result = self.execute_profile(profile_stmt)?;
                 Ok(StatementResult::Query(result))
-            }
-
-            Stmt::Prepare(prepare_stmt) => {
-                let result = self.execute_prepare(prepare_stmt)?;
-                Ok(StatementResult::Mutation(result))
-            }
-
-            Stmt::Execute(execute_stmt) => {
-                let result = self.execute_prepared(execute_stmt)?;
-                Ok(result)
-            }
-
-            Stmt::DropPrepared(drop_stmt) => {
-                let result = self.execute_drop_prepared(drop_stmt)?;
-                Ok(StatementResult::Mutation(result))
             }
         }
     }
@@ -930,80 +911,6 @@ impl<'r> Session<'r> {
             }
         }
     }
-
-    /// Execute a PREPARE statement - stores a prepared statement.
-    fn execute_prepare(&mut self, stmt: &PrepareStmt) -> SessionResult<MutationSummary> {
-        // Store the statement for later execution
-        self.prepared_statements
-            .insert(stmt.name.clone(), (*stmt.statement).clone());
-        Ok(MutationSummary::default())
-    }
-
-    /// Execute a prepared statement (EXECUTE name WITH params).
-    fn execute_prepared(&mut self, stmt: &ExecuteStmt) -> SessionResult<StatementResult> {
-        // Look up the prepared statement
-        let prepared_stmt = self
-            .prepared_statements
-            .get(&stmt.name)
-            .ok_or_else(|| {
-                SessionError::invalid_statement_type(format!(
-                    "not_found: Prepared statement '{}' does not exist",
-                    stmt.name
-                ))
-            })?
-            .clone();
-
-        // Build a map of parameter names to values
-        let mut param_values = HashMap::new();
-        for binding in &stmt.params {
-            let value = self.eval_expr_to_value(&binding.value)?;
-            param_values.insert(binding.name.clone(), value);
-        }
-
-        // Substitute parameters in the statement
-        let substituted_stmt = substitute_params_in_stmt(&prepared_stmt, &param_values);
-
-        self.execute_statement(&substituted_stmt)
-    }
-
-    /// Evaluate an expression to a Value (for simple literal expressions).
-    fn eval_expr_to_value(&self, expr: &mew_parser::Expr) -> SessionResult<Value> {
-        match expr {
-            mew_parser::Expr::Literal(lit) => {
-                let value = match &lit.kind {
-                    mew_parser::LiteralKind::Null => Value::Null,
-                    mew_parser::LiteralKind::Bool(b) => Value::Bool(*b),
-                    mew_parser::LiteralKind::Int(i) => Value::Int(*i),
-                    mew_parser::LiteralKind::Float(f) => Value::Float(*f),
-                    mew_parser::LiteralKind::String(s) => Value::String(s.clone()),
-                    mew_parser::LiteralKind::Duration(ms) => Value::Duration(*ms),
-                    mew_parser::LiteralKind::Timestamp(ms) => Value::Timestamp(*ms),
-                };
-                Ok(value)
-            }
-            mew_parser::Expr::List(exprs, _) => {
-                let mut values = Vec::new();
-                for e in exprs {
-                    values.push(self.eval_expr_to_value(e)?);
-                }
-                Ok(Value::List(values))
-            }
-            _ => Err(SessionError::invalid_statement_type(
-                "Only literal values are supported as parameter values".to_string(),
-            )),
-        }
-    }
-
-    /// Execute a DROP PREPARED statement - removes a prepared statement.
-    fn execute_drop_prepared(&mut self, stmt: &DropPreparedStmt) -> SessionResult<MutationSummary> {
-        self.prepared_statements.remove(&stmt.name).ok_or_else(|| {
-            SessionError::invalid_statement_type(format!(
-                "Prepared statement '{}' not found",
-                stmt.name
-            ))
-        })?;
-        Ok(MutationSummary::default())
-    }
 }
 
 /// Session manager for handling multiple sessions.
@@ -1031,193 +938,6 @@ impl SessionManager {
         let id = self.alloc_id();
         Session::new(id, registry)
     }
-}
-
-// ==================== PARAMETER SUBSTITUTION ====================
-
-/// Substitute parameters in a statement.
-fn substitute_params_in_stmt(stmt: &Stmt, params: &HashMap<String, Value>) -> Stmt {
-    match stmt {
-        Stmt::Match(m) => Stmt::Match(substitute_params_in_match(m, params)),
-        Stmt::MatchMutate(mm) => Stmt::MatchMutate(substitute_params_in_match_mutate(mm, params)),
-        Stmt::Spawn(s) => Stmt::Spawn(substitute_params_in_spawn(s, params)),
-        Stmt::Set(s) => Stmt::Set(substitute_params_in_set(s, params)),
-        Stmt::Link(l) => Stmt::Link(substitute_params_in_link(l, params)),
-        // Other statement types - pass through unchanged for now
-        _ => stmt.clone(),
-    }
-}
-
-fn substitute_params_in_match(stmt: &mew_parser::MatchStmt, params: &HashMap<String, Value>) -> mew_parser::MatchStmt {
-    mew_parser::MatchStmt {
-        pattern: stmt.pattern.clone(),
-        where_clause: stmt.where_clause.as_ref().map(|e| substitute_params_in_expr(e, params)),
-        optional_matches: stmt.optional_matches.iter().map(|om| {
-            mew_parser::OptionalMatch {
-                pattern: om.pattern.clone(),
-                where_clause: om.where_clause.as_ref().map(|e| substitute_params_in_expr(e, params)),
-                span: om.span,
-            }
-        }).collect(),
-        return_clause: mew_parser::ReturnClause {
-            distinct: stmt.return_clause.distinct,
-            projections: stmt.return_clause.projections.iter().map(|p| {
-                mew_parser::Projection {
-                    expr: substitute_params_in_expr(&p.expr, params),
-                    alias: p.alias.clone(),
-                    span: p.span,
-                }
-            }).collect(),
-            span: stmt.return_clause.span,
-        },
-        order_by: stmt.order_by.as_ref().map(|terms| {
-            terms.iter().map(|t| mew_parser::OrderTerm {
-                expr: substitute_params_in_expr(&t.expr, params),
-                direction: t.direction,
-                span: t.span,
-            }).collect()
-        }),
-        limit: stmt.limit,
-        offset: stmt.offset,
-        span: stmt.span,
-    }
-}
-
-fn substitute_params_in_match_mutate(stmt: &mew_parser::MatchMutateStmt, params: &HashMap<String, Value>) -> mew_parser::MatchMutateStmt {
-    mew_parser::MatchMutateStmt {
-        pattern: stmt.pattern.clone(),
-        where_clause: stmt.where_clause.as_ref().map(|e| substitute_params_in_expr(e, params)),
-        mutations: stmt.mutations.iter().map(|m| {
-            match m {
-                mew_parser::MutationAction::Set(s) => {
-                    mew_parser::MutationAction::Set(substitute_params_in_set(s, params))
-                }
-                mew_parser::MutationAction::Spawn(s) => {
-                    mew_parser::MutationAction::Spawn(substitute_params_in_spawn(s, params))
-                }
-                mew_parser::MutationAction::Link(l) => {
-                    mew_parser::MutationAction::Link(substitute_params_in_link(l, params))
-                }
-                _ => m.clone(),
-            }
-        }).collect(),
-        span: stmt.span,
-    }
-}
-
-fn substitute_params_in_spawn(stmt: &mew_parser::SpawnStmt, params: &HashMap<String, Value>) -> mew_parser::SpawnStmt {
-    mew_parser::SpawnStmt {
-        var: stmt.var.clone(),
-        type_name: stmt.type_name.clone(),
-        attrs: stmt.attrs.iter().map(|a| {
-            mew_parser::AttrAssignment {
-                name: a.name.clone(),
-                value: substitute_params_in_expr(&a.value, params),
-                span: a.span,
-            }
-        }).collect(),
-        returning: stmt.returning.clone(),
-        span: stmt.span,
-    }
-}
-
-fn substitute_params_in_set(stmt: &mew_parser::SetStmt, params: &HashMap<String, Value>) -> mew_parser::SetStmt {
-    mew_parser::SetStmt {
-        target: stmt.target.clone(),
-        assignments: stmt.assignments.iter().map(|a| {
-            mew_parser::AttrAssignment {
-                name: a.name.clone(),
-                value: substitute_params_in_expr(&a.value, params),
-                span: a.span,
-            }
-        }).collect(),
-        returning: stmt.returning.clone(),
-        span: stmt.span,
-    }
-}
-
-fn substitute_params_in_link(stmt: &mew_parser::LinkStmt, params: &HashMap<String, Value>) -> mew_parser::LinkStmt {
-    mew_parser::LinkStmt {
-        var: stmt.var.clone(),
-        edge_type: stmt.edge_type.clone(),
-        targets: stmt.targets.clone(),
-        attrs: stmt.attrs.iter().map(|a| {
-            mew_parser::AttrAssignment {
-                name: a.name.clone(),
-                value: substitute_params_in_expr(&a.value, params),
-                span: a.span,
-            }
-        }).collect(),
-        returning: stmt.returning.clone(),
-        if_not_exists: stmt.if_not_exists,
-        span: stmt.span,
-    }
-}
-
-fn substitute_params_in_expr(expr: &mew_parser::Expr, params: &HashMap<String, Value>) -> mew_parser::Expr {
-    match expr {
-        mew_parser::Expr::Param(name, span) => {
-            // Look up the parameter value and convert to a literal
-            if let Some(value) = params.get(name) {
-                value_to_expr(value, *span)
-            } else {
-                // Parameter not found, keep as is (will cause runtime error)
-                expr.clone()
-            }
-        }
-        mew_parser::Expr::BinaryOp(op, left, right, span) => {
-            mew_parser::Expr::BinaryOp(
-                *op,
-                Box::new(substitute_params_in_expr(left, params)),
-                Box::new(substitute_params_in_expr(right, params)),
-                *span,
-            )
-        }
-        mew_parser::Expr::UnaryOp(op, inner, span) => {
-            mew_parser::Expr::UnaryOp(*op, Box::new(substitute_params_in_expr(inner, params)), *span)
-        }
-        mew_parser::Expr::AttrAccess(inner, attr, span) => {
-            mew_parser::Expr::AttrAccess(Box::new(substitute_params_in_expr(inner, params)), attr.clone(), *span)
-        }
-        mew_parser::Expr::FnCall(fc) => {
-            mew_parser::Expr::FnCall(mew_parser::FnCall {
-                name: fc.name.clone(),
-                args: fc.args.iter().map(|a| substitute_params_in_expr(a, params)).collect(),
-                distinct: fc.distinct,
-                limit: fc.limit.clone(),
-                filter: fc.filter.as_ref().map(|f| Box::new(substitute_params_in_expr(f, params))),
-                span: fc.span,
-            })
-        }
-        mew_parser::Expr::List(items, span) => {
-            mew_parser::Expr::List(
-                items.iter().map(|i| substitute_params_in_expr(i, params)).collect(),
-                *span,
-            )
-        }
-        // Pass through other expressions unchanged
-        _ => expr.clone(),
-    }
-}
-
-fn value_to_expr(value: &Value, span: mew_parser::Span) -> mew_parser::Expr {
-    let literal_kind = match value {
-        Value::Null => mew_parser::LiteralKind::Null,
-        Value::Bool(b) => mew_parser::LiteralKind::Bool(*b),
-        Value::Int(i) => mew_parser::LiteralKind::Int(*i),
-        Value::Float(f) => mew_parser::LiteralKind::Float(*f),
-        Value::String(s) => mew_parser::LiteralKind::String(s.clone()),
-        Value::Duration(ms) => mew_parser::LiteralKind::Duration(*ms),
-        Value::Timestamp(ms) => mew_parser::LiteralKind::Timestamp(*ms),
-        Value::List(items) => {
-            // Convert list to Expr::List
-            let exprs: Vec<mew_parser::Expr> = items.iter().map(|v| value_to_expr(v, span)).collect();
-            return mew_parser::Expr::List(exprs, span);
-        }
-        // For other value types, convert to string representation
-        _ => mew_parser::LiteralKind::String(format!("{:?}", value)),
-    };
-    mew_parser::Expr::Literal(mew_parser::Literal { kind: literal_kind, span })
 }
 
 #[cfg(test)]
