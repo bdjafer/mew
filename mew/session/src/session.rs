@@ -94,6 +94,24 @@ impl<'r> Session<'r> {
         self.txn_state.in_transaction
     }
 
+    /// Reset transaction state (used after errors to clean up).
+    ///
+    /// This rolls back any pending changes and resets the transaction flag.
+    /// Note: This doesn't undo changes already applied to the graph - those
+    /// would need proper rollback support at the graph level.
+    pub fn reset_transaction(&mut self) {
+        if self.txn_state.in_transaction {
+            // Roll back created entities
+            for edge_id in self.txn_state.created_edges.drain(..) {
+                let _ = self.graph.delete_edge(edge_id);
+            }
+            for node_id in self.txn_state.created_nodes.drain(..) {
+                let _ = self.graph.delete_node(node_id);
+            }
+            self.txn_state.in_transaction = false;
+        }
+    }
+
     /// Execute a statement string.
     pub fn execute(&mut self, input: &str) -> SessionResult<StatementResult> {
         // Parse the input
