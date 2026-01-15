@@ -255,11 +255,11 @@ mod tests {
 
         match stmt {
             Stmt::Spawn(s) => {
-                assert_eq!(s.var, "t");
-                assert_eq!(s.type_name, "Task");
-                assert_eq!(s.attrs.len(), 2);
-                assert_eq!(s.attrs[0].name, "title");
-                assert_eq!(s.attrs[1].name, "priority");
+                assert_eq!(s.var(), "t");
+                assert_eq!(s.type_name(), "Task");
+                assert_eq!(s.attrs().len(), 2);
+                assert_eq!(s.attrs()[0].name, "title");
+                assert_eq!(s.attrs()[1].name, "priority");
             }
             _ => panic!("Expected SPAWN"),
         }
@@ -271,19 +271,19 @@ mod tests {
 
         match stmt {
             Stmt::Spawn(s) => {
-                assert_eq!(s.var, "t");
-                assert_eq!(s.type_name, "Timer");
-                assert_eq!(s.attrs.len(), 1);
-                assert_eq!(s.attrs[0].name, "timeout");
+                assert_eq!(s.var(), "t");
+                assert_eq!(s.type_name(), "Timer");
+                assert_eq!(s.attrs().len(), 1);
+                assert_eq!(s.attrs()[0].name, "timeout");
                 // Check that the value is a duration literal
-                match &s.attrs[0].value {
+                match &s.attrs()[0].value {
                     Expr::Literal(lit) => match &lit.kind {
                         LiteralKind::Duration(ms) => {
                             assert_eq!(*ms, 30_000); // 30 seconds = 30000 ms
                         }
                         _ => panic!("Expected Duration literal, got {:?}", lit.kind),
                     },
-                    _ => panic!("Expected Literal, got {:?}", s.attrs[0].value),
+                    _ => panic!("Expected Literal, got {:?}", s.attrs()[0].value),
                 }
             }
             _ => panic!("Expected SPAWN"),

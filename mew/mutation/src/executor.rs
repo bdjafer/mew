@@ -142,10 +142,10 @@ mod tests {
         let mut executor = MutationExecutor::new(&registry, &mut graph);
         let bindings = Bindings::new();
 
-        let stmt = SpawnStmt {
-            var: "t".to_string(),
-            type_name: "Task".to_string(),
-            attrs: vec![AttrAssignment {
+        let stmt = SpawnStmt::single(
+            "t".to_string(),
+            "Task".to_string(),
+            vec![AttrAssignment {
                 name: "title".to_string(),
                 value: Expr::Literal(Literal {
                     kind: LiteralKind::String("New Task".to_string()),
@@ -153,9 +153,9 @@ mod tests {
                 }),
                 span: Span::default(),
             }],
-            returning: None,
-            span: Span::default(),
-        };
+            None,
+            Span::default(),
+        );
 
         // WHEN
         let result = executor.execute_spawn(&stmt, &bindings);
@@ -174,13 +174,13 @@ mod tests {
         let mut executor = MutationExecutor::new(&registry, &mut graph);
         let bindings = Bindings::new();
 
-        let stmt = SpawnStmt {
-            var: "x".to_string(),
-            type_name: "Unknown".to_string(),
-            attrs: vec![],
-            returning: None,
-            span: Span::default(),
-        };
+        let stmt = SpawnStmt::single(
+            "x".to_string(),
+            "Unknown".to_string(),
+            vec![],
+            None,
+            Span::default(),
+        );
 
         // WHEN
         let result = executor.execute_spawn(&stmt, &bindings);
@@ -202,13 +202,13 @@ mod tests {
         let bindings = Bindings::new();
 
         // Missing required 'title' attribute
-        let stmt = SpawnStmt {
-            var: "t".to_string(),
-            type_name: "Task".to_string(),
-            attrs: vec![],
-            returning: None,
-            span: Span::default(),
-        };
+        let stmt = SpawnStmt::single(
+            "t".to_string(),
+            "Task".to_string(),
+            vec![],
+            None,
+            Span::default(),
+        );
 
         // WHEN
         let result = executor.execute_spawn(&stmt, &bindings);
@@ -230,10 +230,10 @@ mod tests {
         let bindings = Bindings::new();
 
         // Wrong type for 'priority' - should be Int
-        let stmt = SpawnStmt {
-            var: "t".to_string(),
-            type_name: "Task".to_string(),
-            attrs: vec![
+        let stmt = SpawnStmt::single(
+            "t".to_string(),
+            "Task".to_string(),
+            vec![
                 AttrAssignment {
                     name: "title".to_string(),
                     value: Expr::Literal(Literal {
@@ -251,9 +251,9 @@ mod tests {
                     span: Span::default(),
                 },
             ],
-            returning: None,
-            span: Span::default(),
-        };
+            None,
+            Span::default(),
+        );
 
         // WHEN
         let result = executor.execute_spawn(&stmt, &bindings);

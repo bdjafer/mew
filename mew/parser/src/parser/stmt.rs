@@ -421,7 +421,37 @@ impl Parser {
 
     fn parse_spawn(&mut self) -> ParseResult<SpawnStmt> {
         let start = self.expect(&TokenKind::Spawn)?.span;
+        let mut items = Vec::new();
 
+        // Parse first spawn item
+        items.push(self.parse_spawn_item(start)?);
+
+        // Parse additional chained spawn items (comma-separated)
+        // SPAWN a: T {...}, SPAWN b: U {...}, SPAWN c: V {...}
+        while self.check(&TokenKind::Comma) {
+            // Peek ahead to see if next is SPAWN
+            let next_pos = self.pos + 1;
+            if next_pos < self.tokens.len() && self.tokens[next_pos].kind == TokenKind::Spawn {
+                self.advance(); // consume comma
+                let item_start = self.expect(&TokenKind::Spawn)?.span;
+                items.push(self.parse_spawn_item(item_start)?);
+            } else {
+                break;
+            }
+        }
+
+        let returning = self.parse_optional_returning()?;
+        let span = self.span_from(start);
+
+        Ok(SpawnStmt {
+            items,
+            returning,
+            span,
+        })
+    }
+
+    /// Parse a single spawn item (without the SPAWN keyword, already consumed).
+    fn parse_spawn_item(&mut self, start: Span) -> ParseResult<SpawnItem> {
         let first = self.expect_ident()?;
 
         // Two syntaxes:
@@ -461,14 +491,12 @@ impl Parser {
             var
         };
 
-        let returning = self.parse_optional_returning()?;
         let span = self.span_from(start);
 
-        Ok(SpawnStmt {
+        Ok(SpawnItem {
             var,
             type_name,
             attrs,
-            returning,
             span,
         })
     }
@@ -520,13 +548,32 @@ impl Parser {
             self.advance();
             Ok(ReturningClause::All)
         } else {
-            let mut fields = Vec::new();
-            fields.push(self.expect_ident()?);
-            while self.check(&TokenKind::Comma) {
+            // Parse first field (may be simple or qualified)
+            let first = self.expect_ident()?;
+
+            // Check if it's a qualified name (var.field)
+            if self.check(&TokenKind::Dot) {
                 self.advance();
-                fields.push(self.expect_ident()?);
+                let first_field = self.expect_ident()?;
+                let mut qualified_fields = vec![(first, first_field)];
+
+                while self.check(&TokenKind::Comma) {
+                    self.advance();
+                    let var = self.expect_ident()?;
+                    self.expect(&TokenKind::Dot)?;
+                    let field = self.expect_ident()?;
+                    qualified_fields.push((var, field));
+                }
+                Ok(ReturningClause::QualifiedFields(qualified_fields))
+            } else {
+                // Simple field names
+                let mut fields = vec![first];
+                while self.check(&TokenKind::Comma) {
+                    self.advance();
+                    fields.push(self.expect_ident()?);
+                }
+                Ok(ReturningClause::Fields(fields))
             }
-            Ok(ReturningClause::Fields(fields))
         }
     }
 

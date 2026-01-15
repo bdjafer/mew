@@ -240,38 +240,46 @@ impl<'r> Analyzer<'r> {
 
     /// Analyze a SPAWN statement.
     fn analyze_spawn(&mut self, stmt: &mew_parser::SpawnStmt) -> AnalyzerResult<Type> {
-        // Resolve type name
-        let type_id = self
-            .registry
-            .get_type_id(&stmt.type_name)
-            .ok_or_else(|| AnalyzerError::unknown_type(&stmt.type_name, stmt.span))?;
+        let mut last_type_id = None;
 
-        let type_def = self.registry.get_type(type_id).unwrap();
+        // Analyze each spawn item
+        for item in &stmt.items {
+            // Resolve type name
+            let type_id = self
+                .registry
+                .get_type_id(&item.type_name)
+                .ok_or_else(|| AnalyzerError::unknown_type(&item.type_name, item.span))?;
 
-        // Check that type is not abstract
-        if type_def.is_abstract {
-            return Err(AnalyzerError::TypeMismatch {
-                expected: "concrete type".to_string(),
-                actual: format!("abstract type '{}'", stmt.type_name),
-                line: stmt.span.line,
-                column: stmt.span.column,
-            });
-        }
+            let type_def = self.registry.get_type(type_id).unwrap();
 
-        // Analyze attribute assignments
-        for attr in &stmt.attrs {
-            self.analyze_attr_assignment(attr, &stmt.type_name)?;
-        }
-
-        // Bind the variable
-        if !stmt.var.is_empty() {
-            let binding = VarBinding::new(&stmt.var, Type::NodeRef(type_id));
-            if !self.scope.define(binding) {
-                return Err(AnalyzerError::duplicate_variable(&stmt.var, stmt.span));
+            // Check that type is not abstract
+            if type_def.is_abstract {
+                return Err(AnalyzerError::TypeMismatch {
+                    expected: "concrete type".to_string(),
+                    actual: format!("abstract type '{}'", item.type_name),
+                    line: item.span.line,
+                    column: item.span.column,
+                });
             }
+
+            // Analyze attribute assignments
+            for attr in &item.attrs {
+                self.analyze_attr_assignment(attr, &item.type_name)?;
+            }
+
+            // Bind the variable
+            if !item.var.is_empty() {
+                let binding = VarBinding::new(&item.var, Type::NodeRef(type_id));
+                if !self.scope.define(binding) {
+                    return Err(AnalyzerError::duplicate_variable(&item.var, item.span));
+                }
+            }
+
+            last_type_id = Some(type_id);
         }
 
-        Ok(Type::NodeRef(type_id))
+        // Return type of last item (for single spawns, this is the only type)
+        Ok(Type::NodeRef(last_type_id.unwrap_or(mew_core::TypeId::new(0))))
     }
 
     /// Analyze an attribute assignment.

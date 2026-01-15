@@ -319,9 +319,11 @@ impl<'r> Session<'r> {
                         let summary = self.execute_spawn(spawn_stmt)?;
                         nodes_created += summary.nodes_created;
 
-                        // Add spawned node to local bindings
-                        if let Some(entity_id) = self.bindings.get(&spawn_stmt.var) {
-                            local_bindings.insert(spawn_stmt.var.clone(), *entity_id);
+                        // Add spawned nodes to local bindings (handles both single and chained)
+                        for item in &spawn_stmt.items {
+                            if let Some(entity_id) = self.bindings.get(&item.var) {
+                                local_bindings.insert(item.var.clone(), *entity_id);
+                            }
                         }
                     }
                     MutationAction::Link(link_stmt) => {
@@ -448,20 +450,23 @@ impl<'r> Session<'r> {
                 let summary = self.execute_spawn(spawn_stmt)?;
                 *nodes_created += summary.nodes_created;
 
+                // Get the variable name for inline spawn (first item)
+                let var_name = spawn_stmt.var();
+
                 // Get the node ID from session bindings (spawn stores it with var name)
                 let entity_id = self
                     .bindings
-                    .get(&spawn_stmt.var)
+                    .get(var_name)
                     .cloned()
                     .ok_or_else(|| {
                         SessionError::invalid_statement_type(format!(
                             "inline spawn did not create binding for '{}'",
-                            spawn_stmt.var
+                            var_name
                         ))
                     })?;
 
                 // Also add to local bindings for MATCH context
-                bindings.insert(spawn_stmt.var.clone(), entity_id);
+                bindings.insert(var_name.to_string(), entity_id);
                 Ok(entity_id)
             }
             _ => self.resolve_target_ref_with_bindings(target_ref, bindings),
@@ -579,15 +584,19 @@ impl<'r> Session<'r> {
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_spawn(stmt, &pattern_bindings)?;
 
-        // Store the created node ID with the variable name and count it
-        let nodes_created = if let Some(node_id) = result.created_node() {
-            self.bindings.insert(stmt.var.clone(), node_id.into());
-            // Track for transaction rollback
-            self.txn_state.track_created_node(node_id);
-            1
-        } else {
-            0
-        };
+        // Handle created nodes - for chained spawns, bind each variable
+        let mut nodes_created = 0;
+        if let MutationOutcome::Created(ref created) = result {
+            // Bind each spawn item's variable to its created node
+            for (i, item) in stmt.items.iter().enumerate() {
+                if let Some(&node_id) = created.node_ids.get(i) {
+                    self.bindings.insert(item.var.clone(), node_id.into());
+                    // Track for transaction rollback
+                    self.txn_state.track_created_node(node_id);
+                    nodes_created += 1;
+                }
+            }
+        }
 
         let edges_created = if let Some(edge_id) = result.created_edge() {
             // Track for transaction rollback
@@ -714,15 +723,18 @@ impl<'r> Session<'r> {
                 let summary = self.execute_spawn(spawn_stmt)?;
                 *nodes_created += summary.nodes_created;
 
+                // Get the variable name for inline spawn (first item)
+                let var_name = spawn_stmt.var();
+
                 // Get the node ID from bindings (spawn stores it with var name)
                 let entity_id = self
                     .bindings
-                    .get(&spawn_stmt.var)
+                    .get(var_name)
                     .cloned()
                     .ok_or_else(|| {
                         SessionError::invalid_statement_type(format!(
                             "inline spawn did not create binding for '{}'",
-                            spawn_stmt.var
+                            var_name
                         ))
                     })?;
                 Ok(entity_id)

@@ -186,14 +186,57 @@ pub enum OrderDirection {
 
 // ==================== SPAWN ====================
 
-/// SPAWN statement for creating nodes.
+/// A single spawn item within a spawn statement.
+/// For chained spawns like: SPAWN a: T {...}, SPAWN b: U {...} RETURNING a, b
 #[derive(Debug, Clone, PartialEq)]
-pub struct SpawnStmt {
+pub struct SpawnItem {
     pub var: String,
     pub type_name: String,
     pub attrs: Vec<AttrAssignment>,
+    pub span: Span,
+}
+
+/// SPAWN statement for creating nodes.
+/// Supports both single and chained spawns:
+/// - Single: SPAWN t: Task { ... } [RETURNING ...]
+/// - Chained: SPAWN a: T {...}, SPAWN b: U {...} RETURNING a, b
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpawnStmt {
+    pub items: Vec<SpawnItem>,
     pub returning: Option<ReturningClause>,
     pub span: Span,
+}
+
+impl SpawnStmt {
+    /// Helper to create a single-item spawn statement (most common case).
+    pub fn single(var: String, type_name: String, attrs: Vec<AttrAssignment>, returning: Option<ReturningClause>, span: Span) -> Self {
+        Self {
+            items: vec![SpawnItem { var, type_name, attrs, span }],
+            returning,
+            span,
+        }
+    }
+
+    /// Get the first (and typically only) spawn item.
+    /// Returns None if there are no items.
+    pub fn first(&self) -> Option<&SpawnItem> {
+        self.items.first()
+    }
+
+    /// Get var from single-item spawn (for backward compatibility).
+    pub fn var(&self) -> &str {
+        self.items.first().map(|i| i.var.as_str()).unwrap_or("")
+    }
+
+    /// Get type_name from single-item spawn (for backward compatibility).
+    pub fn type_name(&self) -> &str {
+        self.items.first().map(|i| i.type_name.as_str()).unwrap_or("")
+    }
+
+    /// Get attrs from single-item spawn (for backward compatibility).
+    pub fn attrs(&self) -> &[AttrAssignment] {
+        self.items.first().map(|i| i.attrs.as_slice()).unwrap_or(&[])
+    }
 }
 
 /// Attribute assignment: name = value
@@ -209,7 +252,10 @@ pub struct AttrAssignment {
 pub enum ReturningClause {
     Id,
     All,
+    /// Simple field names (e.g., RETURNING name, email)
     Fields(Vec<String>),
+    /// Qualified field names (e.g., RETURNING t.name, t.email)
+    QualifiedFields(Vec<(String, String)>),
 }
 
 // ==================== KILL ====================
