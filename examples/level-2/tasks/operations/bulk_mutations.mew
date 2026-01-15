@@ -181,12 +181,12 @@ RETURN count(st) AS subtask_count
 --# test_bulk_set_returning
 MATCH t: Task
 WHERE t.title IN ["Bulk 1", "Bulk 2", "Bulk 3"]
-SET t { status = "archived" }
+SET t { status = "cancelled" }
 RETURNING t.title, t.status
 ORDER BY t.title
 --@ expect:ok
 --@ expect:rows = 3
---@ expect:has_row { title = "Bulk 1", status = "archived" }
+--@ expect:has_row { title = "Bulk 1", status = "cancelled" }
 
 -- ---------------------------------------------------------------------------
 -- CONDITIONAL BULK OPERATIONS

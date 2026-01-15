@@ -82,11 +82,17 @@ pub struct OptionalMatch {
 
 /// MATCH followed by mutations (compound statement).
 /// E.g., MATCH a: T, b: U WHERE ... LINK edge(a, b)
+/// Also supports RETURNING and ORDER BY for queries that return modified data:
+/// E.g., MATCH t: Task WHERE ... SET t { ... } RETURNING t.title ORDER BY t.title
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchMutateStmt {
     pub pattern: Vec<PatternElem>,
     pub where_clause: Option<Expr>,
     pub mutations: Vec<MutationAction>,
+    /// Optional RETURNING clause (projections to return after mutation)
+    pub returning: Option<Vec<Projection>>,
+    /// Optional ORDER BY clause
+    pub order_by: Option<Vec<OrderTerm>>,
     pub span: Span,
 }
 
