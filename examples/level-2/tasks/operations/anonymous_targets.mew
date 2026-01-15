@@ -66,7 +66,8 @@ LINK blocks(a, b)
 
 --# test_tasks_with_any_tag
 MATCH t: Task, tagged(t, _)
-RETURN t.title
+WHERE t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
+RETURN DISTINCT t.title
 ORDER BY t.title
 --@ expect:rows = 2
 --@ expect:has_row { title = "Alpha Task" }
@@ -74,6 +75,7 @@ ORDER BY t.title
 
 --# test_tasks_with_any_tag_distinct
 MATCH t: Task, tagged(t, _)
+WHERE t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
 RETURN DISTINCT t.title
 ORDER BY t.title
 --@ expect:rows = 2
@@ -86,6 +88,7 @@ ORDER BY t.title
 
 --# test_tasks_that_block_anything
 MATCH blocker: Task, blocks(blocker, _)
+WHERE blocker.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
 RETURN blocker.title
 --@ expect:rows = 1
 --@ expect:has_row { title = "Alpha Task" }
@@ -96,6 +99,7 @@ RETURN blocker.title
 
 --# test_tasks_blocked_by_anything
 MATCH blocked: Task, blocks(_, blocked)
+WHERE blocked.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
 RETURN blocked.title
 --@ expect:rows = 1
 --@ expect:has_row { title = "Beta Task" }
@@ -106,6 +110,7 @@ RETURN blocked.title
 
 --# test_tags_used_by_any_task
 MATCH tag: Tag, tagged(_, tag)
+WHERE tag.name IN ["urgent-anon", "review-anon"]
 RETURN DISTINCT tag.name
 ORDER BY tag.name
 --@ expect:rows = 2
@@ -171,7 +176,8 @@ RETURN t.title
 
 --# test_tasks_blocking_but_not_tagged_with_review
 MATCH t: Task, blocks(t, _)
-WHERE NOT EXISTS(tag: Tag, tagged(t, tag) AND tag.name = "review-anon")
+WHERE NOT EXISTS(tag: Tag, tagged(t, tag) WHERE tag.name = "review-anon")
+AND t.title IN ["Alpha Task", "Beta Task", "Gamma Task", "Orphan Task"]
 RETURN t.title
 --@ expect:rows = 1
 --@ expect:has_row { title = "Alpha Task" }

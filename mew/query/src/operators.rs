@@ -220,22 +220,43 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
         let mut results = Vec::new();
 
         for (bindings, _) in input_results {
-            // Get the source node from the first variable
             if from_vars.is_empty() {
                 results.push((bindings, Vec::new()));
                 continue;
             }
 
-            let source_binding = bindings.get(&from_vars[0]);
-            let source_id = source_binding.and_then(|b| b.as_node());
+            // Find the first non-wildcard variable and its position
+            let mut bound_idx: Option<usize> = None;
+            let mut bound_id: Option<mew_core::NodeId> = None;
+            for (i, var) in from_vars.iter().enumerate() {
+                if var != "_" {
+                    if let Some(binding) = bindings.get(var) {
+                        if let Some(node_id) = binding.as_node() {
+                            bound_idx = Some(i);
+                            bound_id = Some(node_id);
+                            break;
+                        }
+                    }
+                }
+            }
 
-            if let Some(source_id) = source_id {
-                // Find matching edges
-                for edge_id in self.graph.edges_from(source_id, Some(edge_type_id)) {
+            if let (Some(idx), Some(node_id)) = (bound_idx, bound_id) {
+                // Use edges_from if bound node is at position 0 (source)
+                // Use edges_to if bound node is at position > 0 (target)
+                let edge_ids: Vec<_> = if idx == 0 {
+                    self.graph.edges_from(node_id, Some(edge_type_id)).collect()
+                } else {
+                    self.graph.edges_to(node_id, Some(edge_type_id)).collect()
+                };
+
+                for edge_id in edge_ids {
                     if let Some(edge) = self.graph.get_edge(edge_id) {
-                        // Check that all target variables match
+                        // Check that all non-wildcard target variables match
                         let mut all_match = true;
                         for (i, var) in from_vars.iter().enumerate() {
+                            if var == "_" {
+                                continue; // Wildcard matches anything
+                            }
                             if let Some(binding) = bindings.get(var) {
                                 if let Some(expected_id) = binding.as_node() {
                                     if i < edge.targets.len()

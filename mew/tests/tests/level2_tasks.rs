@@ -56,8 +56,8 @@ mod unlink {
             .step("test_verify_subtask_unlinked", |a| a.scalar("link_count", 0i64))
             // Recreate some tags
             .step("test_recreate_some_tags", |a| a.linked(2))
-            // Unlink all tags from tag
-            .step("test_unlink_all_tags_from_tag", |a| a.unlinked(2))
+            // Unlink all tags from tag (t1 + t2 recreated + t3 never unlinked = 3)
+            .step("test_unlink_all_tags_from_tag", |a| a.unlinked(3))
             // Verify all unlinked = 0
             .step("test_verify_all_unlinked", |a| a.scalar("remaining", 0i64))
             // Tasks still exist = 3

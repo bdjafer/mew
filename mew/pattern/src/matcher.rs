@@ -159,15 +159,18 @@ impl<'r, 'g> Matcher<'r, 'g> {
                     }
                 }
 
-                // Find the first non-wildcard node to use as source for edge lookup
+                // Find the first non-wildcard node to use for edge lookup
                 let first_bound_idx = target_ids.iter().position(|id| id.is_some());
 
                 if let Some(idx) = first_bound_idx {
-                    let source_id = target_ids[idx].unwrap();
-                    let edges: Vec<_> = self
-                        .graph
-                        .edges_from(source_id, Some(*edge_type_id))
-                        .collect();
+                    let bound_id = target_ids[idx].unwrap();
+                    // If bound node is at position 0, use edges_from (it's the source)
+                    // Otherwise use edges_to (it's a target)
+                    let edges: Vec<_> = if idx == 0 {
+                        self.graph.edges_from(bound_id, Some(*edge_type_id)).collect()
+                    } else {
+                        self.graph.edges_to(bound_id, Some(*edge_type_id)).collect()
+                    };
 
                     for edge_id in edges {
                         if let Some(edge) = self.graph.get_edge(edge_id) {
