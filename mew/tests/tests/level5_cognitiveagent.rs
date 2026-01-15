@@ -45,17 +45,17 @@ mod queries {
             .operations("level-5/cognitiveagent/operations/queries.mew")
             .step("count_all_agents", |a| a.value(2))
             .step("count_all_beliefs", |a| a.value(4))
-            // Note: only base Goal types counted, not SubGoal subtypes
-            .step("count_all_goals", |a| a.value(3))
+            // Polymorphic matching: includes Goal + SubGoal instances (3 Goals + 1 SubGoal)
+            .step("count_all_goals", |a| a.value(4))
             .step("count_all_concepts", |a| a.value(2))
             .step("query_active_beliefs", |a| a.rows(3))
-            // 2 active goals (primary, secondary)
-            .step("query_active_goals", |a| a.rows(2))
-            // priority >= 0.8: primary=0.95, achieved=1.0
-            .step("query_high_priority_goals", |a| a.rows(2))
+            // 3 active goals: primary, secondary, navigate_subgoal (polymorphic matching)
+            .step("query_active_goals", |a| a.rows(3))
+            // priority >= 0.8: primary=0.95, achieved=1.0, navigate_subgoal=0.8
+            .step("query_high_priority_goals", |a| a.rows(3))
             // confidence >= 0.9: loc_belief=1.0, goal_belief=0.9
             .step("query_high_confidence_beliefs", |a| a.rows(2))
-            .step("query_all_goals", |a| a.rows(3))
+            .step("query_all_goals", |a| a.rows(4))
             .step("query_concepts", |a| a.rows(2))
             .step("query_plans", |a| a.rows(2))
             .step("query_selfmodels", |a| a.rows(1))

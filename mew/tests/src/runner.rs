@@ -76,6 +76,13 @@ impl<'s> Runner<'s> {
             // Execute the statement
             let result = session.execute_all(&statement);
 
+            // If the step failed and there's an active transaction, clean it up.
+            // This is important for tests that expect errors within transactions,
+            // so the next step can start fresh without "transaction already active".
+            if result.is_err() && session.in_transaction() {
+                session.reset_transaction();
+            }
+
             // Convert to the format expected by assertions
             let result_for_assertion = result.map_err(|e| e.to_string());
 

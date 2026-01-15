@@ -500,6 +500,8 @@ pub struct FnCall {
     pub distinct: bool, // For count(DISTINCT ...) style calls
     /// For COLLECT [limit: N] syntax
     pub limit: Option<CollectLimit>,
+    /// For filtered aggregations: COUNT(t WHERE t.status = "done")
+    pub filter: Option<Box<Expr>>,
     pub span: Span,
 }
 

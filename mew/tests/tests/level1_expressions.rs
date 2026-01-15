@@ -356,11 +356,11 @@ mod transactions {
             .step("verify_nested_links", |a| a.scalar("link_count", 1i64))
             // Isolation level tests
             .step("read_committed_transaction", |a| a.created(1))
-            .step("verify_read_committed", |a| a.scalar("value", 42i64))
+            .step("verify_read_committed", |a| a.scalar("r.value", 42i64))
             .step("serializable_transaction", |a| a.created(1).modified(1))
             .step("verify_serializable", |a| a.rows(1))
-            // Final count
-            .step("final_txn_record_count", |a| a.scalar("total", 10i64))
+            // Final count: 12 TxnRecord spawns - 1 rolled back (r5) = 11
+            .step("final_txn_record_count", |a| a.scalar("total", 11i64))
     }
 
     #[test]
