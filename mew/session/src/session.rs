@@ -5,7 +5,7 @@ use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::{MutationExecutor, MutationOutcome};
 use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, WalkStmt};
-use mew_pattern::{target, Bindings};
+use mew_pattern::{target, Binding, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
 use std::collections::HashMap;
@@ -359,7 +359,9 @@ impl<'r> Session<'r> {
                     MutationAction::Set(set_stmt) => {
                         let target_id =
                             self.resolve_target_with_bindings(&set_stmt.target, &local_bindings)?;
-                        let pb = Bindings::new();
+
+                        // Convert local_bindings to pattern Bindings for expression evaluation
+                        let pb = to_pattern_bindings(&local_bindings);
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
 
                         use mew_mutation::MutationOutcome;
@@ -924,6 +926,22 @@ impl<'r> Session<'r> {
         }
     }
 
+}
+
+/// Convert a HashMap of entity bindings to pattern Bindings for expression evaluation.
+fn to_pattern_bindings(bindings: &HashMap<String, EntityId>) -> Bindings {
+    let mut pattern_bindings = Bindings::new();
+    for (name, entity) in bindings {
+        match entity {
+            EntityId::Node(node_id) => {
+                pattern_bindings.insert(name.clone(), Binding::Node(*node_id));
+            }
+            EntityId::Edge(edge_id) => {
+                pattern_bindings.insert(name.clone(), Binding::Edge(*edge_id));
+            }
+        }
+    }
+    pattern_bindings
 }
 
 /// Session manager for handling multiple sessions.
