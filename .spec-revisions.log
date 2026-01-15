@@ -70,3 +70,30 @@ Resolution:
 
 Propagated to: specs/specification/1_LANGUAGE.md (complete)
 ---
+---
+Date: 2026-01-15
+Document: specs/specification/5_MUTATIONS.md
+Section: 5.10.6 Prepared Statements (REMOVED)
+Problem: PREPARE/EXECUTE/DROP PREPARED feature added complexity (~450 lines) for marginal value
+
+BEFORE:
+- Section 5.10.6 documented PREPARE/EXECUTE/DROP PREPARED syntax
+- Implementation added parser, lexer, analyzer, session support
+- Tests in parameterized_queries.mew
+
+JUSTIFICATION FOR REMOVAL:
+- $param syntax already provides parameterization without PREPARE
+- No actual plan caching implemented (just stored AST in session HashMap)
+- Session-scoped only, limiting practical utility
+- ~450 lines of code for feature that saves typing repeated queries
+- The spec claimed "Plan caching for performance" but implementation didn't deliver this
+
+Resolution:
+- Removed section 5.10.6 "Prepared Statements" entirely
+- Renumbered 5.10.7 "Parameter in Bulk Operations" → 5.10.6
+- Renumbered 5.10.8 "Security" → 5.10.7
+- Reverted parser/lexer/analyzer/session implementation
+- Removed PREPARE/EXECUTE tests from parameterized_queries.mew
+
+Propagated to: specs/specification/5_MUTATIONS.md (complete), code reverted
+---
