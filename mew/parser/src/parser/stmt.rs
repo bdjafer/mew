@@ -452,6 +452,21 @@ impl Parser {
         })
     }
 
+    /// Parse a single SPAWN statement without chaining.
+    /// Used for inline spawns in LINK targets where comma separates targets, not spawns.
+    fn parse_single_spawn(&mut self) -> ParseResult<SpawnStmt> {
+        let start = self.expect(&TokenKind::Spawn)?.span;
+        let item = self.parse_spawn_item(start)?;
+        let span = self.span_from(start);
+
+        // Note: No RETURNING clause for inline spawns in LINK targets
+        Ok(SpawnStmt {
+            items: vec![item],
+            returning: None,
+            span,
+        })
+    }
+
     /// Parse a single spawn item (without the SPAWN keyword, already consumed).
     fn parse_spawn_item(&mut self, start: Span) -> ParseResult<SpawnItem> {
         let first = self.expect_ident()?;
@@ -727,8 +742,9 @@ impl Parser {
             self.expect(&TokenKind::RBrace)?;
             Ok(TargetRef::Pattern(Box::new(pattern)))
         } else if self.check(&TokenKind::Spawn) {
-            // Inline SPAWN in LINK target
-            let spawn = self.parse_spawn()?;
+            // Inline SPAWN in LINK target - parse single spawn without chaining
+            // since comma in LINK separates targets, not spawn items
+            let spawn = self.parse_single_spawn()?;
             Ok(TargetRef::InlineSpawn(Box::new(spawn)))
         } else {
             let var = self.expect_ident()?;
