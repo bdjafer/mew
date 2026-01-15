@@ -911,6 +911,7 @@ impl<'r> Session<'r> {
             }
         }
     }
+
 }
 
 /// Session manager for handling multiple sessions.

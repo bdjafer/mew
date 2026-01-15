@@ -120,7 +120,8 @@ impl Parser {
         // These parse to function calls: `a STARTS WITH b` -> starts_with(a, b)
         let string_op = if self.check_ident("STARTS") {
             self.advance();
-            if !self.check_ident("WITH") {
+            // WITH can be either the keyword or an identifier (for backwards compatibility)
+            if !self.check_ident("WITH") && !self.check(&TokenKind::With) {
                 return Err(crate::ParseError::unexpected_token(
                     self.peek().span,
                     "WITH",
@@ -131,7 +132,8 @@ impl Parser {
             Some("starts_with")
         } else if self.check_ident("ENDS") {
             self.advance();
-            if !self.check_ident("WITH") {
+            // WITH can be either the keyword or an identifier (for backwards compatibility)
+            if !self.check_ident("WITH") && !self.check(&TokenKind::With) {
                 return Err(crate::ParseError::unexpected_token(
                     self.peek().span,
                     "WITH",

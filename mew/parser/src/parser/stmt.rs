@@ -87,9 +87,10 @@ impl Parser {
     /// - MATCH ... LINK/SET/KILL/UNLINK ... (compound mutation)
     /// - MATCH ... WALK ... (compound walk)
     /// Also supports multiple MATCH clauses that combine patterns.
+    /// Pattern: MATCH p1 [WHERE ...] [MATCH p2]* [OPTIONAL MATCH ...]* (RETURN|mutation|WALK)
     fn parse_match_or_mutate(&mut self) -> ParseResult<Stmt> {
         let start = self.expect(&TokenKind::Match)?.span;
-        let pattern = self.parse_chained_patterns()?;
+        let mut pattern = self.parse_chained_patterns()?;
 
         // Parse optional WHERE
         let where_clause = if self.check(&TokenKind::Where) {
@@ -98,6 +99,13 @@ impl Parser {
         } else {
             None
         };
+
+        // Parse additional MATCH clauses after WHERE (extends the pattern)
+        // This allows patterns like: MATCH a WHERE ... MATCH b, edge(a,b) UNLINK ...
+        while self.check(&TokenKind::Match) {
+            self.advance();
+            pattern.extend(self.parse_pattern()?);
+        }
 
         // Parse OPTIONAL MATCH clauses
         let optional_matches = self.parse_optional_matches()?;
@@ -893,4 +901,5 @@ impl Parser {
             span,
         })
     }
+
 }

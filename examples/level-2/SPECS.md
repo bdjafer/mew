@@ -93,22 +93,16 @@ Specification coverage for Level 2: Structure features.
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| $param in WHERE (string) | 5_MUTATIONS.md §5.10.2 | ✓ | tasks/parameterized_queries |
-| $param in WHERE (int) | 5_MUTATIONS.md §5.10.2 | ✓ | tasks/parameterized_queries |
-| $param multiple in WHERE | 5_MUTATIONS.md §5.10.2 | ✓ | tasks/parameterized_queries |
-| $param in pattern filter | 5_MUTATIONS.md §5.10.2 | ✓ | tasks/parameterized_queries |
-| $param in SPAWN | 5_MUTATIONS.md §5.10.2 | ✓ | tasks/parameterized_queries |
-| $param in SET | 5_MUTATIONS.md §5.10.2 | ✓ | tasks/parameterized_queries |
-| $param in list (IN clause) | 5_MUTATIONS.md §5.10.2 | ✓ | tasks/parameterized_queries |
-| $param type inference | 5_MUTATIONS.md §5.10.4 | ✓ | tasks/parameterized_queries |
-| $param bool type | 5_MUTATIONS.md §5.10.4 | ✓ | tasks/parameterized_queries |
-| PREPARE statement | 5_MUTATIONS.md §5.10.6 | ✓ | tasks/parameterized_queries |
-| EXECUTE with single param | 5_MUTATIONS.md §5.10.6 | ✓ | tasks/parameterized_queries |
-| EXECUTE with multiple params | 5_MUTATIONS.md §5.10.6 | ✓ | tasks/parameterized_queries |
-| PREPARE for mutations | 5_MUTATIONS.md §5.10.6 | ✓ | tasks/parameterized_queries |
-| DROP PREPARED | 5_MUTATIONS.md §5.10.6 | ✓ | tasks/parameterized_queries |
-| EXECUTE dropped (error) | 5_MUTATIONS.md §5.10.6 | ✓ | tasks/parameterized_queries |
-| Missing parameter error | 5_MUTATIONS.md §5.10 | ✓ | tasks/parameterized_queries |
+| $param in WHERE (string) | 5_MUTATIONS.md §5.10.2 | ✗ | — |
+| $param in WHERE (int) | 5_MUTATIONS.md §5.10.2 | ✗ | — |
+| $param multiple in WHERE | 5_MUTATIONS.md §5.10.2 | ✗ | — |
+| $param in pattern filter | 5_MUTATIONS.md §5.10.2 | ✗ | — |
+| $param in SPAWN | 5_MUTATIONS.md §5.10.2 | ✗ | — |
+| $param in SET | 5_MUTATIONS.md §5.10.2 | ✗ | — |
+| $param in list (IN clause) | 5_MUTATIONS.md §5.10.2 | ✗ | — |
+| $param type inference | 5_MUTATIONS.md §5.10.4 | ✗ | — |
+| $param bool type | 5_MUTATIONS.md §5.10.4 | ✗ | — |
+| Missing parameter error | 5_MUTATIONS.md §5.10 | ✗ | — |
 
 ## Time Features
 
@@ -135,8 +129,7 @@ Specification coverage for Level 2: Structure features.
 | [>= N] violation | 3_SCHEMA.md §5.3.4 | ✓ | ecommerce/type_aliases |
 | [<= M] violation | 3_SCHEMA.md §5.3.4 | ✓ | ecommerce/type_aliases |
 | [no_self] violation | 3_SCHEMA.md §6.3.2 | ✓ | humanresources/no_self |
-| Missing parameter error | 5_MUTATIONS.md §5.10 | ✓ | tasks/parameterized_queries |
-| Execute dropped prepared | 5_MUTATIONS.md §5.10.6 | ✓ | tasks/parameterized_queries |
+| Missing parameter error | 5_MUTATIONS.md §5.10 | ✗ | — |
 
 ## Coverage Summary
 

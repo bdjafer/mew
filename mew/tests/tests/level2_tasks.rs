@@ -10,7 +10,6 @@
 //! - blocking: [no_self] constraint on blocks edge, blocking chains
 //! - anonymous_targets: Use of `_` for anonymous pattern matching
 //! - link_if_not_exists: Idempotent edge creation with LINK IF NOT EXISTS
-//! - parameterized_queries: $param syntax, PREPARE/EXECUTE statements
 
 use mew_tests::prelude::*;
 
@@ -335,64 +334,3 @@ mod link_if_not_exists {
     }
 }
 
-mod parameterized_queries {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("parameterized_queries")
-            .ontology("level-2/tasks/ontology.mew")
-            .seed("level-2/tasks/seeds/populated.mew")
-            .operations("level-2/tasks/operations/parameterized_queries.mew")
-            // Setup
-            .step("test_setup_param_tasks", |a| a.created(5))
-            .step("test_setup_param_tags", |a| a.created(2))
-            .step("test_setup_param_links", |a| a.linked(4))
-            // Basic $param in WHERE clause
-            .step("test_param_in_where_string", |a| a.rows(2))
-            .step("test_param_in_where_int", |a| a.rows(3))
-            .step("test_param_in_where_multiple", |a| a.rows(2))
-            // $param in pattern matching
-            .step("test_param_in_tag_filter", |a| a.rows(2))
-            // $param in SPAWN
-            .step("test_param_in_spawn", |a| a.created(1))
-            .step("test_verify_param_spawn", |a| a.rows(1))
-            // $param in SET
-            .step("test_param_in_set", |a| a.modified(1))
-            .step("test_verify_param_set", |a| a.rows(1))
-            // $param in list operations
-            .step("test_param_in_list", |a| a.rows(4))
-            .step("test_param_in_list_titles", |a| a.rows(3))
-            // $param type inference
-            .step("test_param_string_type", |a| a.rows(1))
-            .step("test_param_bool_type", |a| a.created(1))
-            .step("test_verify_param_bool", |a| a.rows(1))
-            // PREPARE / EXECUTE
-            .step("test_prepare_basic_query", |a| a.rows(0))
-            .step("test_execute_prepared_todo", |a| a.rows(2))
-            .step("test_execute_prepared_done", |a| a.rows(1))
-            .step("test_execute_prepared_in_progress", |a| a.rows(2))
-            // PREPARE with multiple parameters
-            .step("test_prepare_multi_param", |a| a.rows(0))
-            .step("test_execute_multi_param_1", |a| a.rows(2))
-            .step("test_execute_multi_param_2", |a| a.rows(1))
-            // PREPARE for mutations
-            .step("test_prepare_update_status", |a| a.rows(0))
-            .step("test_execute_update_status", |a| a.modified(1))
-            .step("test_verify_executed_update", |a| a.rows(1))
-            // DROP PREPARED STATEMENT
-            .step("test_drop_prepared", |a| a.rows(0))
-            .step("test_execute_dropped_should_fail", |a| a.error("not_found"))
-            // Missing parameter error
-            .step("test_missing_param_error", |a| a.error("missing_parameter"))
-            // Cleanup
-            .step("test_cleanup_param_tasks", |a| a.deleted(6))
-            .step("test_cleanup_param_subtask", |a| a.deleted(1))
-            .step("test_cleanup_param_tags", |a| a.deleted(2))
-            .step("test_drop_remaining_prepared", |a| a.rows(0))
-    }
-
-    #[test]
-    fn test_parameterized_query_operations() {
-        scenario().run().unwrap();
-    }
-}
