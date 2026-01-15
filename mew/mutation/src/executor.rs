@@ -9,7 +9,7 @@
 
 use mew_core::{EdgeId, EntityId, NodeId};
 use mew_graph::Graph;
-use mew_parser::{KillStmt, LinkStmt, SetStmt, SpawnStmt, UnlinkStmt};
+use mew_parser::{KillStmt, LinkStmt, SetStmt, SpawnItem, SpawnStmt, UnlinkStmt};
 use mew_pattern::{Bindings, Evaluator};
 use mew_registry::Registry;
 
@@ -41,6 +41,15 @@ impl<'r, 'g> MutationExecutor<'r, 'g> {
         bindings: &Bindings,
     ) -> MutationResult<MutationOutcome> {
         ops::execute_spawn(self.registry, self.graph, &self.evaluator, stmt, bindings)
+    }
+
+    /// Execute a spawn from a SpawnItem (used by multi-spawn).
+    pub fn execute_spawn_item(
+        &mut self,
+        item: &SpawnItem,
+        bindings: &Bindings,
+    ) -> MutationResult<MutationOutcome> {
+        ops::execute_spawn_item(self.registry, self.graph, &self.evaluator, item, bindings)
     }
 
     /// Execute a KILL statement (node deletion).

@@ -18,6 +18,18 @@ use crate::transaction::{self, TransactionState};
 /// Session ID type.
 pub type SessionId = u64;
 
+/// Convert a local bindings map to pattern Bindings for expression evaluation.
+fn to_pattern_bindings(local_bindings: &HashMap<String, EntityId>) -> Bindings {
+    let mut bindings = Bindings::new();
+    for (var, entity_id) in local_bindings {
+        match entity_id {
+            EntityId::Node(node_id) => bindings.insert(var.clone(), *node_id),
+            EntityId::Edge(edge_id) => bindings.insert(var.clone(), *edge_id),
+        }
+    }
+    bindings
+}
+
 /// A MEW session.
 pub struct Session<'r> {
     /// Unique session ID.
@@ -362,15 +374,7 @@ impl<'r> Session<'r> {
                     MutationAction::Set(set_stmt) => {
                         let target_id =
                             self.resolve_target_with_bindings(&set_stmt.target, &local_bindings)?;
-
-                        // Convert local_bindings to pattern Bindings for expression evaluation
-                        let mut pb = Bindings::new();
-                        for (var, entity_id) in &local_bindings {
-                            match entity_id {
-                                EntityId::Node(node_id) => pb.insert(var.clone(), *node_id),
-                                EntityId::Edge(edge_id) => pb.insert(var.clone(), *edge_id),
-                            }
-                        }
+                        let pb = to_pattern_bindings(&local_bindings);
 
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
 
@@ -627,21 +631,10 @@ impl<'r> Session<'r> {
         let mut total_nodes_created = 0usize;
         let mut total_edges_created = 0usize;
 
-        // Execute each spawn item
         for spawn_item in &stmt.spawns {
-            // Convert SpawnItem to a temporary SpawnStmt for the executor
-            let temp_stmt = mew_parser::SpawnStmt {
-                var: spawn_item.var.clone(),
-                type_name: spawn_item.type_name.clone(),
-                attrs: spawn_item.attrs.clone(),
-                returning: None, // Individual items don't have RETURNING
-                span: spawn_item.span,
-            };
-
             let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
-            let result = executor.execute_spawn(&temp_stmt, &pattern_bindings)?;
+            let result = executor.execute_spawn_item(spawn_item, &pattern_bindings)?;
 
-            // Store the created node ID with the variable name
             if let Some(node_id) = result.created_node() {
                 self.bindings.insert(spawn_item.var.clone(), node_id.into());
                 self.txn_state.track_created_node(node_id);
