@@ -81,18 +81,16 @@ pub struct OptionalMatch {
 }
 
 /// MATCH followed by mutations (compound statement).
-/// E.g., MATCH a: T, b: U WHERE ... LINK edge(a, b)
-/// Also supports RETURNING and ORDER BY for queries that return modified data:
-/// E.g., MATCH t: Task WHERE ... SET t { ... } RETURNING t.title ORDER BY t.title
+/// E.g., MATCH t: Task WHERE t.done SET t { archived = true }
+///
+/// Note: Per spec (4_QUERIES.md §2.11.3), compound statements do NOT support
+/// RETURN/RETURNING or ORDER BY clauses. For queries that return data, use
+/// a separate MATCH...RETURN statement after the mutation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchMutateStmt {
     pub pattern: Vec<PatternElem>,
     pub where_clause: Option<Expr>,
     pub mutations: Vec<MutationAction>,
-    /// Optional RETURNING clause (projections to return after mutation)
-    pub returning: Option<Vec<Projection>>,
-    /// Optional ORDER BY clause
-    pub order_by: Option<Vec<OrderTerm>>,
     pub span: Span,
 }
 
@@ -253,14 +251,24 @@ pub struct AttrAssignment {
     pub span: Span,
 }
 
-/// RETURNING clause.
+/// RETURNING clause for mutation statements.
+///
+/// **Note on execution:** As of now, RETURNING clauses on mutation statements
+/// (SPAWN, KILL, LINK, UNLINK, SET) are parsed but NOT executed. The mutation
+/// executor returns counts only, not actual data. This is a known limitation.
+/// Tests should not rely on RETURNING to return actual row data.
+///
+/// TODO: Implement RETURNING execution for mutations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ReturningClause {
+    /// Return the entity ID (e.g., RETURNING id)
     Id,
+    /// Return all fields (e.g., RETURNING *)
     All,
     /// Simple field names (e.g., RETURNING name, email)
     Fields(Vec<String>),
     /// Qualified field names (e.g., RETURNING t.name, t.email)
+    /// Note: Parsed but not executed - currently dead code.
     QualifiedFields(Vec<(String, String)>),
 }
 

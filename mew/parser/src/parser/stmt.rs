@@ -154,34 +154,12 @@ impl Parser {
             }))
         } else if self.is_mutation_keyword() {
             // Parse as compound mutation
+            // Per spec (4_QUERIES.md §2.11.3): "No RETURN clause is allowed
+            // (compound statements don't return results)"
             let mut mutations = Vec::new();
             while self.is_mutation_keyword() {
                 mutations.push(self.parse_mutation_action()?);
             }
-
-            // Parse optional RETURNING clause (different from mutation RETURNING)
-            // This allows projections like: RETURNING t.title, t.status
-            let returning = if self.check(&TokenKind::Returning) {
-                self.advance();
-                let mut projections = Vec::new();
-                projections.push(self.parse_projection()?);
-                while self.check(&TokenKind::Comma) {
-                    self.advance();
-                    projections.push(self.parse_projection()?);
-                }
-                Some(projections)
-            } else {
-                None
-            };
-
-            // Parse optional ORDER BY
-            let order_by = if self.check(&TokenKind::Order) {
-                self.advance();
-                self.expect(&TokenKind::By)?;
-                Some(self.parse_order_terms()?)
-            } else {
-                None
-            };
 
             let span = self.span_from(start);
 
@@ -189,8 +167,6 @@ impl Parser {
                 pattern,
                 where_clause,
                 mutations,
-                returning,
-                order_by,
                 span,
             }))
         } else if self.check(&TokenKind::Walk) {
@@ -559,27 +535,6 @@ impl Parser {
 
     fn parse_optional_returning(&mut self) -> ParseResult<Option<ReturningClause>> {
         if self.check(&TokenKind::Returning) {
-            // Look ahead to check if this is a projection-style RETURNING
-            // (with function calls, AS aliases, or ORDER BY after)
-            // If so, leave it for compound statement handling
-            let lookahead_pos = self.pos + 2; // skip RETURNING and first ident
-            if lookahead_pos < self.tokens.len() {
-                let lookahead_kind = &self.tokens[lookahead_pos].kind;
-                // Function call: RETURNING count(...)
-                if matches!(lookahead_kind, TokenKind::LParen) {
-                    return Ok(None);
-                }
-                // Check next ident for AS: RETURNING field AS alias
-                // First need to check if next token after RETURNING is an ident
-                if self.pos + 1 < self.tokens.len() {
-                    if let TokenKind::Ident(_) = &self.tokens[self.pos + 1].kind {
-                        // After ident, check for AS
-                        if matches!(lookahead_kind, TokenKind::As) {
-                            return Ok(None);
-                        }
-                    }
-                }
-            }
             self.advance();
             Ok(Some(self.parse_returning_clause()?))
         } else {
