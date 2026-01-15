@@ -63,7 +63,7 @@ Type system sophistication, validation, and traversal.
 | **Mutations** | Bulk operations (KILL/SET with MATCH subquery), LINK IF NOT EXISTS, inline SPAWN in LINK |
 | **Time** | `now()`, `wall_time()` for real-world timestamps |
 | **Authorization** | Simple ownership-based access control, `current_actor()` |
-| **Parameters** | `$param` syntax, prepared statements (PREPARE/EXECUTE) |
+| **Parameters** | `$param` syntax for parameterized queries |
 
 **Example Ontologies:**
 

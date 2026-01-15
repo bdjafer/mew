@@ -170,10 +170,6 @@ impl Repl {
             Stmt::Profile(ref profile_stmt) => {
                 execute_profile(&self.registry, &mut self.graph, profile_stmt)
             }
-            Stmt::Prepare(_) | Stmt::Execute(_) | Stmt::DropPrepared(_) => {
-                // Prepared statements require session context
-                Err("Prepared statements (PREPARE/EXECUTE/DROP PREPARED) require session mode".into())
-            }
         }
     }
 

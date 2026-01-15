@@ -127,7 +127,7 @@ Here is the **Level 2 Gap Analysis** report, reformatted into clean, structured 
 *   **Mutations:** Bulk operations (`KILL`/`SET` with `MATCH` subquery), `LINK IF NOT EXISTS`, inline `SPAWN` in `LINK`.
 *   **Time:** `now()`, `wall_time()` for real-world timestamps.
 *   **Authorization:** Simple ownership-based access control, `current_actor()`.
-*   **Parameters:** `$param` syntax, prepared statements (`PREPARE`/`EXECUTE`).
+*   **Parameters:** `$param` syntax for parameterized queries.
 
 ---
 
@@ -286,14 +286,6 @@ The following features are currently tested in Level 2 files but belong to Level
 | Parameter type inference | ❌ NOT TESTED | 5_MUTATIONS.md §5.10.4 |
 | Missing parameter error | ❌ NOT TESTED | 5_MUTATIONS.md §5.10.4 |
 
-### 16. Parameters: Prepared Statements
-| Feature | Status | Spec Reference |
-| :--- | :---: | :--- |
-| `PREPARE` statement | ❌ NOT TESTED | 5_MUTATIONS.md §5.10.6 |
-| `EXECUTE` with parameters | ❌ NOT TESTED | 5_MUTATIONS.md §5.10.6 |
-| `DROP PREPARED` | ❌ NOT TESTED | 5_MUTATIONS.md §5.10.6 |
-| Plan caching behavior | ❌ NOT TESTED | 5_MUTATIONS.md §5.10.6 |
-
 ---
 
 ## Summary
@@ -315,8 +307,7 @@ The following features are currently tested in Level 2 files but belong to Level
 | Time (`wall_time()`) | 2 | 0 | 2 | 0 |
 | Authorization | 3 | 0 | 3 | 0 |
 | Parameters (`$param`) | 5 | 0 | 5 | 0 |
-| Parameters (`PREPARE`) | 4 | 0 | 4 | 0 |
-| **TOTAL** | **56** | **1** | **55** | **0** |
+| **TOTAL** | **52** | **1** | **51** | **0** |
 
 **Additionally:** 3 operation files contain Level 3 features that should be moved:
 *   `tasks/transitive.mew` → Move to Level 3
