@@ -101,6 +101,9 @@ impl Parser {
 
         // Parse additional MATCH clauses after WHERE (extends the pattern binding context)
         // This supports: MATCH a, b WHERE ... MATCH c, edge(a, c) ... UNLINK/LINK/etc
+        // TODO: This only extends the required pattern. For cases where subsequent MATCH
+        // items may not exist (e.g., unlinking a non-existent edge), OPTIONAL MATCH
+        // semantics are needed. Currently, those patterns will fail if not found.
         while self.check(&TokenKind::Match) {
             self.advance();
             pattern.extend(self.parse_pattern()?);
@@ -515,57 +518,17 @@ impl Parser {
         })
     }
 
+    /// Parse a standalone SPAWN statement (delegates to parse_spawn_item).
     fn parse_spawn(&mut self) -> ParseResult<SpawnStmt> {
-        let start = self.expect(&TokenKind::Spawn)?.span;
-
-        let first = self.expect_ident()?;
-
-        // Two syntaxes:
-        // 1. SPAWN var: Type { ... } - standard
-        // 2. SPAWN Type { ... } AS alias - inline (used in LINK targets)
-        let (var, type_name) = if self.check(&TokenKind::Colon) {
-            // Standard syntax: first is var, next is type
-            self.advance();
-            let type_name = self.expect_ident()?;
-            (first, type_name)
-        } else if self.check(&TokenKind::LBrace) {
-            // Inline syntax: first is type, var comes from AS clause later
-            // Use empty string as placeholder - will be set by AS clause
-            (String::new(), first)
-        } else {
-            // Could still be inline syntax if there's an AS clause coming
-            // Default: assume first is type (inline syntax)
-            (String::new(), first)
-        };
-
-        let attrs = if self.check(&TokenKind::LBrace) {
-            self.parse_attr_block()?
-        } else {
-            Vec::new()
-        };
-
-        // Check for AS clause (inline spawn syntax)
-        let var = if var.is_empty() {
-            if self.check(&TokenKind::As) {
-                self.advance();
-                self.expect_ident()?
-            } else {
-                // Generate a temp var name for inline spawn without AS
-                format!("_inline_{}", start.start)
-            }
-        } else {
-            var
-        };
-
+        let item = self.parse_spawn_item()?;
         let returning = self.parse_optional_returning()?;
-        let span = self.span_from(start);
 
         Ok(SpawnStmt {
-            var,
-            type_name,
-            attrs,
+            var: item.var,
+            type_name: item.type_name,
+            attrs: item.attrs,
             returning,
-            span,
+            span: item.span,
         })
     }
 
@@ -616,39 +579,50 @@ impl Parser {
             self.advance();
             Ok(ReturningClause::All)
         } else {
-            // Parse first item to determine syntax
-            let start = self.peek().span;
-            let first_ident = self.expect_ident()?;
+            // Parse all items first, then decide on representation
+            let mut items: Vec<(String, Option<String>, Span)> = Vec::new(); // (ident, attr?, span)
+            let mut has_dot = false;
 
-            // Check if it's a dot expression (var.attr)
-            if self.check(&TokenKind::Dot) {
-                // Parse as projections (expressions)
-                self.advance(); // consume dot
-                let attr = self.expect_ident()?;
-                let first_expr = Expr::AttrAccess(
-                    Box::new(Expr::Var(first_ident, start)),
-                    attr,
-                    self.span_from(start),
-                );
-                let first_proj = Projection {
-                    expr: first_expr,
-                    alias: None,
-                    span: self.span_from(start),
-                };
+            loop {
+                let start = self.peek().span;
+                let ident = self.expect_ident()?;
 
-                let mut projections = vec![first_proj];
-                while self.check(&TokenKind::Comma) {
+                if self.check(&TokenKind::Dot) {
                     self.advance();
-                    projections.push(self.parse_projection()?);
+                    let attr = self.expect_ident()?;
+                    items.push((ident, Some(attr), self.span_from(start)));
+                    has_dot = true;
+                } else {
+                    items.push((ident, None, self.span_from(start)));
                 }
+
+                if !self.check(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+            }
+
+            // If any item has a dot, use Projections for all
+            if has_dot {
+                let projections = items
+                    .into_iter()
+                    .map(|(ident, attr, span)| {
+                        let expr = if let Some(attr_name) = attr {
+                            Expr::AttrAccess(Box::new(Expr::Var(ident, span)), attr_name, span)
+                        } else {
+                            Expr::Var(ident, span)
+                        };
+                        Projection {
+                            expr,
+                            alias: None,
+                            span,
+                        }
+                    })
+                    .collect();
                 Ok(ReturningClause::Projections(projections))
             } else {
                 // Simple field names
-                let mut fields = vec![first_ident];
-                while self.check(&TokenKind::Comma) {
-                    self.advance();
-                    fields.push(self.expect_ident()?);
-                }
+                let fields = items.into_iter().map(|(ident, _, _)| ident).collect();
                 Ok(ReturningClause::Fields(fields))
             }
         }
