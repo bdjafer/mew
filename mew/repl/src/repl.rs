@@ -170,18 +170,6 @@ impl Repl {
             Stmt::Profile(ref profile_stmt) => {
                 execute_profile(&self.registry, &mut self.graph, profile_stmt)
             }
-            Stmt::Prepare(_) => {
-                // PREPARE not yet supported in REPL
-                Err("PREPARE statements not yet supported in REPL".to_string())
-            }
-            Stmt::Execute(_) => {
-                // EXECUTE not yet supported in REPL
-                Err("EXECUTE statements not yet supported in REPL".to_string())
-            }
-            Stmt::DropPrepared(_) => {
-                // DROP PREPARED not yet supported in REPL
-                Err("DROP PREPARED statements not yet supported in REPL".to_string())
-            }
         }
     }
 

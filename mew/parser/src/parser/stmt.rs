@@ -52,9 +52,6 @@ impl Parser {
             }
             TokenKind::Explain => self.parse_explain().map(Stmt::Explain),
             TokenKind::Profile => self.parse_profile().map(Stmt::Profile),
-            TokenKind::Prepare => self.parse_prepare().map(Stmt::Prepare),
-            TokenKind::Execute => self.parse_execute().map(Stmt::Execute),
-            TokenKind::Drop => self.parse_drop_prepared().map(Stmt::DropPrepared),
             _ => Err(crate::ParseError::unexpected_token(
                 token.span,
                 "statement",
@@ -83,77 +80,6 @@ impl Parser {
             statement: Box::new(inner),
             span,
         })
-    }
-
-    /// Parse PREPARE statement.
-    /// Format: PREPARE name AS statement
-    fn parse_prepare(&mut self) -> ParseResult<PrepareStmt> {
-        let start = self.expect(&TokenKind::Prepare)?.span;
-        let name = self.expect_ident()?;
-        self.expect(&TokenKind::As)?;
-        let inner = self.parse_stmt()?;
-        let span = self.span_from(start);
-        Ok(PrepareStmt {
-            name,
-            statement: Box::new(inner),
-            span,
-        })
-    }
-
-    /// Parse EXECUTE statement.
-    /// Format: EXECUTE name WITH param1 = value1, param2 = value2
-    fn parse_execute(&mut self) -> ParseResult<ExecuteStmt> {
-        let start = self.expect(&TokenKind::Execute)?.span;
-        let name = self.expect_ident()?;
-
-        let params = if self.check(&TokenKind::With) {
-            self.advance();
-            self.parse_param_bindings()?
-        } else {
-            Vec::new()
-        };
-
-        let span = self.span_from(start);
-        Ok(ExecuteStmt { name, params, span })
-    }
-
-    /// Parse parameter bindings for EXECUTE statement.
-    fn parse_param_bindings(&mut self) -> ParseResult<Vec<ParamBinding>> {
-        let mut bindings = Vec::new();
-        bindings.push(self.parse_param_binding()?);
-
-        while self.check(&TokenKind::Comma) {
-            self.advance();
-            bindings.push(self.parse_param_binding()?);
-        }
-
-        Ok(bindings)
-    }
-
-    /// Parse a single parameter binding: name = value or $name = value
-    fn parse_param_binding(&mut self) -> ParseResult<ParamBinding> {
-        let start = self.peek().span;
-        // Accept both `name = value` and `$name = value`
-        let name = if self.check(&TokenKind::Dollar) {
-            self.advance();
-            self.expect_ident()?
-        } else {
-            self.expect_ident()?
-        };
-        self.expect(&TokenKind::Eq)?;
-        let value = self.parse_expr()?;
-        let span = self.span_from(start);
-        Ok(ParamBinding { name, value, span })
-    }
-
-    /// Parse DROP PREPARED statement.
-    /// Format: DROP PREPARED name
-    fn parse_drop_prepared(&mut self) -> ParseResult<DropPreparedStmt> {
-        let start = self.expect(&TokenKind::Drop)?.span;
-        self.expect(&TokenKind::Prepared)?;
-        let name = self.expect_ident()?;
-        let span = self.span_from(start);
-        Ok(DropPreparedStmt { name, span })
     }
 
     /// Parse MATCH, which can be either:

@@ -1044,29 +1044,7 @@ WHERE $filter? = null OR t.category = $filter
 RETURN t
 ```
 
-## 5.10.6 Prepared Statements
-
-For frequently executed queries, use prepared statements:
-
-```
--- Prepare (parsed and planned once)
-PREPARE find_tasks AS
-  MATCH t: Task WHERE t.status = $status RETURN t
-
--- Execute (reuses plan)
-EXECUTE find_tasks WITH status = "done"
-EXECUTE find_tasks WITH status = "pending"
-
--- Drop when no longer needed
-DROP PREPARED find_tasks
-```
-
-**Benefits:**
-- Queries parsed once, executed many times
-- Plan caching for performance
-- Type checking at prepare time
-
-## 5.10.7 Parameter in Bulk Operations
+## 5.10.6 Parameter in Bulk Operations
 
 ```
 KILL { MATCH t: Task WHERE t.project_id = $projectId RETURN t }
@@ -1076,7 +1054,7 @@ SET { MATCH t: Task WHERE t.assignee = $oldAssignee RETURN t }.assignee = $newAs
 WITH oldAssignee = "user_old", newAssignee = "user_new"
 ```
 
-## 5.10.8 Security
+## 5.10.7 Security
 
 Parameters are **always** treated as values, never as identifiers or operators:
 

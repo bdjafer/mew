@@ -38,9 +38,6 @@ pub enum Stmt {
     Txn(TxnStmt),
     Explain(ExplainStmt),
     Profile(ProfileStmt),
-    Prepare(PrepareStmt),
-    Execute(ExecuteStmt),
-    DropPrepared(DropPreparedStmt),
 }
 
 // ==================== EXPLAIN / PROFILE ====================
@@ -56,42 +53,6 @@ pub struct ExplainStmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProfileStmt {
     pub statement: Box<Stmt>,
-    pub span: Span,
-}
-
-// ==================== PREPARE / EXECUTE / DROP PREPARED ====================
-
-/// PREPARE statement - creates a prepared (named) query.
-/// Format: PREPARE name AS statement
-#[derive(Debug, Clone, PartialEq)]
-pub struct PrepareStmt {
-    pub name: String,
-    pub statement: Box<Stmt>,
-    pub span: Span,
-}
-
-/// EXECUTE statement - executes a prepared query with parameters.
-/// Format: EXECUTE name WITH param1 = value1, param2 = value2
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExecuteStmt {
-    pub name: String,
-    pub params: Vec<ParamBinding>,
-    pub span: Span,
-}
-
-/// A parameter binding for EXECUTE statement.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParamBinding {
-    pub name: String,
-    pub value: Expr,
-    pub span: Span,
-}
-
-/// DROP PREPARED statement - removes a prepared query.
-/// Format: DROP PREPARED name
-#[derive(Debug, Clone, PartialEq)]
-pub struct DropPreparedStmt {
-    pub name: String,
     pub span: Span,
 }
 
