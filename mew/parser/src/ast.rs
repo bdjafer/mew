@@ -38,6 +38,9 @@ pub enum Stmt {
     Txn(TxnStmt),
     Explain(ExplainStmt),
     Profile(ProfileStmt),
+    Prepare(PrepareStmt),
+    Execute(ExecuteStmt),
+    DropPrepared(DropPreparedStmt),
 }
 
 // ==================== EXPLAIN / PROFILE ====================
@@ -352,6 +355,42 @@ pub enum TxnStmt {
 pub enum IsolationLevel {
     ReadCommitted,
     Serializable,
+}
+
+// ==================== PREPARED STATEMENTS ====================
+
+/// PREPARE statement: defines a reusable query with parameters.
+/// PREPARE name AS statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct PrepareStmt {
+    pub name: String,
+    pub statement: Box<Stmt>,
+    pub span: Span,
+}
+
+/// EXECUTE statement: executes a prepared statement with parameter values.
+/// EXECUTE name WITH param = value, ...
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecuteStmt {
+    pub name: String,
+    pub params: Vec<ParamBinding>,
+    pub span: Span,
+}
+
+/// Parameter binding for EXECUTE statement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParamBinding {
+    pub name: String,
+    pub value: Expr,
+    pub span: Span,
+}
+
+/// DROP PREPARED statement: removes a prepared statement.
+/// DROP PREPARED name
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropPreparedStmt {
+    pub name: String,
+    pub span: Span,
 }
 
 // ==================== EXPRESSIONS ====================

@@ -9,6 +9,10 @@ pub enum PatternError {
     #[error("Unbound variable '{name}'")]
     UnboundVariable { name: String },
 
+    /// Missing parameter in expression.
+    #[error("missing_parameter '${name}' not provided")]
+    MissingParameter { name: String },
+
     /// Type mismatch in expression.
     #[error("Type error: {message}")]
     TypeError { message: String },
@@ -37,6 +41,10 @@ pub enum PatternError {
 impl PatternError {
     pub fn unbound_variable(name: impl Into<String>) -> Self {
         Self::UnboundVariable { name: name.into() }
+    }
+
+    pub fn missing_parameter(name: impl Into<String>) -> Self {
+        Self::MissingParameter { name: name.into() }
     }
 
     pub fn type_error(message: impl Into<String>) -> Self {

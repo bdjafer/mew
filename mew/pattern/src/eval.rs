@@ -33,7 +33,7 @@ impl<'r> Evaluator<'r> {
             Expr::UnaryOp(op, operand, _) => self.eval_unary_op(*op, operand, bindings, graph),
             Expr::FnCall(fc) => self.eval_fn_call(&fc.name, &fc.args, bindings, graph),
             Expr::IdRef(_, _) => Ok(Value::Null), // TODO: resolve ID refs
-            Expr::Param(name, _) => Err(PatternError::unbound_variable(name)),
+            Expr::Param(name, _) => Err(PatternError::missing_parameter(name)),
             Expr::Exists(pattern_elems, where_clause, _) => {
                 // Compile the subpattern and check if any matches exist
                 let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;

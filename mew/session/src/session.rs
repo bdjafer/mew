@@ -4,7 +4,7 @@ use mew_constraint::ConstraintChecker;
 use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::{MutationExecutor, MutationOutcome};
-use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, WalkStmt};
+use mew_parser::{parse_stmt, parse_stmts, DropPreparedStmt, ExecuteStmt, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, PrepareStmt, Stmt, TargetRef, WalkStmt};
 use mew_pattern::{target, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -32,6 +32,8 @@ pub struct Session<'r> {
     txn_state: TransactionState,
     /// Variable bindings (var_name -> EntityId) for mutation targets.
     bindings: HashMap<String, EntityId>,
+    /// Prepared statements (name -> Stmt).
+    prepared_statements: HashMap<String, Stmt>,
 }
 
 impl<'r> Session<'r> {
@@ -44,6 +46,7 @@ impl<'r> Session<'r> {
             auto_commit: true,
             txn_state: TransactionState::new(),
             bindings: HashMap::new(),
+            prepared_statements: HashMap::new(),
         }
     }
 
@@ -56,6 +59,7 @@ impl<'r> Session<'r> {
             auto_commit: true,
             txn_state: TransactionState::new(),
             bindings: HashMap::new(),
+            prepared_statements: HashMap::new(),
         }
     }
 
@@ -258,6 +262,21 @@ impl<'r> Session<'r> {
             Stmt::Profile(profile_stmt) => {
                 let result = self.execute_profile(profile_stmt)?;
                 Ok(StatementResult::Query(result))
+            }
+
+            Stmt::Prepare(prepare_stmt) => {
+                self.execute_prepare(prepare_stmt)?;
+                Ok(StatementResult::Mutation(MutationSummary::default()))
+            }
+
+            Stmt::Execute(execute_stmt) => {
+                let result = self.execute_prepared(execute_stmt)?;
+                Ok(result)
+            }
+
+            Stmt::DropPrepared(drop_stmt) => {
+                self.execute_drop_prepared(drop_stmt)?;
+                Ok(StatementResult::Mutation(MutationSummary::default()))
             }
         }
     }
@@ -910,6 +929,275 @@ impl<'r> Session<'r> {
                 })
             }
         }
+    }
+
+    // ==================== PREPARED STATEMENTS ====================
+
+    /// Execute a PREPARE statement - stores a statement for later execution.
+    fn execute_prepare(&mut self, stmt: &PrepareStmt) -> SessionResult<()> {
+        // Store the statement for later execution
+        self.prepared_statements
+            .insert(stmt.name.clone(), (*stmt.statement).clone());
+        Ok(())
+    }
+
+    /// Execute an EXECUTE statement - runs a previously prepared statement.
+    fn execute_prepared(&mut self, stmt: &ExecuteStmt) -> SessionResult<StatementResult> {
+        // Look up the prepared statement
+        let prepared = self
+            .prepared_statements
+            .get(&stmt.name)
+            .cloned()
+            .ok_or_else(|| {
+                SessionError::invalid_statement_type(format!(
+                    "prepared statement '{}' not_found",
+                    stmt.name
+                ))
+            })?;
+
+        // Substitute parameters in the statement
+        let substituted = self.substitute_params(&prepared, &stmt.params)?;
+
+        // Execute the substituted statement
+        self.execute_statement(&substituted)
+    }
+
+    /// Substitute parameters in a statement with their values.
+    fn substitute_params(
+        &self,
+        stmt: &Stmt,
+        params: &[mew_parser::ParamBinding],
+    ) -> SessionResult<Stmt> {
+        // Build a map of param names to values
+        let param_map: HashMap<String, mew_parser::Expr> = params
+            .iter()
+            .map(|p| (p.name.clone(), p.value.clone()))
+            .collect();
+
+        // Find all parameters used in the statement
+        let used_params = self.collect_params(stmt);
+
+        // Check for missing parameters
+        for param in &used_params {
+            if !param_map.contains_key(param) {
+                return Err(SessionError::invalid_statement_type(format!(
+                    "missing_parameter '{}' in EXECUTE",
+                    param
+                )));
+            }
+        }
+
+        // Clone and substitute parameters
+        Ok(self.substitute_stmt_params(stmt, &param_map))
+    }
+
+    /// Collect all parameter names used in a statement.
+    fn collect_params(&self, stmt: &Stmt) -> Vec<String> {
+        let mut params = Vec::new();
+        match stmt {
+            Stmt::Match(m) => {
+                if let Some(ref where_expr) = m.where_clause {
+                    self.collect_expr_params(where_expr, &mut params);
+                }
+            }
+            Stmt::MatchMutate(mm) => {
+                if let Some(ref where_expr) = mm.where_clause {
+                    self.collect_expr_params(where_expr, &mut params);
+                }
+                for mutation in &mm.mutations {
+                    self.collect_mutation_params(mutation, &mut params);
+                }
+            }
+            Stmt::Spawn(s) => {
+                self.collect_attrs_params(&s.attrs, &mut params);
+            }
+            Stmt::Set(s) => {
+                self.collect_attrs_params(&s.assignments, &mut params);
+            }
+            _ => {}
+        }
+        params
+    }
+
+    /// Collect parameter names from a mutation action.
+    fn collect_mutation_params(&self, mutation: &MutationAction, params: &mut Vec<String>) {
+        match mutation {
+            MutationAction::Set(s) => {
+                self.collect_attrs_params(&s.assignments, params);
+            }
+            MutationAction::Spawn(s) => {
+                self.collect_attrs_params(&s.attrs, params);
+            }
+            _ => {}
+        }
+    }
+
+    /// Collect parameter names from attribute assignments.
+    fn collect_attrs_params(&self, attrs: &[mew_parser::AttrAssignment], params: &mut Vec<String>) {
+        for attr in attrs {
+            self.collect_expr_params(&attr.value, params);
+        }
+    }
+
+    /// Collect parameter names from an expression.
+    fn collect_expr_params(&self, expr: &mew_parser::Expr, params: &mut Vec<String>) {
+        match expr {
+            mew_parser::Expr::Param(name, _) => {
+                if !params.contains(name) {
+                    params.push(name.clone());
+                }
+            }
+            mew_parser::Expr::BinaryOp(_, left, right, _) => {
+                self.collect_expr_params(left, params);
+                self.collect_expr_params(right, params);
+            }
+            mew_parser::Expr::UnaryOp(_, inner, _) => {
+                self.collect_expr_params(inner, params);
+            }
+            mew_parser::Expr::FnCall(fc) => {
+                for arg in &fc.args {
+                    self.collect_expr_params(arg, params);
+                }
+                if let Some(ref filter) = fc.filter {
+                    self.collect_expr_params(filter, params);
+                }
+            }
+            mew_parser::Expr::AttrAccess(inner, _, _) => {
+                self.collect_expr_params(inner, params);
+            }
+            _ => {}
+        }
+    }
+
+    /// Recursively substitute parameters in a statement.
+    fn substitute_stmt_params(
+        &self,
+        stmt: &Stmt,
+        param_map: &HashMap<String, mew_parser::Expr>,
+    ) -> Stmt {
+        match stmt {
+            Stmt::Match(m) => {
+                let mut new_match = m.clone();
+                if let Some(ref where_expr) = m.where_clause {
+                    new_match.where_clause = Some(self.substitute_expr_params(where_expr, param_map));
+                }
+                Stmt::Match(new_match)
+            }
+            Stmt::MatchMutate(mm) => {
+                let mut new_mm = mm.clone();
+                if let Some(ref where_expr) = mm.where_clause {
+                    new_mm.where_clause = Some(self.substitute_expr_params(where_expr, param_map));
+                }
+                // Substitute in mutations
+                new_mm.mutations = mm.mutations.iter().map(|m| self.substitute_mutation_params(m, param_map)).collect();
+                Stmt::MatchMutate(new_mm)
+            }
+            Stmt::Spawn(s) => {
+                let mut new_spawn = s.clone();
+                new_spawn.attrs = self.substitute_attrs_params(&s.attrs, param_map);
+                Stmt::Spawn(new_spawn)
+            }
+            Stmt::Set(s) => {
+                let mut new_set = s.clone();
+                new_set.assignments = self.substitute_attrs_params(&s.assignments, param_map);
+                Stmt::Set(new_set)
+            }
+            // For other statement types, clone without substitution for now
+            other => other.clone(),
+        }
+    }
+
+    /// Substitute parameters in a mutation action.
+    fn substitute_mutation_params(
+        &self,
+        mutation: &MutationAction,
+        param_map: &HashMap<String, mew_parser::Expr>,
+    ) -> MutationAction {
+        match mutation {
+            MutationAction::Set(s) => {
+                let mut new_set = s.clone();
+                new_set.assignments = self.substitute_attrs_params(&s.assignments, param_map);
+                MutationAction::Set(new_set)
+            }
+            MutationAction::Spawn(s) => {
+                let mut new_spawn = s.clone();
+                new_spawn.attrs = self.substitute_attrs_params(&s.attrs, param_map);
+                MutationAction::Spawn(new_spawn)
+            }
+            other => other.clone(),
+        }
+    }
+
+    /// Substitute parameters in attribute assignments.
+    fn substitute_attrs_params(
+        &self,
+        attrs: &[mew_parser::AttrAssignment],
+        param_map: &HashMap<String, mew_parser::Expr>,
+    ) -> Vec<mew_parser::AttrAssignment> {
+        attrs.iter().map(|a| {
+            mew_parser::AttrAssignment {
+                name: a.name.clone(),
+                value: self.substitute_expr_params(&a.value, param_map),
+                span: a.span,
+            }
+        }).collect()
+    }
+
+    /// Recursively substitute parameters in an expression.
+    fn substitute_expr_params(
+        &self,
+        expr: &mew_parser::Expr,
+        param_map: &HashMap<String, mew_parser::Expr>,
+    ) -> mew_parser::Expr {
+        match expr {
+            mew_parser::Expr::Param(name, _span) => {
+                // Substitute the parameter with its value
+                param_map.get(name).cloned().unwrap_or_else(|| expr.clone())
+            }
+            mew_parser::Expr::BinaryOp(op, left, right, span) => {
+                mew_parser::Expr::BinaryOp(
+                    *op,
+                    Box::new(self.substitute_expr_params(left, param_map)),
+                    Box::new(self.substitute_expr_params(right, param_map)),
+                    *span,
+                )
+            }
+            mew_parser::Expr::UnaryOp(op, inner, span) => {
+                mew_parser::Expr::UnaryOp(
+                    *op,
+                    Box::new(self.substitute_expr_params(inner, param_map)),
+                    *span,
+                )
+            }
+            mew_parser::Expr::FnCall(fc) => {
+                let new_args: Vec<_> = fc.args.iter()
+                    .map(|arg| self.substitute_expr_params(arg, param_map))
+                    .collect();
+                mew_parser::Expr::FnCall(mew_parser::FnCall {
+                    name: fc.name.clone(),
+                    args: new_args,
+                    distinct: fc.distinct,
+                    limit: fc.limit.clone(),
+                    filter: fc.filter.as_ref().map(|f| Box::new(self.substitute_expr_params(f, param_map))),
+                    span: fc.span,
+                })
+            }
+            mew_parser::Expr::AttrAccess(inner, attr, span) => {
+                mew_parser::Expr::AttrAccess(
+                    Box::new(self.substitute_expr_params(inner, param_map)),
+                    attr.clone(),
+                    *span,
+                )
+            }
+            // For other expression types, clone without substitution
+            other => other.clone(),
+        }
+    }
+
+    /// Execute a DROP PREPARED statement - removes a prepared statement.
+    fn execute_drop_prepared(&mut self, stmt: &DropPreparedStmt) -> SessionResult<()> {
+        self.prepared_statements.remove(&stmt.name);
+        Ok(())
     }
 }
 
