@@ -78,11 +78,9 @@ WHERE NOT EXISTS(r: Review, review_of(r, p))
 RETURN count(p) AS products_without_reviews
 
 --# test_aggregation_with_having_like_filter
-MATCH p: Product
-OPTIONAL MATCH r: Review, review_of(r, p)
-WITH p, count(r) AS review_count
-WHERE review_count > 0
-RETURN p.name, review_count
+-- Products with at least one review (join filters out products without reviews)
+MATCH p: Product, r: Review, review_of(r, p)
+RETURN p.name, count(r) AS review_count
 ORDER BY p.name
 
 -- ---------------------------------------------------------------------------

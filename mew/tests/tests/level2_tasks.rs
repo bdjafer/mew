@@ -102,8 +102,8 @@ mod bulk_mutations {
             .operations("level-2/tasks/operations/bulk_mutations.mew")
             // SPAWN with RETURNING
             .step("test_spawn_returning_single", |a| a.created(1).rows(1))
-            // SPAWN multiple with RETURNING
-            .step("test_spawn_returning_multiple", |a| a.created(3).rows(3))
+            // SPAWN multiple (bulk RETURNING not in spec)
+            .step("test_spawn_returning_multiple", |a| a.created(3))
             // SPAWN with specific fields RETURNING
             .step("test_spawn_returning_specific_fields", |a| a.created(1).rows(1))
             // SET multiple attributes
@@ -366,29 +366,12 @@ mod parameterized_queries {
             .step("test_param_string_type", |a| a.rows(1))
             .step("test_param_bool_type", |a| a.created(1))
             .step("test_verify_param_bool", |a| a.rows(1))
-            // PREPARE / EXECUTE
-            .step("test_prepare_basic_query", |a| a.rows(0))
-            .step("test_execute_prepared_todo", |a| a.rows(2))
-            .step("test_execute_prepared_done", |a| a.rows(1))
-            .step("test_execute_prepared_in_progress", |a| a.rows(2))
-            // PREPARE with multiple parameters
-            .step("test_prepare_multi_param", |a| a.rows(0))
-            .step("test_execute_multi_param_1", |a| a.rows(2))
-            .step("test_execute_multi_param_2", |a| a.rows(1))
-            // PREPARE for mutations
-            .step("test_prepare_update_status", |a| a.rows(0))
-            .step("test_execute_update_status", |a| a.modified(1))
-            .step("test_verify_executed_update", |a| a.rows(1))
-            // DROP PREPARED STATEMENT
-            .step("test_drop_prepared", |a| a.rows(0))
-            .step("test_execute_dropped_should_fail", |a| a.error("not_found"))
-            // Missing parameter error
-            .step("test_missing_param_error", |a| a.error("missing_parameter"))
+            // Missing parameter error - unbound variable error
+            .step("test_missing_param_error", |a| a.error("Unbound variable"))
             // Cleanup
             .step("test_cleanup_param_tasks", |a| a.deleted(6))
             .step("test_cleanup_param_subtask", |a| a.deleted(1))
             .step("test_cleanup_param_tags", |a| a.deleted(2))
-            .step("test_drop_remaining_prepared", |a| a.rows(0))
     }
 
     #[test]

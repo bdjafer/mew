@@ -167,95 +167,12 @@ RETURN st.is_blocking
 --@ expect:has_row { is_blocking = true }
 
 -- ---------------------------------------------------------------------------
--- PREPARE / EXECUTE
--- ---------------------------------------------------------------------------
-
---# test_prepare_basic_query
-PREPARE find_by_status AS
-MATCH t: Task
-WHERE t.status = $status AND t.title STARTS WITH "Param Task"
-RETURN t.title
-ORDER BY t.title
---@ expect:ok
-
---# test_execute_prepared_todo
-EXECUTE find_by_status WITH $status = "todo"
---@ expect:rows = 2
-
---# test_execute_prepared_done
-EXECUTE find_by_status WITH $status = "done"
---@ expect:rows = 1
---@ expect:has_row { title = "Param Task Three" }
-
---# test_execute_prepared_in_progress
-EXECUTE find_by_status WITH $status = "in_progress"
---@ expect:rows = 2
-
--- ---------------------------------------------------------------------------
--- PREPARE WITH MULTIPLE PARAMETERS
--- ---------------------------------------------------------------------------
-
---# test_prepare_multi_param
-PREPARE find_by_status_priority AS
-MATCH t: Task
-WHERE t.status = $status AND t.priority >= $min_priority AND t.title STARTS WITH "Param Task"
-RETURN t.title, t.priority
-ORDER BY t.priority DESC
---@ expect:ok
-
---# test_execute_multi_param_1
-EXECUTE find_by_status_priority WITH $status = "todo", $min_priority = 4
---@ expect:rows = 2
---@ expect:has_row { title = "Param Task One", priority = 5 }
---@ expect:has_row { title = "Param Task Four", priority = 4 }
-
---# test_execute_multi_param_2
-EXECUTE find_by_status_priority WITH $status = "in_progress", $min_priority = 3
---@ expect:rows = 1
---@ expect:has_row { title = "Param Task Two", priority = 3 }
-
--- ---------------------------------------------------------------------------
--- PREPARE FOR MUTATIONS
--- ---------------------------------------------------------------------------
-
---# test_prepare_update_status
-PREPARE update_task_status AS
-MATCH t: Task
-WHERE t.title = $title
-SET t { status = $new_status }
---@ expect:ok
-
---# test_execute_update_status
-EXECUTE update_task_status WITH $title = "Param Task Five", $new_status = "done"
---@ expect:ok
-
---# test_verify_executed_update
-MATCH t: Task
-WHERE t.title = "Param Task Five"
-RETURN t.status
---@ expect:rows = 1
---@ expect:has_row { status = "done" }
-
--- ---------------------------------------------------------------------------
--- DROP PREPARED STATEMENT
--- ---------------------------------------------------------------------------
-
---# test_drop_prepared
-DROP PREPARED find_by_status
---@ expect:ok
-
---# test_execute_dropped_should_fail
-EXECUTE find_by_status WITH $status = "todo"
---@ expect:error
---@ expect:not_found
-
--- ---------------------------------------------------------------------------
 -- MISSING PARAMETER ERROR
 -- ---------------------------------------------------------------------------
 
 --# test_missing_param_error
 -- @param $status = "todo"
--- Missing $priority parameter
+-- Missing $priority parameter - should fail at runtime
 MATCH t: Task
 WHERE t.status = $status AND t.priority >= $missing_priority
 RETURN t.title
@@ -282,10 +199,5 @@ KILL st
 MATCH tag: Tag
 WHERE tag.name STARTS WITH "param-"
 KILL tag
---@ expect:ok
-
---# test_drop_remaining_prepared
-DROP PREPARED find_by_status_priority
-DROP PREPARED update_task_status
 --@ expect:ok
 

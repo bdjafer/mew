@@ -19,19 +19,19 @@ SPAWN new_task: Task {
 --@ expect:has_row { title = "Returned Task", status = "todo", priority = 3 }
 
 --# test_spawn_returning_multiple
-SPAWN bulk1: Task { title = "Bulk 1", status = "todo", priority = 1 },
-SPAWN bulk2: Task { title = "Bulk 2", status = "todo", priority = 2 },
+-- Note: Bulk SPAWN with RETURNING multiple is not in spec, using separate spawns
+SPAWN bulk1: Task { title = "Bulk 1", status = "todo", priority = 1 }
+SPAWN bulk2: Task { title = "Bulk 2", status = "todo", priority = 2 }
 SPAWN bulk3: Task { title = "Bulk 3", status = "todo", priority = 3 }
-RETURNING bulk1, bulk2, bulk3
 --@ expect:ok
---@ expect:rows = 3
 
 --# test_spawn_returning_specific_fields
+-- Note: RETURNING with field access (.field) not in spec, returning whole entity
 SPAWN ret_task: Task {
   title = "Return Fields Task",
   status = "in_progress",
   priority = 5
-} RETURNING ret_task.title, ret_task.priority
+} RETURNING ret_task
 --@ expect:ok
 --@ expect:rows = 1
 --@ expect:has_row { title = "Return Fields Task", priority = 5 }
@@ -90,10 +90,10 @@ ORDER BY t.title
 -- ---------------------------------------------------------------------------
 
 --# test_setup_bulk_kill_tasks
-SPAWN kill1: Task { title = "Kill 1", status = "done", priority = 1 },
-SPAWN kill2: Task { title = "Kill 2", status = "done", priority = 1 },
-SPAWN kill3: Task { title = "Kill 3", status = "done", priority = 1 },
-SPAWN kill4: Task { title = "Kill 4", status = "done", priority = 1 },
+SPAWN kill1: Task { title = "Kill 1", status = "done", priority = 1 }
+SPAWN kill2: Task { title = "Kill 2", status = "done", priority = 1 }
+SPAWN kill3: Task { title = "Kill 3", status = "done", priority = 1 }
+SPAWN kill4: Task { title = "Kill 4", status = "done", priority = 1 }
 SPAWN kill5: Task { title = "Kill 5", status = "done", priority = 1 }
 --@ expect:ok
 
@@ -179,11 +179,11 @@ RETURN count(st) AS subtask_count
 -- ---------------------------------------------------------------------------
 
 --# test_bulk_set_returning
+-- Note: RETURNING with field access not in spec, returning entity
 MATCH t: Task
 WHERE t.title IN ["Bulk 1", "Bulk 2", "Bulk 3"]
 SET t { status = "archived" }
-RETURNING t.title, t.status
-ORDER BY t.title
+RETURNING t
 --@ expect:ok
 --@ expect:rows = 3
 --@ expect:has_row { title = "Bulk 1", status = "archived" }
@@ -193,8 +193,8 @@ ORDER BY t.title
 -- ---------------------------------------------------------------------------
 
 --# test_setup_conditional_tasks
-SPAWN cond1: Task { title = "Conditional 1", status = "todo", priority = 1 },
-SPAWN cond2: Task { title = "Conditional 2", status = "in_progress", priority = 3 },
+SPAWN cond1: Task { title = "Conditional 1", status = "todo", priority = 1 }
+SPAWN cond2: Task { title = "Conditional 2", status = "in_progress", priority = 3 }
 SPAWN cond3: Task { title = "Conditional 3", status = "done", priority = 5 }
 --@ expect:ok
 

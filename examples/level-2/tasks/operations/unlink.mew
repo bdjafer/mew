@@ -262,9 +262,9 @@ RETURN st.title, st.is_blocking
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_and_relink
-MATCH t1: Task, t2: Task
+-- Combine patterns into single MATCH per spec
+MATCH t1: Task, t2: Task, old: Task, blocks(t1, old) AS r
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2"
-MATCH old: Task, blocks(t1, old) AS r
 UNLINK r
 LINK blocks(t1, t2)
 --@ expect:ok
