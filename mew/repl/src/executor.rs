@@ -186,6 +186,44 @@ pub fn execute_spawn(
     }
 }
 
+/// Execute a multi-SPAWN statement.
+pub fn execute_multi_spawn(
+    registry: &Registry,
+    graph: &mut Graph,
+    bindings: &mut HashMap<String, EntityId>,
+    stmt: &mew_parser::MultiSpawnStmt,
+) -> Result<String, String> {
+    let pattern_bindings = to_pattern_bindings(bindings);
+    let mut created = Vec::new();
+
+    for item in &stmt.spawns {
+        // Convert SpawnItem to temporary SpawnStmt
+        let temp_stmt = mew_parser::SpawnStmt {
+            var: item.var.clone(),
+            type_name: item.type_name.clone(),
+            attrs: item.attrs.clone(),
+            returning: None,
+            span: item.span,
+        };
+
+        let mut executor = MutationExecutor::new(registry, graph);
+        let result = executor
+            .execute_spawn(&temp_stmt, &pattern_bindings)
+            .map_err(|e| format!("Spawn error: {}", e))?;
+
+        if let Some(node_id) = result.created_node() {
+            bindings.insert(item.var.clone(), node_id.into());
+            created.push(format!("{} ({})", item.var, node_id.raw()));
+        }
+    }
+
+    if created.is_empty() {
+        Ok("Multi-spawn completed".to_string())
+    } else {
+        Ok(format!("Created: {}", created.join(", ")))
+    }
+}
+
 /// Execute a KILL statement.
 pub fn execute_kill(
     registry: &Registry,

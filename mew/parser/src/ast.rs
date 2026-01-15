@@ -29,6 +29,8 @@ pub enum Stmt {
     MatchMutate(MatchMutateStmt),
     MatchWalk(MatchWalkStmt),
     Spawn(SpawnStmt),
+    /// Multiple SPAWNs with a shared RETURNING clause
+    MultiSpawn(MultiSpawnStmt),
     Kill(KillStmt),
     Link(LinkStmt),
     Unlink(UnlinkStmt),
@@ -196,6 +198,24 @@ pub struct SpawnStmt {
     pub span: Span,
 }
 
+/// Multiple SPAWN statements with a shared RETURNING clause.
+/// Format: SPAWN a: T {...}, SPAWN b: U {...}, ... RETURNING a, b, ...
+#[derive(Debug, Clone, PartialEq)]
+pub struct MultiSpawnStmt {
+    pub spawns: Vec<SpawnItem>,
+    pub returning: Option<ReturningClause>,
+    pub span: Span,
+}
+
+/// A single spawn item within a multi-spawn statement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpawnItem {
+    pub var: String,
+    pub type_name: String,
+    pub attrs: Vec<AttrAssignment>,
+    pub span: Span,
+}
+
 /// Attribute assignment: name = value
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttrAssignment {
@@ -210,6 +230,8 @@ pub enum ReturningClause {
     Id,
     All,
     Fields(Vec<String>),
+    /// Projections with expressions (e.g., RETURNING var.attr, var.attr2)
+    Projections(Vec<Projection>),
 }
 
 // ==================== KILL ====================

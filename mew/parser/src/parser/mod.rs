@@ -62,6 +62,20 @@ impl Parser {
         matches!(&self.peek().kind, TokenKind::Ident(_))
     }
 
+    /// Peek at the nth token ahead (0 = current, 1 = next, etc.)
+    pub(crate) fn peek_nth(&self, n: usize) -> &Token {
+        self.tokens.get(self.pos + n).unwrap_or_else(|| {
+            self.tokens
+                .last()
+                .expect("tokens should always end with EOF")
+        })
+    }
+
+    /// Check if the nth token ahead matches the given kind
+    pub(crate) fn peek_nth_is(&self, n: usize, kind: &TokenKind) -> bool {
+        std::mem::discriminant(&self.peek_nth(n).kind) == std::mem::discriminant(kind)
+    }
+
     pub(crate) fn expect(&mut self, kind: &TokenKind) -> ParseResult<Token> {
         if self.check(kind) {
             Ok(self.advance())

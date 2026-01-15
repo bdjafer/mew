@@ -213,6 +213,11 @@ impl<'r> Session<'r> {
                 Ok(StatementResult::Mutation(result))
             }
 
+            Stmt::MultiSpawn(multi_spawn_stmt) => {
+                let result = self.execute_multi_spawn(multi_spawn_stmt)?;
+                Ok(StatementResult::Mutation(result))
+            }
+
             Stmt::Kill(kill_stmt) => {
                 let result = self.execute_kill(kill_stmt)?;
                 Ok(StatementResult::Mutation(result))
@@ -357,7 +362,16 @@ impl<'r> Session<'r> {
                     MutationAction::Set(set_stmt) => {
                         let target_id =
                             self.resolve_target_with_bindings(&set_stmt.target, &local_bindings)?;
-                        let pb = Bindings::new();
+
+                        // Convert local_bindings to pattern Bindings for expression evaluation
+                        let mut pb = Bindings::new();
+                        for (var, entity_id) in &local_bindings {
+                            match entity_id {
+                                EntityId::Node(node_id) => pb.insert(var.clone(), *node_id),
+                                EntityId::Edge(edge_id) => pb.insert(var.clone(), *edge_id),
+                            }
+                        }
+
                         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
 
                         use mew_mutation::MutationOutcome;
@@ -600,6 +614,49 @@ impl<'r> Session<'r> {
         Ok(MutationSummary {
             nodes_created,
             edges_created,
+            ..Default::default()
+        })
+    }
+
+    /// Execute a multi-SPAWN statement (comma-separated SPAWNs with shared RETURNING).
+    fn execute_multi_spawn(
+        &mut self,
+        stmt: &mew_parser::MultiSpawnStmt,
+    ) -> SessionResult<MutationSummary> {
+        let pattern_bindings = Bindings::new();
+        let mut total_nodes_created = 0usize;
+        let mut total_edges_created = 0usize;
+
+        // Execute each spawn item
+        for spawn_item in &stmt.spawns {
+            // Convert SpawnItem to a temporary SpawnStmt for the executor
+            let temp_stmt = mew_parser::SpawnStmt {
+                var: spawn_item.var.clone(),
+                type_name: spawn_item.type_name.clone(),
+                attrs: spawn_item.attrs.clone(),
+                returning: None, // Individual items don't have RETURNING
+                span: spawn_item.span,
+            };
+
+            let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
+            let result = executor.execute_spawn(&temp_stmt, &pattern_bindings)?;
+
+            // Store the created node ID with the variable name
+            if let Some(node_id) = result.created_node() {
+                self.bindings.insert(spawn_item.var.clone(), node_id.into());
+                self.txn_state.track_created_node(node_id);
+                total_nodes_created += 1;
+            }
+
+            if let Some(edge_id) = result.created_edge() {
+                self.txn_state.track_created_edge(edge_id);
+                total_edges_created += 1;
+            }
+        }
+
+        Ok(MutationSummary {
+            nodes_created: total_nodes_created,
+            edges_created: total_edges_created,
             ..Default::default()
         })
     }

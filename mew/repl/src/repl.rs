@@ -17,7 +17,8 @@ use crate::block::{
 };
 use crate::executor::{
     execute_explain, execute_inspect, execute_kill, execute_link, execute_match, execute_match_mutate,
-    execute_match_walk, execute_profile, execute_set, execute_spawn, execute_txn, execute_unlink, execute_walk,
+    execute_match_walk, execute_multi_spawn, execute_profile, execute_set, execute_spawn, execute_txn,
+    execute_unlink, execute_walk,
 };
 use crate::format::print_help;
 
@@ -123,6 +124,12 @@ impl Repl {
                 &mut self.graph,
                 &mut self.bindings,
                 spawn_stmt,
+            ),
+            Stmt::MultiSpawn(ref multi_spawn_stmt) => execute_multi_spawn(
+                &self.registry,
+                &mut self.graph,
+                &mut self.bindings,
+                multi_spawn_stmt,
             ),
             Stmt::Kill(ref kill_stmt) => execute_kill(
                 &self.registry,

@@ -21,7 +21,7 @@ impl Parser {
         let token = self.peek();
         match &token.kind {
             TokenKind::Match => self.parse_match_or_mutate(),
-            TokenKind::Spawn => self.parse_spawn().map(Stmt::Spawn),
+            TokenKind::Spawn => self.parse_spawn_or_multi_spawn(),
             TokenKind::Kill => self.parse_kill().map(Stmt::Kill),
             TokenKind::Link => self.parse_link().map(Stmt::Link),
             TokenKind::Unlink => self.parse_unlink().map(Stmt::Unlink),
@@ -86,10 +86,10 @@ impl Parser {
     /// - MATCH ... RETURN ... (query)
     /// - MATCH ... LINK/SET/KILL/UNLINK ... (compound mutation)
     /// - MATCH ... WALK ... (compound walk)
-    /// Also supports multiple MATCH clauses that combine patterns.
+    /// Also supports multiple MATCH clauses that combine patterns, including after WHERE.
     fn parse_match_or_mutate(&mut self) -> ParseResult<Stmt> {
         let start = self.expect(&TokenKind::Match)?.span;
-        let pattern = self.parse_chained_patterns()?;
+        let mut pattern = self.parse_chained_patterns()?;
 
         // Parse optional WHERE
         let where_clause = if self.check(&TokenKind::Where) {
@@ -98,6 +98,13 @@ impl Parser {
         } else {
             None
         };
+
+        // Parse additional MATCH clauses after WHERE (extends the pattern binding context)
+        // This supports: MATCH a, b WHERE ... MATCH c, edge(a, c) ... UNLINK/LINK/etc
+        while self.check(&TokenKind::Match) {
+            self.advance();
+            pattern.extend(self.parse_pattern()?);
+        }
 
         // Parse OPTIONAL MATCH clauses
         let optional_matches = self.parse_optional_matches()?;
@@ -411,6 +418,103 @@ impl Parser {
 
     // ==================== SPAWN ====================
 
+    /// Parse SPAWN, which can be either:
+    /// - Single: SPAWN var: Type { ... } RETURNING ...
+    /// - Multi: SPAWN a: T { ... }, SPAWN b: U { ... }, ... RETURNING a, b
+    fn parse_spawn_or_multi_spawn(&mut self) -> ParseResult<Stmt> {
+        let start = self.peek().span;
+        let first_item = self.parse_spawn_item()?;
+
+        // Check for comma followed by SPAWN (multi-spawn syntax)
+        if self.check(&TokenKind::Comma) && self.peek_nth_is(1, &TokenKind::Spawn) {
+            // Multi-spawn syntax
+            let mut spawns = vec![first_item];
+
+            while self.check(&TokenKind::Comma) {
+                self.advance(); // consume comma
+                if self.check(&TokenKind::Spawn) {
+                    spawns.push(self.parse_spawn_item()?);
+                } else {
+                    break;
+                }
+            }
+
+            let returning = self.parse_optional_returning()?;
+            let span = self.span_from(start);
+
+            Ok(Stmt::MultiSpawn(MultiSpawnStmt {
+                spawns,
+                returning,
+                span,
+            }))
+        } else {
+            // Single spawn - convert SpawnItem to SpawnStmt
+            let returning = self.parse_optional_returning()?;
+            let span = self.span_from(start);
+
+            Ok(Stmt::Spawn(SpawnStmt {
+                var: first_item.var,
+                type_name: first_item.type_name,
+                attrs: first_item.attrs,
+                returning,
+                span,
+            }))
+        }
+    }
+
+    /// Parse a single spawn item (without RETURNING).
+    fn parse_spawn_item(&mut self) -> ParseResult<SpawnItem> {
+        let start = self.expect(&TokenKind::Spawn)?.span;
+
+        let first = self.expect_ident()?;
+
+        // Two syntaxes:
+        // 1. SPAWN var: Type { ... } - standard
+        // 2. SPAWN Type { ... } AS alias - inline (used in LINK targets)
+        let (var, type_name) = if self.check(&TokenKind::Colon) {
+            // Standard syntax: first is var, next is type
+            self.advance();
+            let type_name = self.expect_ident()?;
+            (first, type_name)
+        } else if self.check(&TokenKind::LBrace) {
+            // Inline syntax: first is type, var comes from AS clause later
+            // Use empty string as placeholder - will be set by AS clause
+            (String::new(), first)
+        } else {
+            // Could still be inline syntax if there's an AS clause coming
+            // Default: assume first is type (inline syntax)
+            (String::new(), first)
+        };
+
+        let attrs = if self.check(&TokenKind::LBrace) {
+            self.parse_attr_block()?
+        } else {
+            Vec::new()
+        };
+
+        // Check for AS clause (inline spawn syntax)
+        let var = if var.is_empty() {
+            if self.check(&TokenKind::As) {
+                self.advance();
+                self.expect_ident()?
+            } else {
+                // Generate a temp var name for inline spawn without AS
+                format!("_inline_{}", start.start)
+            }
+        } else {
+            var
+        };
+
+        let span = self.span_from(start);
+
+        Ok(SpawnItem {
+            var,
+            type_name,
+            attrs,
+            span,
+        })
+    }
+
     fn parse_spawn(&mut self) -> ParseResult<SpawnStmt> {
         let start = self.expect(&TokenKind::Spawn)?.span;
 
@@ -512,13 +616,41 @@ impl Parser {
             self.advance();
             Ok(ReturningClause::All)
         } else {
-            let mut fields = Vec::new();
-            fields.push(self.expect_ident()?);
-            while self.check(&TokenKind::Comma) {
-                self.advance();
-                fields.push(self.expect_ident()?);
+            // Parse first item to determine syntax
+            let start = self.peek().span;
+            let first_ident = self.expect_ident()?;
+
+            // Check if it's a dot expression (var.attr)
+            if self.check(&TokenKind::Dot) {
+                // Parse as projections (expressions)
+                self.advance(); // consume dot
+                let attr = self.expect_ident()?;
+                let first_expr = Expr::AttrAccess(
+                    Box::new(Expr::Var(first_ident, start)),
+                    attr,
+                    self.span_from(start),
+                );
+                let first_proj = Projection {
+                    expr: first_expr,
+                    alias: None,
+                    span: self.span_from(start),
+                };
+
+                let mut projections = vec![first_proj];
+                while self.check(&TokenKind::Comma) {
+                    self.advance();
+                    projections.push(self.parse_projection()?);
+                }
+                Ok(ReturningClause::Projections(projections))
+            } else {
+                // Simple field names
+                let mut fields = vec![first_ident];
+                while self.check(&TokenKind::Comma) {
+                    self.advance();
+                    fields.push(self.expect_ident()?);
+                }
+                Ok(ReturningClause::Fields(fields))
             }
-            Ok(ReturningClause::Fields(fields))
         }
     }
 

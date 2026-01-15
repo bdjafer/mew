@@ -34,6 +34,7 @@ impl<'r> Analyzer<'r> {
             Stmt::MatchMutate(mm) => self.analyze_match_mutate(mm),
             Stmt::MatchWalk(mw) => self.analyze_match_walk(mw),
             Stmt::Spawn(s) => self.analyze_spawn(s),
+            Stmt::MultiSpawn(ms) => self.analyze_multi_spawn(ms),
             Stmt::Kill(k) => self.analyze_kill(k),
             Stmt::Link(l) => self.analyze_link(l),
             Stmt::Unlink(u) => self.analyze_unlink(u),
@@ -272,6 +273,46 @@ impl<'r> Analyzer<'r> {
         }
 
         Ok(Type::NodeRef(type_id))
+    }
+
+    /// Analyze a multi-SPAWN statement.
+    fn analyze_multi_spawn(&mut self, stmt: &mew_parser::MultiSpawnStmt) -> AnalyzerResult<Type> {
+        // Analyze each spawn item
+        for item in &stmt.spawns {
+            // Resolve type name
+            let type_id = self
+                .registry
+                .get_type_id(&item.type_name)
+                .ok_or_else(|| AnalyzerError::unknown_type(&item.type_name, item.span))?;
+
+            let type_def = self.registry.get_type(type_id).unwrap();
+
+            // Check that type is not abstract
+            if type_def.is_abstract {
+                return Err(AnalyzerError::TypeMismatch {
+                    expected: "concrete type".to_string(),
+                    actual: format!("abstract type '{}'", item.type_name),
+                    line: item.span.line,
+                    column: item.span.column,
+                });
+            }
+
+            // Analyze attribute assignments
+            for attr in &item.attrs {
+                self.analyze_attr_assignment(attr, &item.type_name)?;
+            }
+
+            // Bind the variable
+            if !item.var.is_empty() {
+                let binding = VarBinding::new(&item.var, Type::NodeRef(type_id));
+                if !self.scope.define(binding) {
+                    return Err(AnalyzerError::duplicate_variable(&item.var, item.span));
+                }
+            }
+        }
+
+        // Multi-spawn returns count of nodes created
+        Ok(Type::Int)
     }
 
     /// Analyze an attribute assignment.
