@@ -979,6 +979,7 @@ mod tests {
             args: vec![],
             distinct: false,
             limit: None,
+            filter: None,
             span: Span::default(),
         });
 

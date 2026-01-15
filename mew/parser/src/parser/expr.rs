@@ -159,6 +159,7 @@ impl Parser {
                 args: vec![left, right],
                 distinct: false,
                 limit: None,
+                filter: None,
                 span,
             });
         }
@@ -479,15 +480,30 @@ impl Parser {
                     }
 
                     let mut args = Vec::new();
+                    let mut filter = None;
+
                     // Handle count(*) - treat * as "count all rows" (empty args)
                     if self.check(&TokenKind::Star) {
                         self.advance(); // consume the *
                         // args remains empty - represents count(*)
                     } else if !self.check(&TokenKind::RParen) {
+                        // Parse first argument
+                        // For filtered aggregation like COUNT(t WHERE t.status = "done"),
+                        // parse_expr will return just 't' since WHERE is not a valid
+                        // expression continuation token
                         args.push(self.parse_expr()?);
-                        while self.check(&TokenKind::Comma) {
+
+                        // Check for WHERE clause for filtered aggregation
+                        // e.g., COUNT(t WHERE t.status = "done")
+                        if self.check(&TokenKind::Where) {
                             self.advance();
-                            args.push(self.parse_expr()?);
+                            filter = Some(Box::new(self.parse_expr()?));
+                        } else {
+                            // Regular comma-separated arguments
+                            while self.check(&TokenKind::Comma) {
+                                self.advance();
+                                args.push(self.parse_expr()?);
+                            }
                         }
                     }
                     self.expect(&TokenKind::RParen)?;
@@ -527,6 +543,7 @@ impl Parser {
                         args,
                         distinct,
                         limit,
+                        filter,
                         span,
                     }))
                 } else {
