@@ -64,6 +64,11 @@ pub enum TokenKind {
     Explain,
     Profile,
     Is,
+    Prepare,
+    Execute,
+    Drop,
+    Prepared,
+    With,
 
     // Literals
     Ident(String),
@@ -169,6 +174,11 @@ impl TokenKind {
             TokenKind::Explain => "EXPLAIN",
             TokenKind::Profile => "PROFILE",
             TokenKind::Is => "IS",
+            TokenKind::Prepare => "PREPARE",
+            TokenKind::Execute => "EXECUTE",
+            TokenKind::Drop => "DROP",
+            TokenKind::Prepared => "PREPARED",
+            TokenKind::With => "WITH",
             TokenKind::Ident(_) => "identifier",
             TokenKind::Int(_) => "integer",
             TokenKind::Float(_) => "float",
@@ -268,6 +278,11 @@ impl TokenKind {
                 | TokenKind::Explain
                 | TokenKind::Profile
                 | TokenKind::Is
+                | TokenKind::Prepare
+                | TokenKind::Execute
+                | TokenKind::Drop
+                | TokenKind::Prepared
+                | TokenKind::With
         )
     }
 }
@@ -615,6 +630,11 @@ impl<'a> Lexer<'a> {
             "EXPLAIN" => TokenKind::Explain,
             "PROFILE" => TokenKind::Profile,
             "IS" => TokenKind::Is,
+            "PREPARE" => TokenKind::Prepare,
+            "EXECUTE" => TokenKind::Execute,
+            "DROP" => TokenKind::Drop,
+            "PREPARED" => TokenKind::Prepared,
+            "WITH" => TokenKind::With,
             _ => TokenKind::Ident(ident),
         }
     }

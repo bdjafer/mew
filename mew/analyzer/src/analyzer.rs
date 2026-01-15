@@ -51,6 +51,20 @@ impl<'r> Analyzer<'r> {
                 self.analyze_stmt(&p.statement)?;
                 Ok(Type::Any) // Returns execution metrics
             }
+            Stmt::Prepare(p) => {
+                // Analyze inner statement to check for type errors
+                self.analyze_stmt(&p.statement)?;
+                Ok(Type::Null) // Prepare doesn't return a value
+            }
+            Stmt::Execute(_) => {
+                // Execute returns the result of the prepared statement
+                // Runtime will resolve the prepared statement
+                Ok(Type::Any)
+            }
+            Stmt::DropPrepared(_) => {
+                // Drop doesn't return a value
+                Ok(Type::Null)
+            }
         }
     }
 
