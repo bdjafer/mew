@@ -53,8 +53,10 @@ impl MutationOutcome {
 /// Result of creating a node or edge.
 #[derive(Debug, Clone, Default)]
 pub struct CreatedEntity {
-    /// Created node ID (if SPAWN).
+    /// Created node ID (if SPAWN single).
     pub node_id: Option<NodeId>,
+    /// Created node IDs (if SPAWN multiple/chained).
+    pub node_ids: Vec<NodeId>,
     /// Created edge ID (if LINK).
     pub edge_id: Option<EdgeId>,
     /// Returned attributes.
@@ -65,6 +67,16 @@ impl CreatedEntity {
     pub fn node(id: NodeId) -> Self {
         Self {
             node_id: Some(id),
+            node_ids: vec![id],
+            edge_id: None,
+            attributes: HashMap::new(),
+        }
+    }
+
+    pub fn nodes(ids: Vec<NodeId>) -> Self {
+        Self {
+            node_id: ids.first().copied(),
+            node_ids: ids,
             edge_id: None,
             attributes: HashMap::new(),
         }
@@ -73,6 +85,7 @@ impl CreatedEntity {
     pub fn edge(id: EdgeId) -> Self {
         Self {
             node_id: None,
+            node_ids: Vec::new(),
             edge_id: Some(id),
             attributes: HashMap::new(),
         }

@@ -154,6 +154,8 @@ impl Parser {
             }))
         } else if self.is_mutation_keyword() {
             // Parse as compound mutation
+            // Per spec (4_QUERIES.md §2.11.3): "No RETURN clause is allowed
+            // (compound statements don't return results)"
             let mut mutations = Vec::new();
             while self.is_mutation_keyword() {
                 mutations.push(self.parse_mutation_action()?);
@@ -421,7 +423,52 @@ impl Parser {
 
     fn parse_spawn(&mut self) -> ParseResult<SpawnStmt> {
         let start = self.expect(&TokenKind::Spawn)?.span;
+        let mut items = Vec::new();
 
+        // Parse first spawn item
+        items.push(self.parse_spawn_item(start)?);
+
+        // Parse additional chained spawn items (comma-separated)
+        // SPAWN a: T {...}, SPAWN b: U {...}, SPAWN c: V {...}
+        while self.check(&TokenKind::Comma) {
+            // Peek ahead to see if next is SPAWN
+            let next_pos = self.pos + 1;
+            if next_pos < self.tokens.len() && self.tokens[next_pos].kind == TokenKind::Spawn {
+                self.advance(); // consume comma
+                let item_start = self.expect(&TokenKind::Spawn)?.span;
+                items.push(self.parse_spawn_item(item_start)?);
+            } else {
+                break;
+            }
+        }
+
+        let returning = self.parse_optional_returning()?;
+        let span = self.span_from(start);
+
+        Ok(SpawnStmt {
+            items,
+            returning,
+            span,
+        })
+    }
+
+    /// Parse a single SPAWN statement without chaining.
+    /// Used for inline spawns in LINK targets where comma separates targets, not spawns.
+    fn parse_single_spawn(&mut self) -> ParseResult<SpawnStmt> {
+        let start = self.expect(&TokenKind::Spawn)?.span;
+        let item = self.parse_spawn_item(start)?;
+        let span = self.span_from(start);
+
+        // Note: No RETURNING clause for inline spawns in LINK targets
+        Ok(SpawnStmt {
+            items: vec![item],
+            returning: None,
+            span,
+        })
+    }
+
+    /// Parse a single spawn item (without the SPAWN keyword, already consumed).
+    fn parse_spawn_item(&mut self, start: Span) -> ParseResult<SpawnItem> {
         let first = self.expect_ident()?;
 
         // Two syntaxes:
@@ -461,14 +508,12 @@ impl Parser {
             var
         };
 
-        let returning = self.parse_optional_returning()?;
         let span = self.span_from(start);
 
-        Ok(SpawnStmt {
+        Ok(SpawnItem {
             var,
             type_name,
             attrs,
-            returning,
             span,
         })
     }
@@ -520,13 +565,32 @@ impl Parser {
             self.advance();
             Ok(ReturningClause::All)
         } else {
-            let mut fields = Vec::new();
-            fields.push(self.expect_ident()?);
-            while self.check(&TokenKind::Comma) {
+            // Parse first field (may be simple or qualified)
+            let first = self.expect_ident()?;
+
+            // Check if it's a qualified name (var.field)
+            if self.check(&TokenKind::Dot) {
                 self.advance();
-                fields.push(self.expect_ident()?);
+                let first_field = self.expect_ident()?;
+                let mut qualified_fields = vec![(first, first_field)];
+
+                while self.check(&TokenKind::Comma) {
+                    self.advance();
+                    let var = self.expect_ident()?;
+                    self.expect(&TokenKind::Dot)?;
+                    let field = self.expect_ident()?;
+                    qualified_fields.push((var, field));
+                }
+                Ok(ReturningClause::QualifiedFields(qualified_fields))
+            } else {
+                // Simple field names
+                let mut fields = vec![first];
+                while self.check(&TokenKind::Comma) {
+                    self.advance();
+                    fields.push(self.expect_ident()?);
+                }
+                Ok(ReturningClause::Fields(fields))
             }
-            Ok(ReturningClause::Fields(fields))
         }
     }
 
@@ -678,8 +742,9 @@ impl Parser {
             self.expect(&TokenKind::RBrace)?;
             Ok(TargetRef::Pattern(Box::new(pattern)))
         } else if self.check(&TokenKind::Spawn) {
-            // Inline SPAWN in LINK target
-            let spawn = self.parse_spawn()?;
+            // Inline SPAWN in LINK target - parse single spawn without chaining
+            // since comma in LINK separates targets, not spawn items
+            let spawn = self.parse_single_spawn()?;
             Ok(TargetRef::InlineSpawn(Box::new(spawn)))
         } else {
             let var = self.expect_ident()?;

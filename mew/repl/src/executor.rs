@@ -171,6 +171,8 @@ pub fn execute_spawn(
     bindings: &mut HashMap<String, EntityId>,
     stmt: &mew_parser::SpawnStmt,
 ) -> Result<String, String> {
+    use mew_mutation::MutationOutcome;
+
     let pattern_bindings = to_pattern_bindings(bindings);
     let mut executor = MutationExecutor::new(registry, graph);
 
@@ -178,12 +180,21 @@ pub fn execute_spawn(
         .execute_spawn(stmt, &pattern_bindings)
         .map_err(|e| format!("Spawn error: {}", e))?;
 
-    if let Some(node_id) = result.created_node() {
-        bindings.insert(stmt.var.clone(), node_id.into());
-        Ok(format!("Created {} with id {}", stmt.var, node_id.raw()))
-    } else {
-        Ok("Spawn completed".to_string())
+    // Handle created nodes - for chained spawns, bind each variable
+    if let MutationOutcome::Created(ref created) = result {
+        let mut messages = Vec::new();
+        for (i, item) in stmt.items.iter().enumerate() {
+            if let Some(&node_id) = created.node_ids.get(i) {
+                bindings.insert(item.var.clone(), node_id.into());
+                messages.push(format!("Created {} with id {}", item.var, node_id.raw()));
+            }
+        }
+        if !messages.is_empty() {
+            return Ok(messages.join(", "));
+        }
     }
+
+    Ok("Spawn completed".to_string())
 }
 
 /// Execute a KILL statement.
@@ -357,11 +368,12 @@ pub fn resolve_or_spawn_target_ref(
                 .execute_spawn(spawn_stmt, &pattern_bindings)
                 .map_err(|e| format!("Inline spawn error: {}", e))?;
 
-            // Get the created node ID and add to bindings
+            // Get the created node ID and add to bindings (first item for inline spawn)
             let node_id = result.created_node().ok_or_else(|| {
                 "Inline spawn did not create a node".to_string()
             })?;
-            bindings.insert(spawn_stmt.var.clone(), node_id.into());
+            let var_name = spawn_stmt.var();
+            bindings.insert(var_name.to_string(), node_id.into());
             Ok(node_id.into())
         }
         _ => resolve_target_ref(target_ref, bindings),
@@ -439,15 +451,21 @@ pub fn execute_match_mutate(
         for mutation in &stmt.mutations {
             match mutation {
                 MutationAction::Spawn(spawn_stmt) => {
+                    use mew_mutation::MutationOutcome;
                     let pattern_bindings = to_pattern_bindings(&local_bindings);
                     let mut executor = MutationExecutor::new(registry, graph);
                     let result = executor
                         .execute_spawn(spawn_stmt, &pattern_bindings)
                         .map_err(|e| format!("Spawn error: {}", e))?;
 
-                    if let Some(node_id) = result.created_node() {
-                        local_bindings.insert(spawn_stmt.var.clone(), node_id.into());
-                        total_nodes += 1;
+                    // Handle created nodes - for chained spawns, bind each variable
+                    if let MutationOutcome::Created(ref created) = result {
+                        for (i, item) in spawn_stmt.items.iter().enumerate() {
+                            if let Some(&node_id) = created.node_ids.get(i) {
+                                local_bindings.insert(item.var.clone(), node_id.into());
+                                total_nodes += 1;
+                            }
+                        }
                     }
                 }
                 MutationAction::Link(link_stmt) => {
