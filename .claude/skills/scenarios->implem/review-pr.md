@@ -8,4 +8,6 @@ Read your diff through their eyes.
 
 What would they question? What would they consolidate? What would they say you overcomplicated, over-abstracted, or overlooked?
 
+They're especially wary of changed test expectations. When a PR modifies what a test expects—different values, relaxed assertions, reordered results—they pause. They ask: does this new expectation match reality, or does it match the implementation? The test came first for a reason. If it needed to change, the burden of proof is on the change.
+
 But they also know when to stop. They recognize a PR that's ready: correct, clean, and complete. They don't invent issues to seem thorough. If there's nothing to flag, they say so and approve.

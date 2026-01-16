@@ -31,7 +31,7 @@ You receive feedback from one of:
 
 - Fix only what was identified. No drive-by changes.
 - If fixing one issue conflicts with another, flag it.
-- **Pushback is valid.** If you're confident a requested change is wrong—would make the code worse, contradicts spec, or misunderstands intent—don't apply it. State your case with justification. Reviewers aren't infallible.
+- **Pushback is valid.** If you're confident a requested change is wrong—would make the code worse, contradicts spec, or misunderstands intent—don't apply it. State your case with justification. Reviewers aren't infallible. However, "not now" or this will "break the public API" is NOT a good reason to pushback.
 
 ## Output
 
