@@ -1,0 +1,57 @@
+-- ===========================================================================
+-- SEED: Populated Auth Setup
+-- ===========================================================================
+
+-- Roles
+SPAWN admin: Role { name = "admin", priority = 100 }
+SPAWN editor: Role { name = "editor", priority = 50 }
+SPAWN viewer: Role { name = "viewer", priority = 10 }
+SPAWN security: Role { name = "security_cleared", priority = 200 }
+
+-- Users
+SPAWN alice: User { username = "alice", email = "alice@example.com", display_name = "Alice Admin" }
+SPAWN bob: User { username = "bob", email = "bob@example.com", display_name = "Bob Editor" }
+SPAWN charlie: User { username = "charlie", email = "charlie@example.com", display_name = "Charlie Viewer" }
+
+-- Role assignments
+LINK has_role(#alice, #admin)
+LINK has_role(#alice, #security)
+LINK has_role(#bob, #editor)
+LINK has_role(#charlie, #viewer)
+
+-- Permissions
+LINK grants_permission(#admin, "admin") { resource_type = "Document" }
+LINK grants_permission(#admin, "read") { resource_type = "Document" }
+LINK grants_permission(#admin, "write") { resource_type = "Document" }
+LINK grants_permission(#admin, "delete") { resource_type = "Document" }
+LINK grants_permission(#editor, "read") { resource_type = "Document" }
+LINK grants_permission(#editor, "write") { resource_type = "Document" }
+LINK grants_permission(#viewer, "read") { resource_type = "Document" }
+
+-- Folders
+SPAWN public_folder: Folder { name = "Public", path = "/public", sensitivity = "public" }
+SPAWN internal_folder: Folder { name = "Internal", path = "/internal", sensitivity = "internal" }
+SPAWN secret_folder: Folder { name = "Secret", path = "/secret", sensitivity = "secret" }
+
+LINK folder_owned_by(#public_folder, #alice)
+LINK folder_owned_by(#internal_folder, #alice)
+LINK folder_owned_by(#secret_folder, #alice)
+
+-- Documents
+SPAWN doc1: Document { title = "Public Notice", sensitivity = "public", status = "published" }
+SPAWN doc2: Document { title = "Internal Memo", sensitivity = "internal" }
+SPAWN doc3: Document { title = "Confidential Report", sensitivity = "confidential" }
+SPAWN doc4: Document { title = "Secret Project", sensitivity = "secret" }
+
+LINK owned_by(#doc1, #alice)
+LINK owned_by(#doc2, #bob)
+LINK owned_by(#doc3, #alice)
+LINK owned_by(#doc4, #alice)
+
+LINK in_folder(#doc1, #public_folder)
+LINK in_folder(#doc2, #internal_folder)
+LINK in_folder(#doc4, #secret_folder)
+
+-- Sharing
+LINK shared_with(#doc2, #charlie) { permission = "read" }
+LINK shared_with(#doc3, #bob) { permission = "write" }

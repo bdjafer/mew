@@ -1,0 +1,143 @@
+-- ===========================================================================
+-- OPERATIONS: Symmetric Edge Relationships
+-- DESCRIPTION: Tests [symmetric] edge modifier behavior
+-- FEATURES: modifiers/edge_symmetry.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create users
+-- ---------------------------------------------------------------------------
+
+--# test_setup_alice
+SPAWN alice: User {
+  username = "alice",
+  display_name = "Alice Smith"
+}
+
+--# test_setup_bob
+SPAWN bob: User {
+  username = "bob",
+  display_name = "Bob Jones"
+}
+
+--# test_setup_charlie
+SPAWN charlie: User {
+  username = "charlie",
+  display_name = "Charlie Brown"
+}
+
+-- ---------------------------------------------------------------------------
+-- Symmetric Edge: friend_of
+-- ---------------------------------------------------------------------------
+
+--# test_create_friendship_alice_bob
+LINK friend_of(#alice, #bob) {
+  nickname_a_for_b = "Bobby"
+}
+
+--# test_query_friendship_forward
+MATCH friend_of(#alice, x)
+RETURN x.username
+
+--# test_query_friendship_reverse
+MATCH friend_of(#bob, x)
+RETURN x.username
+
+--# test_query_friendship_either_order
+MATCH friend_of(a, b)
+WHERE a.username = "alice" OR b.username = "alice"
+RETURN a.username, b.username
+
+-- ---------------------------------------------------------------------------
+-- Symmetric Edge: Idempotency
+-- ---------------------------------------------------------------------------
+
+--# test_friendship_idempotent
+LINK friend_of(#bob, #alice)
+
+--# test_verify_single_friendship
+MATCH friend_of(#alice, #bob) AS f
+RETURN f
+
+--# test_count_alice_friends
+MATCH friend_of(#alice, x)
+RETURN COUNT(x) AS friend_count
+
+-- ---------------------------------------------------------------------------
+-- Symmetric Edge: Attributes accessible from either side
+-- ---------------------------------------------------------------------------
+
+--# test_access_nickname_forward
+MATCH friend_of(#alice, #bob) AS f
+RETURN f.nickname_a_for_b
+
+--# test_access_nickname_reverse
+MATCH friend_of(#bob, #alice) AS f
+RETURN f.nickname_a_for_b
+
+-- ---------------------------------------------------------------------------
+-- Symmetric Edge: collaborates_with
+-- ---------------------------------------------------------------------------
+
+--# test_create_collaboration
+LINK collaborates_with(#alice, #charlie) {
+  project = "Open Source MEW"
+}
+
+--# test_query_collaboration_charlie_perspective
+MATCH collaborates_with(#charlie, x)
+RETURN x.username, collaborates_with.project
+
+--# test_query_all_collaborations
+MATCH u1: User, u2: User, collaborates_with(u1, u2) AS c
+RETURN u1.username, u2.username, c.project
+
+-- ---------------------------------------------------------------------------
+-- Symmetric Edge: mutual_block
+-- ---------------------------------------------------------------------------
+
+--# test_create_mutual_block
+LINK mutual_block(#bob, #charlie)
+
+--# test_query_mutual_block_forward
+MATCH mutual_block(#bob, x)
+RETURN x.username
+
+--# test_query_mutual_block_reverse
+MATCH mutual_block(#charlie, x)
+RETURN x.username
+
+-- ---------------------------------------------------------------------------
+-- Symmetric Edge: Count verification
+-- ---------------------------------------------------------------------------
+
+--# test_count_symmetric_edges
+MATCH friend_of(a, b)
+RETURN COUNT(*) AS total_friendships
+
+--# test_count_user_relationships
+MATCH u: User, friend_of(u, _)
+RETURN u.username, COUNT(*) AS friend_count
+
+-- ---------------------------------------------------------------------------
+-- Symmetric Edge: Unlink
+-- ---------------------------------------------------------------------------
+
+--# test_unlink_friendship
+MATCH friend_of(#alice, #bob) AS f
+UNLINK f
+
+--# test_verify_unlinked_forward
+MATCH friend_of(#alice, #bob)
+RETURN COUNT(*) AS count
+
+--# test_verify_unlinked_reverse
+MATCH friend_of(#bob, #alice)
+RETURN COUNT(*) AS count
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH u: User KILL u

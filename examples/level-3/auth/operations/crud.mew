@@ -1,0 +1,197 @@
+-- ===========================================================================
+-- OPERATIONS: Basic CRUD for Authorization
+-- DESCRIPTION: Tests basic operations for the auth ontology
+-- FEATURES: Core CRUD operations
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Create: Roles
+-- ---------------------------------------------------------------------------
+
+--# test_create_admin_role
+SPAWN admin: Role {
+  name = "admin",
+  description = "Full system access",
+  priority = 100
+}
+
+--# test_create_user_role
+SPAWN user_role: Role {
+  name = "user",
+  description = "Standard user access",
+  priority = 10
+}
+
+-- ---------------------------------------------------------------------------
+-- Create: Users
+-- ---------------------------------------------------------------------------
+
+--# test_create_user_alice
+SPAWN alice: User {
+  username = "alice",
+  email = "alice@example.com",
+  display_name = "Alice Smith"
+}
+
+--# test_create_user_bob
+SPAWN bob: User {
+  username = "bob_jones",
+  email = "bob@example.com",
+  display_name = "Bob Jones"
+}
+
+-- ---------------------------------------------------------------------------
+-- Create: Service
+-- ---------------------------------------------------------------------------
+
+--# test_create_service
+SPAWN api: Service {
+  name = "api-service",
+  api_key = "sk_live_abc123",
+  scopes = "read,write"
+}
+
+-- ---------------------------------------------------------------------------
+-- Link: Role assignments
+-- ---------------------------------------------------------------------------
+
+--# test_assign_admin_role
+LINK has_role(#alice, #admin) {
+  granted_by = "system"
+}
+
+--# test_assign_user_role
+LINK has_role(#bob, #user_role)
+
+--# test_assign_service_role
+LINK service_has_role(#api, #user_role)
+
+-- ---------------------------------------------------------------------------
+-- Create: Documents and Folders
+-- ---------------------------------------------------------------------------
+
+--# test_create_folder
+SPAWN docs: Folder {
+  name = "Documents",
+  path = "/documents",
+  sensitivity = "internal"
+}
+
+--# test_create_public_doc
+SPAWN public_doc: Document {
+  title = "Public Policy",
+  content = "Available to everyone",
+  sensitivity = "public",
+  status = "published"
+}
+
+--# test_create_internal_doc
+SPAWN internal_doc: Document {
+  title = "Internal Guide",
+  content = "For employees only",
+  sensitivity = "internal"
+}
+
+-- ---------------------------------------------------------------------------
+-- Link: Ownership and location
+-- ---------------------------------------------------------------------------
+
+--# test_link_ownership
+LINK owned_by(#public_doc, #alice)
+LINK owned_by(#internal_doc, #bob)
+
+--# test_link_folder
+LINK in_folder(#internal_doc, #docs)
+LINK folder_owned_by(#docs, #alice)
+
+-- ---------------------------------------------------------------------------
+-- Link: Sharing
+-- ---------------------------------------------------------------------------
+
+--# test_share_document
+LINK shared_with(#internal_doc, #alice) {
+  permission = "write"
+}
+
+-- ---------------------------------------------------------------------------
+-- Link: Permissions
+-- ---------------------------------------------------------------------------
+
+--# test_grant_permissions
+LINK grants_permission(#admin, "admin") { resource_type = "Document" }
+LINK grants_permission(#admin, "read") { resource_type = "Document" }
+LINK grants_permission(#admin, "write") { resource_type = "Document" }
+LINK grants_permission(#user_role, "read") { resource_type = "Document" }
+
+-- ---------------------------------------------------------------------------
+-- Query: Users and roles
+-- ---------------------------------------------------------------------------
+
+--# test_query_admins
+MATCH u: User, r: Role, has_role(u, r)
+WHERE r.name = "admin"
+RETURN u.username, r.name
+
+--# test_query_user_roles
+MATCH u: User, r: Role, has_role(u, r)
+RETURN u.username, r.name, r.priority
+ORDER BY r.priority DESC
+
+-- ---------------------------------------------------------------------------
+-- Query: Documents
+-- ---------------------------------------------------------------------------
+
+--# test_query_public_docs
+MATCH d: Document WHERE d.sensitivity = "public"
+RETURN d.title, d.status
+
+--# test_query_owned_docs
+MATCH u: User, d: Document, owned_by(d, u)
+RETURN u.username, d.title
+
+--# test_query_shared_docs
+MATCH d: Document, u: User, shared_with(d, u) AS s
+RETURN d.title, u.username, s.permission
+
+-- ---------------------------------------------------------------------------
+-- Query: Folder contents
+-- ---------------------------------------------------------------------------
+
+--# test_query_folder_docs
+MATCH f: Folder, d: Document, in_folder(d, f)
+RETURN f.path, d.title
+
+-- ---------------------------------------------------------------------------
+-- Update: Document status
+-- ---------------------------------------------------------------------------
+
+--# test_publish_document
+SET #internal_doc {
+  status = "published",
+  published_at = now()
+}
+
+--# test_archive_document
+SET #internal_doc {
+  status = "archived",
+  archived_at = now()
+}
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_docs
+MATCH d: Document KILL d
+
+--# test_cleanup_folders
+MATCH f: Folder KILL f
+
+--# test_cleanup_services
+MATCH s: Service KILL s
+
+--# test_cleanup_users
+MATCH u: User KILL u
+
+--# test_cleanup_roles
+MATCH r: Role KILL r

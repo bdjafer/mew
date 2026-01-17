@@ -1,0 +1,241 @@
+-- ===========================================================================
+-- OPERATIONS: Policy Declarations
+-- DESCRIPTION: Tests ALLOW/DENY policy rules and access control
+-- FEATURES: declarations/policy.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create actors and roles
+-- ---------------------------------------------------------------------------
+
+--# test_setup_admin_role
+SPAWN admin_role: Role {
+  name = "admin",
+  description = "Full access to all resources",
+  priority = 100
+}
+
+--# test_setup_editor_role
+SPAWN editor_role: Role {
+  name = "editor",
+  description = "Can read and write documents",
+  priority = 50
+}
+
+--# test_setup_viewer_role
+SPAWN viewer_role: Role {
+  name = "viewer",
+  description = "Read-only access",
+  priority = 10
+}
+
+--# test_setup_security_role
+SPAWN security_role: Role {
+  name = "security_cleared",
+  description = "Access to secret documents",
+  priority = 200
+}
+
+--# test_setup_admin_user
+SPAWN admin: User {
+  username = "admin",
+  email = "admin@example.com",
+  display_name = "System Administrator"
+}
+LINK has_role(#admin, #admin_role)
+
+--# test_setup_editor_user
+SPAWN editor: User {
+  username = "editor",
+  email = "editor@example.com",
+  display_name = "Content Editor"
+}
+LINK has_role(#editor, #editor_role)
+
+--# test_setup_viewer_user
+SPAWN viewer: User {
+  username = "viewer",
+  email = "viewer@example.com",
+  display_name = "Reader"
+}
+LINK has_role(#viewer, #viewer_role)
+
+--# test_setup_permissions
+LINK grants_permission(#admin_role, "admin") { resource_type = "Document" }
+LINK grants_permission(#admin_role, "read") { resource_type = "Document" }
+LINK grants_permission(#admin_role, "write") { resource_type = "Document" }
+LINK grants_permission(#admin_role, "delete") { resource_type = "Document" }
+LINK grants_permission(#editor_role, "read") { resource_type = "Document" }
+LINK grants_permission(#editor_role, "write") { resource_type = "Document" }
+LINK grants_permission(#viewer_role, "read") { resource_type = "Document" }
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create documents with different sensitivities
+-- ---------------------------------------------------------------------------
+
+--# test_setup_public_doc
+SPAWN public_doc: Document {
+  title = "Public Announcement",
+  content = "This is public",
+  sensitivity = "public",
+  status = "published"
+}
+LINK owned_by(#public_doc, #admin)
+
+--# test_setup_internal_doc
+SPAWN internal_doc: Document {
+  title = "Internal Memo",
+  content = "For internal use",
+  sensitivity = "internal"
+}
+LINK owned_by(#internal_doc, #editor)
+
+--# test_setup_confidential_doc
+SPAWN confidential_doc: Document {
+  title = "Confidential Report",
+  content = "Sensitive information",
+  sensitivity = "confidential"
+}
+LINK owned_by(#confidential_doc, #admin)
+
+--# test_setup_secret_doc
+SPAWN secret_doc: Document {
+  title = "Secret Project",
+  content = "Top secret information",
+  sensitivity = "secret"
+}
+LINK owned_by(#secret_doc, #admin)
+
+-- ---------------------------------------------------------------------------
+-- Test: Public access (policy: public_read)
+-- ---------------------------------------------------------------------------
+
+--# test_public_access_as_viewer
+BEGIN SESSION AS #viewer
+MATCH d: Document WHERE d.sensitivity = "public"
+RETURN d.title
+END SESSION
+
+--# test_public_access_no_session
+MATCH d: Document WHERE d.sensitivity = "public"
+RETURN d.title
+
+-- ---------------------------------------------------------------------------
+-- Test: Owner access (policy: owner_read, owner_write)
+-- ---------------------------------------------------------------------------
+
+--# test_owner_can_read
+BEGIN SESSION AS #editor
+MATCH d: Document, owned_by(d, current_actor())
+RETURN d.title
+END SESSION
+
+--# test_owner_can_write
+BEGIN SESSION AS #editor
+SET #internal_doc { content = "Updated by owner" }
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Test: Role-based access (policy: role_read, role_write)
+-- ---------------------------------------------------------------------------
+
+--# test_admin_can_read_all
+BEGIN SESSION AS #admin
+MATCH d: Document
+RETURN d.title, d.sensitivity
+END SESSION
+
+--# test_viewer_cannot_write
+BEGIN SESSION AS #viewer
+SET #public_doc { content = "Attempted modification" }
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Test: Shared access (policy: shared_read, shared_write)
+-- ---------------------------------------------------------------------------
+
+--# test_share_document
+LINK shared_with(#confidential_doc, #viewer) {
+  permission = "read"
+}
+
+--# test_viewer_can_read_shared
+BEGIN SESSION AS #viewer
+MATCH d: Document, shared_with(d, current_actor())
+RETURN d.title
+END SESSION
+
+--# test_viewer_cannot_write_shared
+BEGIN SESSION AS #viewer
+SET #confidential_doc { content = "Attempted write" }
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Test: Delete policies
+-- ---------------------------------------------------------------------------
+
+--# test_owner_can_delete_draft
+SPAWN draft_doc: Document {
+  title = "Draft to Delete",
+  status = "draft"
+}
+LINK owned_by(#draft_doc, #editor)
+
+--# test_editor_deletes_own
+BEGIN SESSION AS #editor
+KILL #draft_doc
+END SESSION
+
+--# test_cannot_delete_published
+BEGIN SESSION AS #admin
+KILL #public_doc
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Test: Sensitivity escalation prevention
+-- ---------------------------------------------------------------------------
+
+--# test_cannot_access_secret
+BEGIN SESSION AS #editor
+MATCH d: Document WHERE d.sensitivity = "secret"
+RETURN d.title
+END SESSION
+
+--# test_cannot_escalate_sensitivity
+BEGIN SESSION AS #editor
+SET #internal_doc { sensitivity = "secret" }
+END SESSION
+
+--# test_security_cleared_can_access
+LINK has_role(#admin, #security_role)
+BEGIN SESSION AS #admin
+MATCH d: Document WHERE d.sensitivity = "secret"
+RETURN d.title
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Test: Service account restrictions
+-- ---------------------------------------------------------------------------
+
+--# test_setup_service
+SPAWN api_service: Service {
+  name = "api-gateway",
+  api_key = "sk_test_12345"
+}
+
+--# test_service_read_only
+BEGIN SESSION AS #api_service
+SET #public_doc { content = "Service modification" }
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH l: AuditLog KILL l
+MATCH d: Document KILL d
+MATCH f: Folder KILL f
+MATCH s: Service KILL s
+MATCH u: User KILL u
+MATCH r: Role KILL r

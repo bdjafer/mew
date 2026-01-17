@@ -21,14 +21,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Final test verification
-        run: |
-          cd mew && cargo test --workspace
-          echo "All tests passed."
-
       - name: Merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

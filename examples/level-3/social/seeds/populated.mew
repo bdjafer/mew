@@ -1,0 +1,47 @@
+-- ===========================================================================
+-- SEED: Populated Social Network
+-- ===========================================================================
+
+-- Users
+SPAWN alice: User { username = "alice", display_name = "Alice", verified = true }
+SPAWN bob: User { username = "bob", display_name = "Bob" }
+SPAWN charlie: User { username = "charlie", display_name = "Charlie" }
+SPAWN diana: User { username = "diana", display_name = "Diana", verified = true }
+SPAWN eve: User { username = "eve", display_name = "Eve" }
+
+-- Friendships (symmetric)
+LINK friend_of(#alice, #bob)
+LINK friend_of(#bob, #charlie)
+LINK friend_of(#charlie, #diana)
+LINK friend_of(#alice, #diana)
+
+-- Follows (asymmetric)
+LINK follows(#eve, #alice)
+LINK follows(#eve, #diana)
+LINK follows(#charlie, #alice)
+LINK follows(#bob, #diana)
+
+-- Posts
+SPAWN post1: Post { content = "Hello everyone!", visibility = "public" }
+SPAWN post2: Post { content = "Friends only update", visibility = "friends" }
+SPAWN post3: Post { content = "Check out this project", visibility = "public" }
+
+LINK authored(#alice, #post1) AS auth1
+LINK authored(#alice, #post2)
+LINK authored(#diana, #post3) AS auth3
+
+-- Comments
+SPAWN comment1: Comment { content = "Great post!" }
+LINK comment_on(#comment1, #post1)
+LINK commented_by(#comment1, #bob)
+
+-- Higher-order: Reactions
+LINK reacted_to(#charlie, #auth1) { reaction = "like" }
+LINK reacted_to(#eve, #auth1) { reaction = "love" }
+LINK reacted_to(#bob, #auth3) { reaction = "wow" }
+
+-- Group
+SPAWN devs: Group { name = "Developers", visibility = "public" }
+LINK member_of(#alice, #devs) { role = "admin" }
+LINK member_of(#bob, #devs) { role = "member" }
+LINK member_of(#charlie, #devs) { role = "moderator" }

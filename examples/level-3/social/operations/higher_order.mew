@@ -1,0 +1,152 @@
+-- ===========================================================================
+-- OPERATIONS: Higher-Order Edges
+-- DESCRIPTION: Tests edge<T> type references and meta-relationships
+-- FEATURES: types/edge_references.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create users and content
+-- ---------------------------------------------------------------------------
+
+--# test_setup_users
+SPAWN alice: User { username = "alice", display_name = "Alice" }
+SPAWN bob: User { username = "bob", display_name = "Bob" }
+SPAWN charlie: User { username = "charlie", display_name = "Charlie" }
+
+--# test_setup_posts
+SPAWN post1: Post { content = "Hello world!", visibility = "public" }
+SPAWN post2: Post { content = "Check out my project", visibility = "friends" }
+
+--# test_link_authored
+LINK authored(#alice, #post1) AS auth1
+LINK authored(#bob, #post2) AS auth2
+
+-- ---------------------------------------------------------------------------
+-- Higher-Order Edge: Reacting to authored edge
+-- ---------------------------------------------------------------------------
+
+--# test_react_to_post
+LINK reacted_to(#charlie, #auth1) {
+  reaction = "like"
+}
+
+--# test_react_love
+LINK reacted_to(#bob, #auth1) {
+  reaction = "love"
+}
+
+--# test_query_reactions_to_post
+MATCH u: User, authored(author, #post1) AS a, reacted_to(u, a) AS r
+RETURN u.username, r.reaction
+
+--# test_count_reactions
+MATCH authored(_, #post1) AS a, reacted_to(_, a)
+RETURN COUNT(*) AS reaction_count
+
+-- ---------------------------------------------------------------------------
+-- Higher-Order Edge: Trust score on friendship
+-- ---------------------------------------------------------------------------
+
+--# test_create_friendships
+LINK friend_of(#alice, #bob)
+LINK friend_of(#alice, #charlie)
+LINK friend_of(#bob, #charlie)
+
+--# test_assess_trust
+MATCH friend_of(#alice, #bob) AS friendship
+LINK trust_score(#charlie, friendship) {
+  score = 0.85,
+  confidence = 0.9
+}
+
+--# test_query_trust_scores
+MATCH friend_of(u1, u2) AS f, trust_score(assessor, f) AS ts
+RETURN u1.username, u2.username, assessor.username, ts.score
+
+--# test_high_trust_relationships
+MATCH friend_of(u1, u2) AS f, trust_score(_, f) AS ts
+WHERE ts.score >= 0.8
+RETURN u1.username, u2.username, ts.score
+
+-- ---------------------------------------------------------------------------
+-- Higher-Order Edge: Endorsing follow relationships
+-- ---------------------------------------------------------------------------
+
+--# test_create_follows
+LINK follows(#bob, #alice)
+LINK follows(#charlie, #alice)
+
+--# test_endorse_follow
+MATCH follows(#bob, #alice) AS f
+LINK endorses_follow(#charlie, f) {
+  reason = "Bob writes great content recommendations"
+}
+
+--# test_query_endorsed_follows
+MATCH follows(follower, followed) AS f, endorses_follow(endorser, f) AS e
+RETURN follower.username, followed.username, endorser.username, e.reason
+
+-- ---------------------------------------------------------------------------
+-- Higher-Order Edge: edge<any> - Report any relationship
+-- ---------------------------------------------------------------------------
+
+--# test_report_follow
+MATCH follows(#charlie, #alice) AS f
+LINK reported(#bob, f) {
+  reason = "Suspicious activity",
+  severity = "spam"
+}
+
+--# test_report_friendship
+MATCH friend_of(#alice, #charlie) AS f
+LINK reported(#bob, f) {
+  reason = "Fake account connection",
+  severity = "abuse"
+}
+
+--# test_query_all_reports
+MATCH reported(reporter, target) AS r
+RETURN reporter.username, r.reason, r.severity
+
+--# test_query_abuse_reports
+MATCH reported(_, _) AS r
+WHERE r.severity = "abuse"
+RETURN r.reason, r.reported_at
+
+-- ---------------------------------------------------------------------------
+-- Higher-Order Edge: Cascade behavior
+-- ---------------------------------------------------------------------------
+
+--# test_verify_reactions_exist
+MATCH reacted_to(_, _)
+RETURN COUNT(*) AS count
+
+--# test_unlink_authored_edge
+MATCH authored(#alice, #post1) AS a
+UNLINK a
+
+--# test_verify_reactions_cascaded
+MATCH reacted_to(_, _)
+RETURN COUNT(*) AS count
+
+-- ---------------------------------------------------------------------------
+-- Higher-Order Edge: Query patterns
+-- ---------------------------------------------------------------------------
+
+--# test_query_edges_about_edges
+MATCH trust_score(assessor, about) AS ts
+RETURN assessor.username, ts.score
+
+--# test_join_through_higher_order
+MATCH u1: User, u2: User, friend_of(u1, u2) AS f,
+      trust_score(assessor, f) AS ts
+WHERE assessor != u1 AND assessor != u2
+RETURN u1.username, u2.username, assessor.username, ts.score
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH p: Post KILL p
+MATCH u: User KILL u

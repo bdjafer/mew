@@ -1,0 +1,140 @@
+-- ===========================================================================
+-- OPERATIONS: Session Management
+-- DESCRIPTION: Tests BEGIN SESSION AS, END SESSION statements
+-- FEATURES: statements/session.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create actors
+-- ---------------------------------------------------------------------------
+
+--# test_setup_alice
+SPAWN alice: User {
+  username = "alice",
+  email = "alice@example.com",
+  display_name = "Alice"
+}
+
+--# test_setup_bob
+SPAWN bob: User {
+  username = "bob",
+  email = "bob@example.com",
+  display_name = "Bob"
+}
+
+--# test_setup_service
+SPAWN worker: Service {
+  name = "background-worker",
+  api_key = "sk_worker_123"
+}
+
+-- ---------------------------------------------------------------------------
+-- Basic Session: BEGIN and END
+-- ---------------------------------------------------------------------------
+
+--# test_begin_session_alice
+BEGIN SESSION AS #alice
+
+--# test_session_active_query
+MATCH u: User WHERE u = current_actor()
+RETURN u.username
+
+--# test_end_session_alice
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Session: Actor binding persists
+-- ---------------------------------------------------------------------------
+
+--# test_session_block
+BEGIN SESSION AS #bob
+  SPAWN doc: Document {
+    title = "Bob's Document",
+    sensitivity = "internal"
+  }
+  LINK owned_by(#doc, current_actor())
+END SESSION
+
+--# test_verify_ownership
+MATCH d: Document, u: User, owned_by(d, u)
+WHERE d.title = "Bob's Document"
+RETURN u.username
+
+-- ---------------------------------------------------------------------------
+-- Session: Service account
+-- ---------------------------------------------------------------------------
+
+--# test_service_session
+BEGIN SESSION AS #worker
+  MATCH d: Document
+  RETURN d.title
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Session: Nested sessions (stacking)
+-- ---------------------------------------------------------------------------
+
+--# test_nested_session_outer
+BEGIN SESSION AS #alice
+  SPAWN outer_doc: Document { title = "Created by Alice" }
+  LINK owned_by(#outer_doc, current_actor())
+
+  BEGIN SESSION AS #bob
+    SPAWN inner_doc: Document { title = "Created by Bob" }
+    LINK owned_by(#inner_doc, current_actor())
+  END SESSION
+
+  SPAWN another_doc: Document { title = "Also by Alice" }
+  LINK owned_by(#another_doc, current_actor())
+END SESSION
+
+--# test_verify_nested_ownership
+MATCH d: Document, u: User, owned_by(d, u)
+RETURN d.title, u.username
+ORDER BY d.title
+
+-- ---------------------------------------------------------------------------
+-- Session: System context (no actor)
+-- ---------------------------------------------------------------------------
+
+--# test_system_context
+MATCH d: Document
+RETURN d.title, d.sensitivity
+
+--# test_system_can_do_anything
+SPAWN system_doc: Document {
+  title = "System Document",
+  sensitivity = "secret"
+}
+
+-- ---------------------------------------------------------------------------
+-- Session: Invalid actor types
+-- ---------------------------------------------------------------------------
+
+--# test_invalid_actor
+BEGIN SESSION AS #nonexistent
+
+--# test_invalid_actor_type
+SPAWN doc: Document { title = "Test" }
+BEGIN SESSION AS #doc
+
+-- ---------------------------------------------------------------------------
+-- Session: With transactions
+-- ---------------------------------------------------------------------------
+
+--# test_session_with_transaction
+BEGIN SESSION AS #alice
+BEGIN
+  SPAWN tx_doc: Document { title = "Transaction Document" }
+  LINK owned_by(#tx_doc, current_actor())
+COMMIT
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH d: Document KILL d
+MATCH s: Service KILL s
+MATCH u: User KILL u

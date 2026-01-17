@@ -1,0 +1,15 @@
+-- ===========================================================================
+-- SEED: Minimal Auth Setup
+-- ===========================================================================
+
+SPAWN admin: Role { name = "admin", priority = 100 }
+SPAWN user: Role { name = "user", priority = 10 }
+
+SPAWN alice: User {
+  username = "alice",
+  email = "alice@example.com",
+  display_name = "Alice"
+}
+
+LINK has_role(#alice, #admin)
+LINK grants_permission(#admin, "admin") { resource_type = "Document" }

@@ -1,0 +1,15 @@
+-- ===========================================================================
+-- SEED: Minimal Social Network Setup
+-- ===========================================================================
+
+SPAWN alice: User {
+  username = "alice",
+  display_name = "Alice"
+}
+
+SPAWN bob: User {
+  username = "bob",
+  display_name = "Bob"
+}
+
+LINK friend_of(#alice, #bob)

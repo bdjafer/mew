@@ -1,0 +1,191 @@
+-- ===========================================================================
+-- OPERATIONS: Context Functions
+-- DESCRIPTION: Tests current_actor(), operation(), target(), target_type(), target_attr()
+-- FEATURES: expressions/context_functions.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create test actors and documents
+-- ---------------------------------------------------------------------------
+
+--# test_setup_user
+SPAWN alice: User {
+  username = "alice",
+  email = "alice@example.com",
+  display_name = "Alice"
+}
+
+--# test_setup_role
+SPAWN editor: Role {
+  name = "editor",
+  priority = 50
+}
+LINK has_role(#alice, #editor)
+
+--# test_setup_document
+SPAWN doc: Document {
+  title = "Test Document",
+  content = "Original content",
+  sensitivity = "internal"
+}
+LINK owned_by(#doc, #alice)
+
+-- ---------------------------------------------------------------------------
+-- current_actor(): Returns the session's bound actor
+-- ---------------------------------------------------------------------------
+
+--# test_current_actor_basic
+BEGIN SESSION AS #alice
+MATCH u: User WHERE u = current_actor()
+RETURN u.username, u.email
+END SESSION
+
+--# test_current_actor_in_query
+BEGIN SESSION AS #alice
+MATCH d: Document, owned_by(d, current_actor())
+RETURN d.title
+END SESSION
+
+--# test_current_actor_comparison
+BEGIN SESSION AS #alice
+MATCH u: User WHERE u.username = current_actor().username
+RETURN u.display_name
+END SESSION
+
+--# test_current_actor_null_outside_session
+MATCH d: Document WHERE current_actor() IS NULL
+RETURN d.title
+
+-- ---------------------------------------------------------------------------
+-- operation(): Returns the current operation type
+-- ---------------------------------------------------------------------------
+
+--# test_operation_in_policy
+BEGIN SESSION AS #alice
+MATCH d: Document
+WHERE operation() = "MATCH"
+RETURN d.title
+END SESSION
+
+--# test_operation_spawn
+BEGIN SESSION AS #alice
+SPAWN new_doc: Document { title = "New" }
+WHERE operation() = "SPAWN"
+END SESSION
+
+--# test_operation_set
+BEGIN SESSION AS #alice
+SET #doc { content = "Updated" }
+WHERE operation() = "SET"
+END SESSION
+
+--# test_operation_kill
+BEGIN SESSION AS #alice
+MATCH d: Document WHERE d.title = "New"
+WHERE operation() = "MATCH"
+KILL d
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- target(): Returns the target entity of the operation
+-- ---------------------------------------------------------------------------
+
+--# test_target_in_set
+BEGIN SESSION AS #alice
+SET #doc { content = "Modified" }
+WHERE target() = #doc
+END SESSION
+
+--# test_target_in_match
+BEGIN SESSION AS #alice
+MATCH d: Document WHERE target() = d
+RETURN d.title
+END SESSION
+
+--# test_target_with_condition
+BEGIN SESSION AS #alice
+SET #doc { status = "published" }
+WHERE target().sensitivity = "internal"
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- target_type(): Returns the type name of the target
+-- ---------------------------------------------------------------------------
+
+--# test_target_type_document
+BEGIN SESSION AS #alice
+MATCH d: Document
+WHERE target_type() = "Document"
+RETURN d.title
+END SESSION
+
+--# test_target_type_in_spawn
+BEGIN SESSION AS #alice
+SPAWN f: Folder { name = "Test Folder", path = "/test" }
+WHERE target_type() = "Folder"
+END SESSION
+
+--# test_target_type_check
+BEGIN SESSION AS #alice
+SET #doc { content = "Check type" }
+WHERE target_type() IN ["Document", "Folder"]
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- target_attr(): Returns the attribute name being modified
+-- ---------------------------------------------------------------------------
+
+--# test_target_attr_content
+BEGIN SESSION AS #alice
+SET #doc { content = "New content" }
+WHERE target_attr() = "content"
+END SESSION
+
+--# test_target_attr_sensitivity
+BEGIN SESSION AS #alice
+SET #doc { sensitivity = "confidential" }
+WHERE target_attr() = "sensitivity"
+END SESSION
+
+--# test_target_attr_multiple
+BEGIN SESSION AS #alice
+SET #doc { content = "Multi", status = "draft" }
+WHERE target_attr() IN ["content", "status"]
+END SESSION
+
+--# test_target_attr_null_for_non_set
+BEGIN SESSION AS #alice
+MATCH d: Document WHERE target_attr() IS NULL
+RETURN d.title
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Combined context functions
+-- ---------------------------------------------------------------------------
+
+--# test_combined_functions
+BEGIN SESSION AS #alice
+SET #doc { content = "Combined test" }
+WHERE current_actor().username = "alice"
+AND operation() = "SET"
+AND target_type() = "Document"
+AND target_attr() = "content"
+END SESSION
+
+--# test_policy_style_check
+BEGIN SESSION AS #alice
+MATCH d: Document
+WHERE current_actor():User
+AND EXISTS(owned_by(d, current_actor()))
+RETURN d.title
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH f: Folder KILL f
+MATCH d: Document KILL d
+MATCH r: Role KILL r
+MATCH u: User KILL u
