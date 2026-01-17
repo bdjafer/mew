@@ -1,7 +1,7 @@
 name: "Scenarios: Verify"
 
 # Verifies scenario/test pairs after merges.
-# Runs agents in parallel per changed ontology.
+# Creates a verification PR, then runs agents to check assertions.
 
 on:
   push:
@@ -12,6 +12,9 @@ on:
       - 'examples/level-*/*/ontology.mew'
       - 'mew/tests/tests/level*.rs'
 
+  pull_request_target:
+    types: [labeled]
+
 permissions:
   contents: write
   pull-requests: write
@@ -19,11 +22,14 @@ permissions:
   id-token: write
 
 jobs:
-  detect-changes:
+  # Phase 1: On push, detect changes and create verification PR
+  create-verification-pr:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.detect.outputs.matrix }}
+      pr_number: ${{ steps.create-pr.outputs.pr_number }}
       has_changes: ${{ steps.detect.outputs.has_changes }}
+      matrix: ${{ steps.detect.outputs.matrix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -39,7 +45,6 @@ jobs:
           # Extract unique level/ontology pairs
           PAIRS=""
 
-          # From examples/level-N/ontology/...
           for file in $CHANGED; do
             if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/ ]]; then
               LEVEL="${BASH_REMATCH[1]}"
@@ -51,7 +56,6 @@ jobs:
             fi
           done
 
-          # From mew/tests/tests/levelN_ontology.rs
           for file in $CHANGED; do
             if [[ "$file" =~ ^mew/tests/tests/level([0-9]+)_([^.]+)\.rs$ ]]; then
               LEVEL="${BASH_REMATCH[1]}"
@@ -63,7 +67,6 @@ jobs:
             fi
           done
 
-          # Build matrix JSON
           if [ -z "$PAIRS" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
             echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
@@ -86,39 +89,116 @@ jobs:
             echo "Detected changes: $MATRIX"
           fi
 
+      - name: Create verification PR
+        id: create-pr
+        if: steps.detect.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { execSync } = require('child_process');
+
+            // Configure git
+            execSync('git config user.name "github-actions[bot]"');
+            execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
+
+            // Create branch
+            const branch = `verify/scenarios-${Date.now()}`;
+            execSync(`git checkout -b ${branch}`);
+
+            // Create empty commit to trigger PR
+            execSync('git commit --allow-empty -m "chore: trigger scenario verification"');
+            execSync(`git push -u origin ${branch}`);
+
+            // Create PR with matrix info in body
+            const matrix = ${{ steps.detect.outputs.matrix }};
+            const pairs = matrix.include.map(m => `- level-${m.level}/${m.ontology}`).join('\n');
+
+            const { data: pr } = await github.rest.pulls.create({
+              owner,
+              repo,
+              title: 'verify: scenario assertions',
+              head: branch,
+              base: 'main',
+              body: `## Scenario Verification
+
+            Checking assertions for:
+            ${pairs}
+
+            This PR will be auto-closed after verification.`
+            });
+
+            // Add label to trigger verification
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: pr.number,
+              labels: ['scenarios/needs-verify']
+            });
+
+            core.setOutput('pr_number', pr.number);
+            console.log(`Created verification PR #${pr.number}`);
+
+  # Phase 2: On label, run verification agents
   verify:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
+    if: |
+      github.event_name == 'pull_request_target' &&
+      contains(github.event.pull_request.labels.*.name, 'scenarios/needs-verify')
     runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-      fail-fast: false
-    outputs:
-      result: ${{ steps.verify.outputs.result }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          ref: main
+          fetch-depth: 2
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Detect ontologies to verify
+        id: detect
+        run: |
+          # Get changed files from the merge that created this PR
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+
+          PAIRS=""
+          for file in $CHANGED; do
+            if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/ ]]; then
+              PAIR="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"
+              if [[ ! "$PAIRS" =~ "$PAIR" ]]; then
+                PAIRS="$PAIRS $PAIR"
+              fi
+            fi
+            if [[ "$file" =~ ^mew/tests/tests/level([0-9]+)_([^.]+)\.rs$ ]]; then
+              PAIR="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"
+              if [[ ! "$PAIRS" =~ "$PAIR" ]]; then
+                PAIRS="$PAIRS $PAIR"
+              fi
+            fi
+          done
+
+          echo "pairs=$PAIRS" >> $GITHUB_OUTPUT
+
       - name: Load skill prompt
         id: skill
         run: |
+          PAIRS="${{ steps.detect.outputs.pairs }}"
           {
             echo "prompt<<SKILL_EOF"
-            echo "# Context"
-            echo "LEVEL=${{ matrix.level }}"
-            echo "ONTOLOGY=${{ matrix.ontology }}"
+            echo "# Scenario Verification"
+            echo ""
+            echo "Verify the following ontologies:"
+            for PAIR in $PAIRS; do
+              LEVEL=$(echo "$PAIR" | cut -d: -f1)
+              ONTOLOGY=$(echo "$PAIR" | cut -d: -f2)
+              echo "- Level $LEVEL: $ONTOLOGY"
+            done
             echo ""
             cat ".claude/skills/specs->scenarios/verify-scenario.md"
             echo "SKILL_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Run Claude Code - Verify Scenario
-        id: verify
+      - name: Run Claude Code - Verify Scenarios
         uses: anthropics/claude-code-action@v1
         with:
           prompt: ${{ steps.skill.outputs.prompt }}
@@ -127,121 +207,96 @@ jobs:
           allowed_bots: '*'
           claude_args: |
             --model claude-opus-4-5-20251101
-            --max-turns 100
+            --max-turns 150
             --allowedTools Bash,Read,Glob,Grep,Edit,Write,Task
 
-  collect-results:
-    needs: [detect-changes, verify]
-    if: always() && needs.detect-changes.outputs.has_changes == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Check for changes and create PR if needed
+      - name: Handle verification result
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+            const { execSync } = require('child_process');
 
             // Check if any files were modified
-            const { execSync } = require('child_process');
             const status = execSync('git status --porcelain').toString().trim();
 
             if (!status) {
-              console.log('No changes made - all scenarios verified correctly.');
-              return;
+              // No changes needed - close the verification PR
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: '## ✅ Verification Passed\n\nAll scenario assertions are correct. No changes needed.'
+              });
+
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: prNumber,
+                state: 'closed'
+              });
+
+              // Delete the branch
+              const pr = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+              try {
+                await github.rest.git.deleteRef({
+                  owner,
+                  repo,
+                  ref: `heads/${pr.data.head.ref}`
+                });
+              } catch (e) {
+                console.log('Could not delete branch:', e.message);
+              }
+
+              console.log('Verification passed - PR closed');
+            } else {
+              // Changes needed - commit and request confirmation
+              execSync('git config user.name "github-actions[bot]"');
+              execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
+              execSync('git add -A');
+              execSync('git commit -m "fix: correct scenario assertions"');
+              execSync('git push');
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: '## ⚠️ Issues Found\n\nIncorrect assertions detected and fixed. Requesting independent confirmation.'
+              });
+
+              // Update labels
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: prNumber,
+                name: 'scenarios/needs-verify'
+              }).catch(() => {});
+
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: prNumber,
+                labels: ['scenarios/needs-confirm']
+              });
+
+              console.log('Issues found - awaiting confirmation');
             }
 
-            console.log('Changes detected - creating PR for fixes...');
-
-            // Configure git
-            execSync('git config user.name "github-actions[bot]"');
-            execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
-
-            // Create branch and commit
-            const branch = `fix/scenario-verification-${Date.now()}`;
-            execSync(`git checkout -b ${branch}`);
-            execSync('git add -A');
-            execSync('git commit -m "fix: correct scenario assertions after verification"');
-            execSync(`git push -u origin ${branch}`);
-
-            // Create PR
-            const { data: pr } = await github.rest.pulls.create({
-              owner,
-              repo,
-              title: 'fix: correct scenario assertions',
-              head: branch,
-              base: 'main',
-              body: `## Summary
-
-            Automated verification found incorrect assertions in scenario files.
-
-            This PR contains fixes proposed by the verification agent.
-
-            ## Next Steps
-
-            A confirmation agent will independently verify these fixes.
-            - If confirmed: auto-merge
-            - If issues found: requires human review`
-            });
-
-            // Add label to trigger confirmation
-            await github.rest.issues.addLabels({
-              owner,
-              repo,
-              issue_number: pr.number,
-              labels: ['needs-confirmation']
-            });
-
-            console.log(`Created PR #${pr.number}`);
-
+  # Phase 3: Confirm fixes independently
   confirm:
-    needs: collect-results
-    if: always()
+    if: |
+      github.event_name == 'pull_request_target' &&
+      contains(github.event.pull_request.labels.*.name, 'scenarios/needs-confirm')
     runs-on: ubuntu-latest
     steps:
-      - name: Check for PRs needing confirmation
-        id: check
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-
-            // Find PRs with needs-confirmation label
-            const { data: prs } = await github.rest.pulls.list({
-              owner,
-              repo,
-              state: 'open'
-            });
-
-            const needsConfirm = prs.filter(pr =>
-              pr.labels.some(l => l.name === 'needs-confirmation')
-            );
-
-            if (needsConfirm.length === 0) {
-              console.log('No PRs need confirmation');
-              core.setOutput('has_pr', 'false');
-              return;
-            }
-
-            // Take the first one
-            const pr = needsConfirm[0];
-            core.setOutput('has_pr', 'true');
-            core.setOutput('pr_number', pr.number);
-            core.setOutput('pr_branch', pr.head.ref);
-
       - name: Checkout PR branch
-        if: steps.check.outputs.has_pr == 'true'
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.check.outputs.pr_branch }}
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Load confirm skill
-        if: steps.check.outputs.has_pr == 'true'
         id: skill
         run: |
           {
@@ -251,7 +306,6 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code - Confirm Fix
-        if: steps.check.outputs.has_pr == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           prompt: ${{ steps.skill.outputs.prompt }}
@@ -260,18 +314,16 @@ jobs:
           allowed_bots: '*'
           claude_args: |
             --model claude-opus-4-5-20251101
-            --max-turns 60
+            --max-turns 80
             --allowedTools Bash,Read,Glob,Grep
 
-      - name: Auto-merge if verified
-        if: steps.check.outputs.has_pr == 'true'
+      - name: Handle confirmation result
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
-            const prNumber = ${{ steps.check.outputs.pr_number }};
+            const prNumber = context.payload.pull_request.number;
 
-            // Get current labels
             const { data: pr } = await github.rest.pulls.get({
               owner,
               repo,
@@ -288,22 +340,22 @@ jobs:
                   repo,
                   pull_number: prNumber,
                   merge_method: 'squash',
-                  commit_title: pr.title,
+                  commit_title: 'fix: correct scenario assertions',
                   commit_message: 'Auto-merged after independent verification confirmed fixes.'
                 });
-                console.log('PR merged successfully');
 
-                // Delete branch
                 await github.rest.git.deleteRef({
                   owner,
                   repo,
                   ref: `heads/${pr.head.ref}`
                 });
+
+                console.log('PR merged successfully');
               } catch (e) {
                 console.log('Merge failed:', e.message);
               }
             } else if (labels.includes('awaiting-human')) {
-              console.log('PR requires human review - not auto-merging');
+              console.log('PR requires human review');
             } else {
-              console.log('PR status unclear - labels:', labels);
+              console.log('Confirmation incomplete - labels:', labels);
             }
