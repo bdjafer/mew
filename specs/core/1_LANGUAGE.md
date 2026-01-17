@@ -632,8 +632,14 @@ BinaryExpr = Expr BinaryOp Expr
 
 | Operator | Valid For | Result |
 |----------|-----------|--------|
-| `=`, `!=` | All types | Bool |
+| `=`, `!=` | Compatible types | Bool |
 | `<`, `>`, `<=`, `>=` | Int, Float, String, Timestamp | Bool |
+
+**Equality type rules:**
+- Same type: always valid (`Int = Int`, `String = String`, etc.)
+- Numeric coercion: `Int` and `Float` are compatible (`3 = 3.0` → `true`)
+- Null: `null = null` → `true`; `null = x` (non-null) → `false`
+- Incompatible types: type error (`Int = String` → error)
 
 ### 5.5.2 Arithmetic Operators
 

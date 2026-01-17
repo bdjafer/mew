@@ -1,5 +1,6 @@
 //! Session manager.
 
+use mew_analyzer::Analyzer;
 use mew_constraint::ConstraintChecker;
 use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
@@ -264,6 +265,10 @@ impl<'r> Session<'r> {
 
     /// Execute a MATCH statement.
     fn execute_match(&self, stmt: &MatchStmt) -> SessionResult<QueryResult> {
+        // Run analyzer for type checking before execution
+        let mut analyzer = Analyzer::new(self.registry);
+        analyzer.analyze_stmt(&Stmt::Match(stmt.clone()))?;
+
         let executor = QueryExecutor::new(self.registry, &self.graph);
         let result = executor.execute_match(stmt)?;
         Ok(convert_query_result(&result))

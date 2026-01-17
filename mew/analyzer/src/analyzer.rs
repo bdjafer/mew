@@ -214,9 +214,9 @@ impl<'r> Analyzer<'r> {
             });
         }
 
-        // Check that target variables exist
+        // Check that target variables exist (skip "_" wildcard)
         for target in &pattern.targets {
-            if !self.scope.is_defined(target) {
+            if target != "_" && !self.scope.is_defined(target) {
                 return Err(AnalyzerError::undefined_variable(target, pattern.span));
             }
         }

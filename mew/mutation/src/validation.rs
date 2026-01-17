@@ -214,6 +214,23 @@ pub fn apply_defaults(
     Ok(())
 }
 
+/// Check that all required edge attributes are present.
+pub fn check_required_edge_attributes(
+    registry: &Registry,
+    edge_type_name: &str,
+    edge_type_id: EdgeTypeId,
+    attrs: &mew_core::Attributes,
+) -> MutationResult<()> {
+    if let Some(edge_type) = registry.get_edge_type(edge_type_id) {
+        for (name, attr_def) in &edge_type.attributes {
+            if attr_def.required && !attrs.contains_key(name) && attr_def.default.is_none() {
+                return Err(MutationError::missing_required(edge_type_name, name));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Apply default values to missing edge attributes.
 pub fn apply_edge_defaults(
     registry: &Registry,

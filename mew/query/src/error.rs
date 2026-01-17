@@ -11,6 +11,9 @@ pub enum QueryError {
     #[error("Unknown type: {name}")]
     UnknownType { name: String },
 
+    #[error("Unknown edge type: {name}")]
+    UnknownEdgeType { name: String },
+
     #[error("Unknown attribute: {attr} on type {type_name}")]
     UnknownAttribute { type_name: String, attr: String },
 
@@ -30,6 +33,10 @@ pub enum QueryError {
 impl QueryError {
     pub fn unknown_type(name: impl Into<String>) -> Self {
         Self::UnknownType { name: name.into() }
+    }
+
+    pub fn unknown_edge_type(name: impl Into<String>) -> Self {
+        Self::UnknownEdgeType { name: name.into() }
     }
 
     pub fn unknown_attribute(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
