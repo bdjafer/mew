@@ -1,0 +1,199 @@
+-- ===========================================================================
+-- OPERATIONS: Versioning & Time-Travel
+-- DESCRIPTION: Tests SNAPSHOT, CHECKOUT, DIFF, BRANCH, MERGE
+-- FEATURES: statements/versioning.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create config sets with items
+-- ---------------------------------------------------------------------------
+
+--# test_setup_config_set
+SPAWN app_config: ConfigSet {
+  name = "app-config",
+  description = "Application configuration",
+  environment = "development"
+}
+
+--# test_setup_config_items
+SPAWN db_host: ConfigItem {
+  key = "database.host",
+  value = "localhost",
+  config_type = "database"
+}
+SPAWN db_port: ConfigItem {
+  key = "database.port",
+  value = "5432",
+  config_type = "database"
+}
+SPAWN api_key: ConfigItem {
+  key = "api.key",
+  value = "dev-key-123",
+  config_type = "application",
+  sensitive = true
+}
+LINK belongs_to(#db_host, #app_config)
+LINK belongs_to(#db_port, #app_config)
+LINK belongs_to(#api_key, #app_config)
+
+-- ---------------------------------------------------------------------------
+-- SNAPSHOT: Create point-in-time snapshot
+-- ---------------------------------------------------------------------------
+
+--# test_create_snapshot
+SNAPSHOT "initial-state"
+
+--# test_create_named_snapshot
+SNAPSHOT "before-migration" WITH DESCRIPTION "State before database migration"
+
+--# test_verify_snapshot_exists
+VERSIONS
+WHERE name = "initial-state"
+
+-- ---------------------------------------------------------------------------
+-- Modify data after snapshot
+-- ---------------------------------------------------------------------------
+
+--# test_modify_after_snapshot
+SET #db_host { value = "db.production.local" }
+SET #db_port { value = "5433" }
+
+--# test_verify_modifications
+MATCH i: ConfigItem WHERE i.key = "database.host"
+RETURN i.value
+
+-- ---------------------------------------------------------------------------
+-- CHECKOUT: Time-travel to previous version
+-- ---------------------------------------------------------------------------
+
+--# test_checkout_snapshot
+CHECKOUT "initial-state"
+
+--# test_query_historical_data
+MATCH i: ConfigItem WHERE i.key = "database.host"
+RETURN i.value
+
+--# test_checkout_head
+CHECKOUT HEAD
+
+--# test_verify_current_state
+MATCH i: ConfigItem WHERE i.key = "database.host"
+RETURN i.value
+
+-- ---------------------------------------------------------------------------
+-- CHECKOUT: Relative references
+-- ---------------------------------------------------------------------------
+
+--# test_checkout_head_minus_1
+CHECKOUT HEAD~1
+
+--# test_checkout_head_minus_2
+CHECKOUT HEAD~2
+
+--# test_return_to_head
+CHECKOUT HEAD
+
+-- ---------------------------------------------------------------------------
+-- DIFF: Compare versions
+-- ---------------------------------------------------------------------------
+
+--# test_diff_snapshots
+DIFF "initial-state" HEAD
+
+--# test_diff_head_versions
+DIFF HEAD~1 HEAD
+
+--# test_diff_with_filter
+DIFF "initial-state" HEAD
+WHERE config_type = "database"
+
+-- ---------------------------------------------------------------------------
+-- BRANCH: Create parallel development branch
+-- ---------------------------------------------------------------------------
+
+--# test_create_branch
+BRANCH feature-new-db
+
+--# test_switch_to_branch
+SWITCH feature-new-db
+
+--# test_modify_on_branch
+SET #db_host { value = "newdb.cluster.local" }
+SET #db_port { value = "5434" }
+
+--# test_verify_branch_state
+MATCH i: ConfigItem WHERE i.key = "database.host"
+RETURN i.value
+
+--# test_switch_to_main
+SWITCH main
+
+--# test_verify_main_unchanged
+MATCH i: ConfigItem WHERE i.key = "database.host"
+RETURN i.value
+
+-- ---------------------------------------------------------------------------
+-- MERGE: Merge branch changes
+-- ---------------------------------------------------------------------------
+
+--# test_merge_branch
+MERGE feature-new-db
+
+--# test_verify_merged_state
+MATCH i: ConfigItem WHERE i.key = "database.host"
+RETURN i.value
+
+-- ---------------------------------------------------------------------------
+-- MERGE: Conflict resolution
+-- ---------------------------------------------------------------------------
+
+--# test_create_conflict_scenario
+BRANCH conflict-branch
+
+--# test_modify_main
+SET #api_key { value = "main-key-456" }
+
+--# test_switch_and_modify_branch
+SWITCH conflict-branch
+SET #api_key { value = "branch-key-789" }
+
+--# test_switch_back_to_main
+SWITCH main
+
+--# test_merge_with_conflict
+MERGE conflict-branch
+
+--# test_resolve_conflict_ours
+MERGE conflict-branch RESOLVE OURS
+
+--# test_resolve_conflict_theirs
+MERGE conflict-branch RESOLVE THEIRS
+
+--# test_resolve_conflict_manual
+MERGE conflict-branch RESOLVE MANUAL
+
+-- ---------------------------------------------------------------------------
+-- VERSIONS: List available versions
+-- ---------------------------------------------------------------------------
+
+--# test_list_versions
+VERSIONS
+
+--# test_list_versions_limit
+VERSIONS LIMIT 5
+
+--# test_list_branches
+SHOW BRANCHES
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH c: Conflict KILL c
+MATCH s: Snapshot KILL s
+MATCH b: Branch KILL b
+MATCH l: ChangeLog KILL l
+MATCH r: ChangeRequest KILL r
+MATCH i: ConfigItem KILL i
+MATCH cs: ConfigSet KILL cs

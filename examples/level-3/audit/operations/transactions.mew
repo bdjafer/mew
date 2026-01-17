@@ -1,0 +1,187 @@
+-- ===========================================================================
+-- OPERATIONS: Transactions
+-- DESCRIPTION: Tests SAVEPOINT, ROLLBACK TO, nested savepoints
+-- FEATURES: statements/transactions.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create base config set
+-- ---------------------------------------------------------------------------
+
+--# test_setup
+SPAWN configs: ConfigSet {
+  name = "transaction-test",
+  environment = "development"
+}
+
+-- ---------------------------------------------------------------------------
+-- BEGIN/COMMIT: Basic transaction
+-- ---------------------------------------------------------------------------
+
+--# test_basic_transaction
+BEGIN
+  SPAWN item1: ConfigItem {
+    key = "tx.item1",
+    value = "value1"
+  }
+  LINK belongs_to(#item1, #configs)
+COMMIT
+
+--# test_verify_committed
+MATCH i: ConfigItem WHERE i.key = "tx.item1"
+RETURN i.value
+
+-- ---------------------------------------------------------------------------
+-- ROLLBACK: Undo entire transaction
+-- ---------------------------------------------------------------------------
+
+--# test_rollback_transaction
+BEGIN
+  SPAWN item2: ConfigItem {
+    key = "tx.item2",
+    value = "will_be_rolled_back"
+  }
+  LINK belongs_to(#item2, #configs)
+ROLLBACK
+
+--# test_verify_rollback
+MATCH i: ConfigItem WHERE i.key = "tx.item2"
+RETURN COUNT(*) AS count
+
+-- ---------------------------------------------------------------------------
+-- SAVEPOINT: Partial rollback
+-- ---------------------------------------------------------------------------
+
+--# test_savepoint_basic
+BEGIN
+  SPAWN item3: ConfigItem {
+    key = "tx.item3",
+    value = "before_savepoint"
+  }
+  LINK belongs_to(#item3, #configs)
+
+  SAVEPOINT sp1
+
+  SET #item3 { value = "after_savepoint" }
+
+  ROLLBACK TO sp1
+
+  -- item3 should still exist but with original value
+COMMIT
+
+--# test_verify_savepoint
+MATCH i: ConfigItem WHERE i.key = "tx.item3"
+RETURN i.value
+
+-- ---------------------------------------------------------------------------
+-- SAVEPOINT: Multiple savepoints
+-- ---------------------------------------------------------------------------
+
+--# test_multiple_savepoints
+BEGIN
+  SPAWN item4: ConfigItem { key = "tx.item4", value = "v1" }
+  LINK belongs_to(#item4, #configs)
+
+  SAVEPOINT sp1
+  SET #item4 { value = "v2" }
+
+  SAVEPOINT sp2
+  SET #item4 { value = "v3" }
+
+  SAVEPOINT sp3
+  SET #item4 { value = "v4" }
+
+  -- Roll back to sp2, keeping v2
+  ROLLBACK TO sp2
+
+COMMIT
+
+--# test_verify_multiple_savepoints
+MATCH i: ConfigItem WHERE i.key = "tx.item4"
+RETURN i.value
+
+-- ---------------------------------------------------------------------------
+-- SAVEPOINT: Nested savepoints
+-- ---------------------------------------------------------------------------
+
+--# test_nested_savepoints
+BEGIN
+  SPAWN item5: ConfigItem { key = "tx.item5", value = "outer" }
+  LINK belongs_to(#item5, #configs)
+
+  SAVEPOINT outer_sp
+    SPAWN item6: ConfigItem { key = "tx.item6", value = "inner" }
+    LINK belongs_to(#item6, #configs)
+
+    SAVEPOINT inner_sp
+      SET #item5 { value = "modified_inner" }
+      SET #item6 { value = "also_modified" }
+    ROLLBACK TO inner_sp
+
+    -- item5 and item6 should have original values
+  -- Keep outer_sp changes
+COMMIT
+
+--# test_verify_nested
+MATCH i: ConfigItem WHERE i.key STARTS WITH "tx.item"
+RETURN i.key, i.value
+ORDER BY i.key
+
+-- ---------------------------------------------------------------------------
+-- Transaction: Isolation levels
+-- ---------------------------------------------------------------------------
+
+--# test_read_committed
+BEGIN READ COMMITTED
+  SPAWN item7: ConfigItem { key = "tx.item7", value = "rc" }
+  LINK belongs_to(#item7, #configs)
+COMMIT
+
+--# test_serializable
+BEGIN SERIALIZABLE
+  SPAWN item8: ConfigItem { key = "tx.item8", value = "ser" }
+  LINK belongs_to(#item8, #configs)
+COMMIT
+
+-- ---------------------------------------------------------------------------
+-- Transaction: Deferred constraint checking
+-- ---------------------------------------------------------------------------
+
+--# test_deferred_cardinality
+BEGIN
+  -- Create item without belongs_to (cardinality: item -> 1)
+  -- Should defer check until COMMIT
+  SPAWN orphan: ConfigItem { key = "tx.orphan", value = "no_set" }
+  -- This should fail at COMMIT due to cardinality violation
+COMMIT
+
+-- ---------------------------------------------------------------------------
+-- Transaction: Rule execution
+-- ---------------------------------------------------------------------------
+
+--# test_rules_in_transaction
+BEGIN
+  SPAWN item9: ConfigItem {
+    key = "tx.item9",
+    value = "original"
+  }
+  LINK belongs_to(#item9, #configs)
+
+  -- auto_update_timestamp rule should fire
+  SET #item9 { value = "updated" }
+
+  SAVEPOINT before_check
+
+  -- Verify timestamp was set by rule
+  MATCH i: ConfigItem WHERE i.key = "tx.item9" AND i.updated_at IS NOT NULL
+  RETURN i.value
+
+COMMIT
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH i: ConfigItem KILL i
+MATCH cs: ConfigSet KILL cs

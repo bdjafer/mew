@@ -1,0 +1,141 @@
+-- ===========================================================================
+-- OPERATIONS: Transitive Pattern Queries
+-- DESCRIPTION: Tests causes+ and causes* transitive patterns
+-- FEATURES: patterns/transitive_patterns.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create event chain A -> B -> C -> D -> E
+-- ---------------------------------------------------------------------------
+
+--# test_setup_events
+SPAWN a: Event { name = "Event A", timestamp = 1000 }
+SPAWN b: Event { name = "Event B", timestamp = 2000 }
+SPAWN c: Event { name = "Event C", timestamp = 3000 }
+SPAWN d: Event { name = "Event D", timestamp = 4000 }
+SPAWN e: Event { name = "Event E", timestamp = 5000 }
+
+--# test_setup_chain
+LINK causes(#a, #b) { mechanism = "direct" }
+LINK causes(#b, #c) { mechanism = "direct" }
+LINK causes(#c, #d) { mechanism = "direct" }
+LINK causes(#d, #e) { mechanism = "direct" }
+
+-- ---------------------------------------------------------------------------
+-- Transitive: causes+ (one or more hops)
+-- ---------------------------------------------------------------------------
+
+--# test_direct_effects
+MATCH causes(#a, effect)
+RETURN effect.name
+
+--# test_transitive_plus_from_a
+MATCH causes+(#a, effect)
+RETURN effect.name
+ORDER BY effect.timestamp
+
+--# test_transitive_plus_to_e
+MATCH causes+(cause, #e)
+RETURN cause.name
+ORDER BY cause.timestamp
+
+--# test_transitive_reachability
+MATCH causes+(#a, #e)
+RETURN true AS reachable
+
+--# test_transitive_no_path
+MATCH causes+(#e, #a)
+RETURN true AS reachable
+
+-- ---------------------------------------------------------------------------
+-- Transitive: causes* (zero or more hops)
+-- ---------------------------------------------------------------------------
+
+--# test_transitive_star_includes_self
+MATCH causes*(#a, effect)
+WHERE effect = #a
+RETURN effect.name
+
+--# test_transitive_star_all
+MATCH causes*(#a, effect)
+RETURN effect.name
+ORDER BY effect.timestamp
+
+-- ---------------------------------------------------------------------------
+-- Transitive: With depth limits
+-- ---------------------------------------------------------------------------
+
+--# test_depth_1
+MATCH causes+(#a, effect) [depth: 1]
+RETURN effect.name
+
+--# test_depth_2
+MATCH causes+(#a, effect) [depth: 2]
+RETURN effect.name
+ORDER BY effect.timestamp
+
+--# test_depth_3
+MATCH causes+(#a, effect) [depth: 3]
+RETURN effect.name
+ORDER BY effect.timestamp
+
+--# test_depth_range
+MATCH causes+(#a, effect) [depth: 2..4]
+RETURN effect.name
+ORDER BY effect.timestamp
+
+-- ---------------------------------------------------------------------------
+-- Transitive: Reverse direction
+-- ---------------------------------------------------------------------------
+
+--# test_find_root_causes
+MATCH causes+(root, #e)
+WHERE NOT EXISTS(cause: Event, causes(cause, root))
+RETURN root.name
+
+--# test_find_all_ancestors
+MATCH causes+(ancestor, #d)
+RETURN ancestor.name
+ORDER BY ancestor.timestamp
+
+-- ---------------------------------------------------------------------------
+-- Transitive: With WHERE clauses
+-- ---------------------------------------------------------------------------
+
+--# test_transitive_with_filter
+MATCH causes+(#a, effect)
+WHERE effect.timestamp > 2500
+RETURN effect.name
+
+--# test_transitive_chain_strength
+MATCH causes+(#a, effect) AS chain
+WHERE chain.strength >= 0.5
+RETURN effect.name
+
+-- ---------------------------------------------------------------------------
+-- Transitive: Aggregations
+-- ---------------------------------------------------------------------------
+
+--# test_count_reachable
+MATCH causes+(#a, effect)
+RETURN COUNT(effect) AS total_effects
+
+--# test_count_by_depth
+MATCH causes+(#a, effect) [depth: 1..2]
+RETURN COUNT(effect) AS within_2_hops
+
+-- ---------------------------------------------------------------------------
+-- Transitive: Combined with standard patterns
+-- ---------------------------------------------------------------------------
+
+--# test_join_with_transitive
+MATCH e1: Event, e2: Event, causes+(e1, e2)
+WHERE e1.name STARTS WITH "Event" AND e2.name STARTS WITH "Event"
+RETURN e1.name, e2.name
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH e: Event KILL e

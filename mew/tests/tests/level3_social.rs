@@ -134,7 +134,7 @@ mod higher_order {
             .step("test_query_edges_about_edges", |a| a.error("parse"))
             .step("test_join_through_higher_order", |a| a.error("parse"))
             // Cleanup
-            .step("test_cleanup", |a| a.deleted_gte(2))
+            .step("test_cleanup", |a| a.deleted(2))
     }
 
     #[test]

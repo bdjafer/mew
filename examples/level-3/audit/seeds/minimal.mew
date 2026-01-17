@@ -1,0 +1,15 @@
+-- ===========================================================================
+-- SEED: Minimal Audit Setup
+-- ===========================================================================
+
+SPAWN config: ConfigSet {
+  name = "app-config",
+  environment = "development"
+}
+
+SPAWN db_url: ConfigItem {
+  key = "DATABASE_URL",
+  value = "postgres://localhost:5432/app"
+}
+
+LINK belongs_to(#db_url, #config)

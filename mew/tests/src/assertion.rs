@@ -14,10 +14,17 @@ pub type Row = HashMap<String, Value>;
 pub struct Assertion {
     // Mutation assertions
     pub created: Option<usize>,
+    pub created_min: Option<usize>,
     pub modified: Option<usize>,
+    pub modified_min: Option<usize>,
     pub deleted: Option<usize>,
+    pub deleted_min: Option<usize>,
     pub linked: Option<usize>,
+    pub linked_min: Option<usize>,
     pub unlinked: Option<usize>,
+    pub unlinked_min: Option<usize>,
+    pub subscribed: Option<usize>,
+    pub subscribed_min: Option<usize>,
 
     // Query assertions - single value
     pub value: Option<Value>,

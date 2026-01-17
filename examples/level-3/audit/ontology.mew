@@ -1,0 +1,179 @@
+-- ===========================================================================
+-- ONTOLOGY: Audit & Configuration Management
+-- FOCUS: Versioning, snapshots, time-travel, branching
+-- FEATURES: statements/versioning.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Type Aliases
+-- ---------------------------------------------------------------------------
+
+type ConfigType = String [in: ["application", "database", "network", "security"]]
+type Environment = String [in: ["development", "staging", "production"]]
+type ChangeType = String [in: ["create", "update", "delete", "rollback"]]
+type ApprovalStatus = String [in: ["pending", "approved", "rejected"]]
+
+-- ---------------------------------------------------------------------------
+-- Nodes: Configuration Items
+-- ---------------------------------------------------------------------------
+
+node ConfigItem {
+  key: String [required],
+  value: String [required],
+  config_type: ConfigType = "application",
+  environment: Environment = "development",
+  description: String?,
+  sensitive: Bool = false,
+  created_at: Timestamp = now(),
+  updated_at: Timestamp?
+}
+
+node ConfigSet {
+  name: String [required, unique],
+  description: String?,
+  environment: Environment = "development",
+  version: Int [>= 1] = 1,
+  locked: Bool = false,
+  created_at: Timestamp = now()
+}
+
+-- ---------------------------------------------------------------------------
+-- Nodes: Change Tracking
+-- ---------------------------------------------------------------------------
+
+node ChangeRequest {
+  title: String [required],
+  description: String?,
+  change_type: ChangeType = "update",
+  status: ApprovalStatus = "pending",
+  requested_by: String [required],
+  approved_by: String?,
+  requested_at: Timestamp = now(),
+  approved_at: Timestamp?
+}
+
+node ChangeLog {
+  action: ChangeType,
+  old_value: String?,
+  new_value: String?,
+  changed_by: String [required],
+  changed_at: Timestamp = now(),
+  reason: String?
+}
+
+-- ---------------------------------------------------------------------------
+-- Nodes: Versioning
+-- ---------------------------------------------------------------------------
+
+node Snapshot {
+  name: String [required],
+  description: String?,
+  created_by: String [required],
+  created_at: Timestamp = now()
+}
+
+node Branch {
+  name: String [required, unique],
+  description: String?,
+  created_from: String?,
+  created_at: Timestamp = now(),
+  merged_at: Timestamp?
+}
+
+node Conflict {
+  config_key: String [required],
+  base_value: String?,
+  ours_value: String?,
+  theirs_value: String?,
+  resolved: Bool = false,
+  resolution: String?
+}
+
+-- ---------------------------------------------------------------------------
+-- Edges
+-- ---------------------------------------------------------------------------
+
+-- Config item belongs to config set
+edge belongs_to(item: ConfigItem, set: ConfigSet) [item -> 1]
+
+-- Config set snapshot
+edge snapshot_of(snapshot: Snapshot, set: ConfigSet) [snapshot -> 1]
+
+-- Branch from config set
+edge branch_of(branch: Branch, set: ConfigSet) [branch -> 1]
+
+-- Change request for config item
+edge change_for(request: ChangeRequest, item: ConfigItem)
+
+-- Change log for config item
+edge log_for(log: ChangeLog, item: ConfigItem)
+
+-- Conflict in branch merge
+edge conflict_in(conflict: Conflict, branch: Branch)
+
+-- ---------------------------------------------------------------------------
+-- Constraints
+-- ---------------------------------------------------------------------------
+
+-- Locked config sets cannot be modified
+constraint locked_readonly:
+  s: ConfigSet, i: ConfigItem
+  WHERE belongs_to(i, s)
+  AND s.locked = true
+  => false
+  [message: "Cannot modify items in locked config set"]
+
+-- Production configs require approval
+constraint production_approval:
+  r: ChangeRequest, i: ConfigItem
+  WHERE change_for(r, i)
+  AND i.environment = "production"
+  AND r.status = "pending"
+  => false
+  [message: "Production changes require approval"]
+
+-- Sensitive configs cannot be in development
+constraint sensitive_not_dev [soft]:
+  i: ConfigItem
+  WHERE i.sensitive = true
+  AND i.environment = "development"
+  => false
+  [message: "Sensitive configs should not be in development"]
+
+-- ---------------------------------------------------------------------------
+-- Rules
+-- ---------------------------------------------------------------------------
+
+-- Auto-update timestamp on config change
+rule update_timestamp [priority: 100]:
+  i: ConfigItem
+  WHERE i.updated_at IS NULL OR i.updated_at < now()
+  => SET i { updated_at = now() }
+
+-- Increment config set version on any change
+rule increment_version [priority: 90]:
+  s: ConfigSet, i: ConfigItem
+  WHERE belongs_to(i, s)
+  AND i.updated_at = now()
+  => SET s { version = s.version + 1 }
+
+-- Auto-approve development changes
+rule auto_approve_dev [priority: 80]:
+  r: ChangeRequest, i: ConfigItem
+  WHERE change_for(r, i)
+  AND i.environment = "development"
+  AND r.status = "pending"
+  => SET r { status = "approved", approved_by = "auto", approved_at = now() }
+
+-- Create change log entry
+rule log_changes [priority: 70]:
+  r: ChangeRequest, i: ConfigItem
+  WHERE change_for(r, i)
+  AND r.status = "approved"
+  AND NOT EXISTS(l: ChangeLog, log_for(l, i), l.changed_at >= r.approved_at)
+  => SPAWN l: ChangeLog {
+       action = r.change_type,
+       changed_by = r.requested_by,
+       reason = r.title
+     },
+     LINK log_for(l, i)

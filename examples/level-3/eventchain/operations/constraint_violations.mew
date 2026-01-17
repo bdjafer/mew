@@ -1,0 +1,110 @@
+-- ===========================================================================
+-- OPERATIONS: Constraint Violation Tests
+-- DESCRIPTION: Tests that constraints properly reject invalid operations
+-- FEATURES: declarations/constraint.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create valid events
+-- ---------------------------------------------------------------------------
+
+--# test_setup_early_event
+SPAWN early: Event {
+  name = "Early Event",
+  timestamp = 1000
+}
+
+--# test_setup_later_event
+SPAWN later: Event {
+  name = "Later Event",
+  timestamp = 2000
+}
+
+--# test_valid_causation
+LINK causes(#early, #later) { mechanism = "valid" }
+
+-- ---------------------------------------------------------------------------
+-- Constraint: temporal_order violation
+-- "Cause must precede or coincide with effect"
+-- ---------------------------------------------------------------------------
+
+--# test_setup_past_event
+SPAWN past: Event {
+  name = "Past Event",
+  timestamp = 500
+}
+
+--# test_setup_future_event
+SPAWN future: Event {
+  name = "Future Event",
+  timestamp = 3000
+}
+
+--# test_temporal_violation
+LINK causes(#future, #past) { mechanism = "invalid_temporal" }
+
+--# test_temporal_same_time_valid
+SPAWN same1: Event { name = "Same Time 1", timestamp = 1500 }
+SPAWN same2: Event { name = "Same Time 2", timestamp = 1500 }
+LINK causes(#same1, #same2)
+
+-- ---------------------------------------------------------------------------
+-- Constraint: no_causal_loop violation
+-- "Event cannot cause itself through any chain"
+-- ---------------------------------------------------------------------------
+
+--# test_direct_self_loop
+LINK causes(#early, #early)
+
+--# test_setup_loop_chain
+SPAWN loop_a: Event { name = "Loop A", timestamp = 100 }
+SPAWN loop_b: Event { name = "Loop B", timestamp = 200 }
+SPAWN loop_c: Event { name = "Loop C", timestamp = 300 }
+LINK causes(#loop_a, #loop_b)
+LINK causes(#loop_b, #loop_c)
+
+--# test_transitive_loop_violation
+LINK causes(#loop_c, #loop_a)
+
+-- ---------------------------------------------------------------------------
+-- Constraint: no_self edge modifier
+-- ---------------------------------------------------------------------------
+
+--# test_no_self_violation
+SPAWN single: Event { name = "Single Event" }
+LINK causes(#single, #single)
+
+-- ---------------------------------------------------------------------------
+-- Verify constraints don't block valid operations
+-- ---------------------------------------------------------------------------
+
+--# test_valid_chain_no_violation
+SPAWN chain_a: Event { name = "Chain A", timestamp = 1000 }
+SPAWN chain_b: Event { name = "Chain B", timestamp = 2000 }
+SPAWN chain_c: Event { name = "Chain C", timestamp = 3000 }
+LINK causes(#chain_a, #chain_b)
+LINK causes(#chain_b, #chain_c)
+
+--# test_verify_chain_exists
+MATCH causes+(#chain_a, #chain_c)
+RETURN true AS connected
+
+-- ---------------------------------------------------------------------------
+-- Constraint message verification
+-- ---------------------------------------------------------------------------
+
+--# test_temporal_error_message
+SPAWN msg_early: Event { name = "Msg Early", timestamp = 100 }
+SPAWN msg_late: Event { name = "Msg Late", timestamp = 200 }
+LINK causes(#msg_late, #msg_early)
+
+--# test_loop_error_message
+SPAWN msg_loop: Event { name = "Msg Loop", timestamp = 100 }
+LINK causes(#msg_loop, #msg_loop)
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH e: Event KILL e

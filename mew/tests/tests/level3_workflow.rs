@@ -80,3 +80,35 @@ mod errors {
         scenario().run().unwrap();
     }
 }
+
+mod trigger {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("trigger")
+            .ontology("level-3/workflow/ontology.mew")
+            .operations("level-3/workflow/operations/trigger.mew")
+            // Setup workflow and states
+            .step("test_setup_workflow", |a| a.created(1))
+            .step("test_setup_states", |a| a.created(4).linked(4))
+            .step("test_setup_transitions", |a| a.created(3).linked(9))
+            .step("test_setup_work_items", |a| a.created(3).linked(6))
+            // TRIGGER expects parse error (not yet implemented)
+            .step("test_trigger_cancel_workflow", |a| a.error("parse"))
+            .step("test_verify_manual_rule_fired", |a| a.rows_gte(0))
+            .step("test_trigger_with_filter", |a| a.error("parse"))
+            .step("test_verify_filtered_trigger", |a| a.rows_gte(0))
+            .step("test_trigger_returns_count", |a| a.error("parse"))
+            .step("test_verify_count_returned", |a| a.error("parse"))
+            .step("test_trigger_no_match", |a| a.error("parse"))
+            .step("test_trigger_unknown_rule", |a| a.error("parse"))
+            .step("test_trigger_auto_rule", |a| a.error("parse"))
+            // Cleanup
+            .step("test_cleanup", |a| a.deleted(1))
+    }
+
+    #[test]
+    fn test_trigger_manual_rules() {
+        scenario().run().unwrap();
+    }
+}

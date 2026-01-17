@@ -1,0 +1,139 @@
+-- ===========================================================================
+-- OPERATIONS: Manual Rule Triggering
+-- DESCRIPTION: Tests TRIGGER statement for manual rules
+-- FEATURES: statements/trigger.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create workflow definition and work items
+-- ---------------------------------------------------------------------------
+
+--# test_setup_workflow
+SPAWN approval_wf: WorkflowDef {
+  name = "approval-workflow"
+}
+
+--# test_setup_states
+SPAWN pending: State {
+  name = "pending",
+  is_initial = true
+}
+SPAWN approved: State {
+  name = "approved",
+  is_final = true
+}
+SPAWN cancelled: State {
+  name = "cancelled",
+  is_final = true
+}
+SPAWN failed: State {
+  name = "failed",
+  is_final = true
+}
+
+LINK state_of(#pending, #approval_wf)
+LINK state_of(#approved, #approval_wf)
+LINK state_of(#cancelled, #approval_wf)
+LINK state_of(#failed, #approval_wf)
+
+--# test_setup_transitions
+SPAWN t_approve: Transition { name = "approve" }
+SPAWN t_cancel: Transition { name = "cancel" }
+SPAWN t_fail: Transition { name = "fail" }
+
+LINK transition_of(#t_approve, #approval_wf)
+LINK transition_of(#t_cancel, #approval_wf)
+LINK transition_of(#t_fail, #approval_wf)
+LINK from_state(#t_approve, #pending)
+LINK to_state(#t_approve, #approved)
+LINK from_state(#t_cancel, #pending)
+LINK to_state(#t_cancel, #cancelled)
+LINK from_state(#t_fail, #pending)
+LINK to_state(#t_fail, #failed)
+
+--# test_setup_work_items
+SPAWN item1: WorkItem {
+  name = "Request 1",
+  status = "active"
+}
+SPAWN item2: WorkItem {
+  name = "Request 2",
+  status = "active"
+}
+SPAWN item3: WorkItem {
+  name = "Request 3",
+  status = "active"
+}
+
+LINK instance_of(#item1, #approval_wf)
+LINK instance_of(#item2, #approval_wf)
+LINK instance_of(#item3, #approval_wf)
+LINK current_state(#item1, #pending)
+LINK current_state(#item2, #pending)
+LINK current_state(#item3, #pending)
+
+-- ---------------------------------------------------------------------------
+-- TRIGGER: Basic manual rule invocation
+-- ---------------------------------------------------------------------------
+
+--# test_trigger_cancel_workflow
+TRIGGER cancel_workflow
+
+--# test_verify_manual_rule_fired
+MATCH w: WorkItem WHERE w.status = "cancelled"
+RETURN w.name
+
+-- ---------------------------------------------------------------------------
+-- TRIGGER: With WHERE clause filtering
+-- ---------------------------------------------------------------------------
+
+--# test_trigger_with_filter
+TRIGGER fail_workflow WHERE w.name = "Request 2"
+
+--# test_verify_filtered_trigger
+MATCH w: WorkItem WHERE w.status = "failed"
+RETURN w.name
+
+-- ---------------------------------------------------------------------------
+-- TRIGGER: Returns count of bindings
+-- ---------------------------------------------------------------------------
+
+--# test_trigger_returns_count
+TRIGGER cancel_workflow
+RETURN fired
+
+--# test_verify_count_returned
+TRIGGER fail_workflow WHERE w.name = "Request 3"
+RETURN fired AS bindings_fired
+
+-- ---------------------------------------------------------------------------
+-- TRIGGER: Non-matching rule (no bindings)
+-- ---------------------------------------------------------------------------
+
+--# test_trigger_no_match
+TRIGGER cancel_workflow WHERE w.name = "Nonexistent"
+
+-- ---------------------------------------------------------------------------
+-- TRIGGER: Rule not found
+-- ---------------------------------------------------------------------------
+
+--# test_trigger_unknown_rule
+TRIGGER nonexistent_rule
+
+-- ---------------------------------------------------------------------------
+-- TRIGGER: Auto rule cannot be triggered manually
+-- ---------------------------------------------------------------------------
+
+--# test_trigger_auto_rule
+TRIGGER start_workflow
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH h: StateHistory KILL h
+MATCH w: WorkItem KILL w
+MATCH t: Transition KILL t
+MATCH s: State KILL s
+MATCH wf: WorkflowDef KILL wf

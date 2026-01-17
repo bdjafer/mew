@@ -1,0 +1,49 @@
+-- ===========================================================================
+-- SEED: Populated Audit Setup
+-- ===========================================================================
+
+-- Config sets for each environment
+SPAWN dev_config: ConfigSet { name = "dev-config", environment = "development" }
+SPAWN staging_config: ConfigSet { name = "staging-config", environment = "staging" }
+SPAWN prod_config: ConfigSet { name = "prod-config", environment = "production", locked = true }
+
+-- Development configs
+SPAWN dev_db: ConfigItem { key = "DATABASE_URL", value = "postgres://localhost:5432/dev", config_type = "database", environment = "development" }
+SPAWN dev_redis: ConfigItem { key = "REDIS_URL", value = "redis://localhost:6379", config_type = "database", environment = "development" }
+SPAWN dev_api: ConfigItem { key = "API_KEY", value = "dev-key-123", config_type = "application", environment = "development" }
+
+LINK belongs_to(#dev_db, #dev_config)
+LINK belongs_to(#dev_redis, #dev_config)
+LINK belongs_to(#dev_api, #dev_config)
+
+-- Staging configs
+SPAWN stg_db: ConfigItem { key = "DATABASE_URL", value = "postgres://staging-db:5432/app", config_type = "database", environment = "staging" }
+SPAWN stg_redis: ConfigItem { key = "REDIS_URL", value = "redis://staging-cache:6379", config_type = "database", environment = "staging" }
+SPAWN stg_secret: ConfigItem { key = "API_SECRET", value = "staging-secret", config_type = "security", sensitive = true, environment = "staging" }
+
+LINK belongs_to(#stg_db, #staging_config)
+LINK belongs_to(#stg_redis, #staging_config)
+LINK belongs_to(#stg_secret, #staging_config)
+
+-- Production configs
+SPAWN prod_db: ConfigItem { key = "DATABASE_URL", value = "postgres://prod-cluster:5432/app", config_type = "database", environment = "production" }
+SPAWN prod_redis: ConfigItem { key = "REDIS_URL", value = "redis://prod-cache:6379", config_type = "database", environment = "production" }
+SPAWN prod_secret: ConfigItem { key = "API_SECRET", value = "prod-secret-encrypted", config_type = "security", sensitive = true, environment = "production" }
+
+LINK belongs_to(#prod_db, #prod_config)
+LINK belongs_to(#prod_redis, #prod_config)
+LINK belongs_to(#prod_secret, #prod_config)
+
+-- Snapshots
+SPAWN v1: Snapshot { name = "v1.0.0", description = "Initial release", created_by = "admin" }
+SPAWN v2: Snapshot { name = "v2.0.0", description = "Major update", created_by = "admin" }
+LINK snapshot_of(#v1, #prod_config)
+LINK snapshot_of(#v2, #prod_config)
+
+-- Branches
+SPAWN feature: Branch { name = "feature/new-auth", description = "New auth system", created_from = "main" }
+LINK branch_of(#feature, #dev_config)
+
+-- Change requests
+SPAWN cr1: ChangeRequest { title = "Update staging DB", change_type = "update", requested_by = "dev@example.com", status = "approved", approved_by = "admin@example.com" }
+LINK change_for(#cr1, #stg_db)

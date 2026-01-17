@@ -1,0 +1,132 @@
+-- ===========================================================================
+-- OPERATIONS: Rule Execution Tests
+-- DESCRIPTION: Tests that auto rules fire correctly and in priority order
+-- FEATURES: declarations/rule.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Test: auto_timestamp rule fires on creation
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_without_timestamp
+SPAWN no_ts: Event {
+  name = "No Timestamp Event"
+}
+
+--# test_verify_timestamp_set
+MATCH e: Event WHERE e.name = "No Timestamp Event"
+RETURN e.name, e.timestamp IS NOT NULL AS has_timestamp
+
+--# test_spawn_with_timestamp
+SPAWN with_ts: Event {
+  name = "Has Timestamp Event",
+  timestamp = 12345
+}
+
+--# test_verify_explicit_timestamp
+MATCH e: Event WHERE e.name = "Has Timestamp Event"
+RETURN e.timestamp
+
+-- ---------------------------------------------------------------------------
+-- Test: Rule fires on pattern match
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_multiple_no_timestamp
+SPAWN multi1: Event { name = "Multi 1" }
+SPAWN multi2: Event { name = "Multi 2" }
+SPAWN multi3: Event { name = "Multi 3" }
+
+--# test_verify_all_have_timestamps
+MATCH e: Event WHERE e.name STARTS WITH "Multi"
+RETURN e.name, e.timestamp IS NOT NULL AS has_timestamp
+
+-- ---------------------------------------------------------------------------
+-- Test: Rule does not fire when condition not met
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_with_null_check
+SPAWN explicit: Event {
+  name = "Explicit Timestamp",
+  timestamp = 99999
+}
+
+--# test_verify_no_overwrite
+MATCH e: Event WHERE e.name = "Explicit Timestamp"
+RETURN e.timestamp
+
+-- ---------------------------------------------------------------------------
+-- Test: Rule execution order (priority)
+-- ---------------------------------------------------------------------------
+
+--# test_priority_ordering
+SPAWN priority_test: Event {
+  name = "Priority Test",
+  event_type = "test"
+}
+
+--# test_verify_rule_execution_order
+MATCH e: Event WHERE e.name = "Priority Test"
+RETURN e.timestamp IS NOT NULL AS rule_executed
+
+-- ---------------------------------------------------------------------------
+-- Test: Rules fire on updates
+-- ---------------------------------------------------------------------------
+
+--# test_create_then_clear_timestamp
+SPAWN update_test: Event {
+  name = "Update Test",
+  timestamp = 5000
+}
+
+--# test_clear_timestamp
+SET #update_test { timestamp = NULL }
+
+--# test_verify_timestamp_restored
+MATCH e: Event WHERE e.name = "Update Test"
+RETURN e.timestamp IS NOT NULL AS restored
+
+-- ---------------------------------------------------------------------------
+-- Test: Rule quiescence (fires until stable)
+-- ---------------------------------------------------------------------------
+
+--# test_quiescence
+SPAWN quiesce1: Event { name = "Quiesce 1" }
+SPAWN quiesce2: Event { name = "Quiesce 2" }
+LINK causes(#quiesce1, #quiesce2)
+
+--# test_verify_quiescence
+MATCH e: Event WHERE e.name STARTS WITH "Quiesce"
+RETURN e.name, e.timestamp IS NOT NULL AS has_ts
+ORDER BY e.name
+
+-- ---------------------------------------------------------------------------
+-- Test: Rule variable scoping
+-- ---------------------------------------------------------------------------
+
+--# test_variable_scoping
+SPAWN scoped: Event {
+  name = "Scoped Event",
+  description = "Test variable scoping in rules"
+}
+
+--# test_verify_scoped
+MATCH e: Event WHERE e.name = "Scoped Event"
+RETURN e.timestamp IS NOT NULL AS rule_accessed_e
+
+-- ---------------------------------------------------------------------------
+-- Test: Rule once-per-binding (no infinite loops)
+-- ---------------------------------------------------------------------------
+
+--# test_no_infinite_loop
+SPAWN loop_safe: Event { name = "Loop Safe" }
+
+--# test_verify_loop_safe
+MATCH e: Event WHERE e.name = "Loop Safe"
+RETURN e.timestamp IS NOT NULL AS processed_once
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH e: Event KILL e
