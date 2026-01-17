@@ -15,7 +15,7 @@ ontology Bookmarks {
     url: String [required],
     title: String [required],
     description: String?,
-    created_at: Timestamp = now(),
+    created_at: Timestamp [readonly] = now(),
     is_favorite: Bool = false,
     visit_count: Int = 0
   }

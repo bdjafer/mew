@@ -24,6 +24,9 @@ pub enum MutationError {
     #[error("Cannot set required attribute to null: {attr} on type {type_name}")]
     RequiredNullViolation { type_name: String, attr: String },
 
+    #[error("Cannot modify readonly attribute: {attr} on type {type_name}")]
+    ReadonlyAttributeViolation { type_name: String, attr: String },
+
     #[error("Invalid attribute type: expected {expected}, got {actual} for {attr}")]
     InvalidAttrType {
         attr: String,
@@ -131,6 +134,13 @@ impl MutationError {
 
     pub fn required_null_violation(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
         Self::RequiredNullViolation {
+            type_name: type_name.into(),
+            attr: attr.into(),
+        }
+    }
+
+    pub fn readonly_attribute_violation(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
+        Self::ReadonlyAttributeViolation {
             type_name: type_name.into(),
             attr: attr.into(),
         }

@@ -206,6 +206,9 @@ impl Parser {
         } else if self.check_ident("unique") {
             self.advance();
             Ok(AttrModifier::Unique)
+        } else if self.check_ident("readonly") {
+            self.advance();
+            Ok(AttrModifier::Readonly)
         } else if self.check_ident("default") {
             self.advance();
             if self.check(&TokenKind::Eq) || self.check(&TokenKind::Colon) {
