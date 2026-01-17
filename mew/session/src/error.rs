@@ -75,5 +75,11 @@ impl From<mew_pattern::TargetError> for SessionError {
     }
 }
 
+impl From<mew_analyzer::AnalyzerError> for SessionError {
+    fn from(err: mew_analyzer::AnalyzerError) -> Self {
+        SessionError::analysis_error(err.to_string())
+    }
+}
+
 /// Result type for session operations.
 pub type SessionResult<T> = Result<T, SessionError>;

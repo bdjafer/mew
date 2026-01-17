@@ -94,6 +94,9 @@ pub fn execute_link(
         attrs.insert(assign.name.clone(), value);
     }
 
+    // Check that all required edge attributes are present
+    crate::validation::check_required_edge_attributes(registry, &stmt.edge_type, edge_type_id, &attrs)?;
+
     // Apply default values for missing edge attributes
     crate::validation::apply_edge_defaults(registry, edge_type_id, &mut attrs)?;
 
