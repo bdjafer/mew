@@ -164,7 +164,7 @@ Specification coverage for Level 3: Dynamics features.
 - [symmetric] edge modifier — Not used in any ontology
 - [on_kill_source: prevent] — Not demonstrated
 - Aggregates in WHERE — Not tested
-- Manual rule invocation — Rule [manual] defined but not invoked
+- Manual rule trigger — Rule [manual] defined but not triggered
 
 ### Ontology Improvements
 - **EventChain** — Add edge<causes> confidence pattern for higher-order demo
