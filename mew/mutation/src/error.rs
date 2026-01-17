@@ -107,6 +107,9 @@ pub enum MutationError {
         min_length: i64,
         max_length: i64,
     },
+
+    #[error("readonly attribute: {attr} cannot be modified on type {type_name}")]
+    ReadonlyViolation { type_name: String, attr: String },
 }
 
 impl MutationError {
@@ -268,6 +271,13 @@ impl MutationError {
             actual_length,
             min_length,
             max_length,
+        }
+    }
+
+    pub fn readonly_violation(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
+        Self::ReadonlyViolation {
+            type_name: type_name.into(),
+            attr: attr.into(),
         }
     }
 }

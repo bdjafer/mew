@@ -207,6 +207,8 @@ impl Compiler {
                 if is_now_call(default_expr) {
                     // Mark as having a timestamp default (computed at runtime)
                     attr = attr.with_default(Value::Timestamp(0)); // Placeholder
+                    // Timestamp attributes with now() default are readonly after creation
+                    attr = attr.readonly();
                 }
             }
 
@@ -388,6 +390,8 @@ impl Compiler {
                 }
                 if is_now_call(default_expr) {
                     attr = attr.with_default(Value::Timestamp(0)); // Placeholder
+                    // Timestamp attributes with now() default are readonly after creation
+                    attr = attr.readonly();
                 }
             }
 
