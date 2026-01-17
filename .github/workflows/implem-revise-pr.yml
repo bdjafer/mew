@@ -1,0 +1,47 @@
+name: "Implem: Revise PR"
+
+# Triggered when a PR needs revision based on review feedback.
+# Applies fixes and re-triggers review gates.
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: write         # Push commits with fixes
+  pull-requests: write    # Update PR labels
+  issues: write           # Post comments
+  id-token: write         # For OAuth authentication
+
+jobs:
+  revise:
+    if: contains(github.event.pull_request.labels.*.name, 'agent/needs-revision')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Load skill prompt
+        id: skill
+        run: |
+          {
+            echo "prompt<<SKILL_EOF"
+            cat ".claude/skills/scenarios->implem/revise-pr.md"
+            echo "SKILL_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code - Revise PR
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: ${{ steps.skill.outputs.prompt }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-opus-4-5-20251101
+            --max-turns 40
+            --allowedTools Read,Edit,Write,Bash,Grep,Glob

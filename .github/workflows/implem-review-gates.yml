@@ -1,0 +1,117 @@
+name: "Implem: Review Gates"
+
+# Runs quality review and spec compliance checks in parallel when a PR needs review.
+# Triggered when 'agent/needs-review' label is present.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: write         # Push commits (for spec revision)
+  pull-requests: write    # Update PR labels and comments
+  issues: write           # Post comments
+  id-token: write         # For OAuth authentication
+
+jobs:
+  quality-review:
+    if: |
+      !github.event.pull_request.draft &&
+      contains(github.event.pull_request.labels.*.name, 'agent/needs-review')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Load skill prompt
+        id: skill
+        run: |
+          {
+            echo "prompt<<SKILL_EOF"
+            cat ".claude/skills/scenarios->implem/review-pr.md"
+            echo "SKILL_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code - Quality Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: ${{ steps.skill.outputs.prompt }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-opus-4-5-20251101
+            --max-turns 20
+
+  spec-compliance:
+    if: |
+      !github.event.pull_request.draft &&
+      contains(github.event.pull_request.labels.*.name, 'agent/needs-review')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Load skill prompt
+        id: skill
+        run: |
+          {
+            echo "prompt<<SKILL_EOF"
+            cat ".claude/skills/scenarios->implem/compare-spec.md"
+            echo "SKILL_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code - Spec Compliance
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: ${{ steps.skill.outputs.prompt }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --max-turns 30
+
+  # Check if both gates passed and mark ready to merge
+  check-merge-ready:
+    needs: [quality-review, spec-compliance]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check gates and update labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+
+            // Get current labels
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber
+            });
+
+            const labels = pr.labels.map(l => l.name);
+
+            // Check if both gates passed
+            const qualityPassed = labels.includes('gate/quality-passed');
+            const specPassed = labels.includes('gate/spec-passed');
+            const awaitingHuman = labels.includes('awaiting-human');
+
+            if (qualityPassed && specPassed && !awaitingHuman) {
+              // Add ready-to-merge label
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: prNumber,
+                labels: ['ready-to-merge']
+              });
+
+              console.log('Both gates passed. PR marked ready-to-merge.');
+            } else {
+              console.log('Gates status:', { qualityPassed, specPassed, awaitingHuman });
+            }

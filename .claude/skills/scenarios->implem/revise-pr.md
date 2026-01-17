@@ -1,40 +1,87 @@
 # REVISE PR
 
-Your goal: apply targeted fixes to the implementation based on feedback.
+You are a revision agent. Apply targeted fixes based on review feedback.
 
-## Input
+## INPUT
 
-You receive feedback from one of:
-- `/review-pr` — quality issues (complexity, patterns, structure)
-- `/compare-spec` — drift issues (impl doesn't match spec)
+Read the PR comments to find feedback from:
+- `review-pr` — quality issues (complexity, patterns, structure)
+- `compare-spec` — drift issues (impl doesn't match spec)
 
-## Process
+Look for comments titled "Review: Changes Requested" or "Spec Compliance: Failed".
 
-1. **List the issues** identified in the feedback. Be specific—quote them.
+## PROCESS
 
-2. **For each issue**, determine the fix:
+1. **List the issues** from comments — quote them exactly
+
+2. **For each issue**, determine:
    - What file(s) need to change?
    - What's the minimal change that addresses it?
    - Does fixing this affect anything else?
 
 3. **Apply fixes one at a time**:
    - Make the change
-   - Verify it compiles
-   - Verify tests still pass
+   - Verify it compiles: `cargo check --workspace`
+   - Verify tests pass: `cargo test --workspace`
    - Move to next issue
 
-4. **Don't over-correct**. Fix what was flagged. Don't refactor adjacent code, don't add improvements you noticed along the way. Stay scoped.
+4. **Don't over-correct** — fix only what was flagged, no drive-by improvements
 
-5. **If a fix is unclear or risky**, say so. Better to ask than to guess wrong.
+5. **If a fix is unclear or risky** — say so, don't guess
 
-## Constraints
+## PUSHBACK
 
-- Fix only what was identified. No drive-by changes.
-- If fixing one issue conflicts with another, flag it.
-- **Pushback is valid.** If you're confident a requested change is wrong—would make the code worse, contradicts spec, or misunderstands intent—don't apply it. State your case with justification. Reviewers aren't infallible. However, "not now" or this will "break the public API" is NOT a good reason to pushback.
+If you're confident a requested change is wrong:
+- Would make the code worse
+- Contradicts the spec
+- Misunderstands the intent
 
-## Output
+Then state your case in a comment with justification. Reviewers aren't infallible.
 
-- List of changes made, mapped to the issues they address
-- Any issues you couldn't resolve (with explanation)
-- Confirmation: compiles, tests pass
+**Invalid pushback:**
+- "Not now" or "later"
+- "Breaks public API" (if spec says to do it, do it)
+- "Too much work" (do the work)
+
+## OUTPUT
+
+Post a PR comment:
+
+```markdown
+## Revision Complete
+
+**Changes made:**
+1. [quoted issue] → [fix applied, with file:line]
+2. [quoted issue] → [fix applied, with file:line]
+
+**Unresolved (with explanation):**
+- [issue] → [why not fixed, or pushback reasoning]
+
+---
+✓ Compiles
+✓ Tests pass
+```
+
+Then commit and push:
+```bash
+git add -A
+git commit -m "revise: address review feedback
+
+- [summary of changes]
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+git push
+```
+
+Then update labels to re-trigger review:
+```bash
+gh pr edit --add-label "agent/needs-review"
+gh pr edit --remove-label "agent/needs-revision"
+```
+
+## CONSTRAINTS
+
+- Fix only what was identified — no drive-by changes
+- If fixing one issue conflicts with another, flag it
+- If you can't resolve an issue, explain why clearly
+- Always verify compile + tests before declaring done

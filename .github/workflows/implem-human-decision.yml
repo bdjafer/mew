@@ -1,0 +1,46 @@
+name: "Implem: Handle Human Decision"
+
+# Processes human approval/rejection of spec revisions.
+# - human/approved: Accept spec change, proceed to merge
+# - human/rejected: Revert spec change, request implementation rework
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: write         # Revert commits if rejected
+  pull-requests: write    # Update PR labels
+  issues: write           # Post comments
+  id-token: write         # For OAuth authentication
+
+jobs:
+  handle-decision:
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'human/approved') ||
+      contains(github.event.pull_request.labels.*.name, 'human/rejected')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Load skill prompt
+        id: skill
+        run: |
+          {
+            echo "prompt<<SKILL_EOF"
+            cat ".claude/skills/scenarios->implem/handle-human-decision.md"
+            echo "SKILL_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code - Handle Decision
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: ${{ steps.skill.outputs.prompt }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --max-turns 15

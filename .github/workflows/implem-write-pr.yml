@@ -1,0 +1,65 @@
+name: "Implem: Write PR"
+
+# Periodically picks failing tests and creates PRs to fix them.
+# Multiple agents run in parallel; coordination via draft PRs prevents conflicts.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      parallel_agents:
+        description: 'Number of parallel agents (1-5)'
+        required: false
+        default: '3'
+        type: choice
+        options: ['1', '2', '3', '4', '5']
+      model:
+        description: 'Model to use'
+        required: false
+        default: 'claude-opus-4-5-20251101'
+        type: choice
+        options:
+          - 'claude-sonnet-4-5-20250929'
+          - 'claude-opus-4-5-20251101'
+
+permissions:
+  contents: write         # Push commits, create branches
+  pull-requests: write    # Create and update PRs
+  issues: write           # Post comments
+  id-token: write         # For OAuth authentication
+
+jobs:
+  write-pr:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent: [1, 2, 3]
+      fail-fast: false  # Don't cancel others if one fails
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Load skill prompt
+        id: skill
+        run: |
+          {
+            echo "prompt<<SKILL_EOF"
+            cat ".claude/skills/scenarios->implem/write-pr.md"
+            echo "SKILL_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: ${{ steps.skill.outputs.prompt }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ inputs.model }}
+            --max-turns 50
+            --allowedTools Read,Edit,Write,Bash,Grep,Glob
