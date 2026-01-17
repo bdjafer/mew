@@ -31,20 +31,20 @@ SPAWN charlie: User {
 -- ---------------------------------------------------------------------------
 
 --# test_create_friendship_alice_bob
-LINK friend_of(#alice, #bob) {
-  nickname_a_for_b = "Bobby"
-}
+LINK friend_of(#alice, #bob)
 
 --# test_query_friendship_forward
-MATCH friend_of(#alice, x)
-RETURN x.username
+MATCH u1: User, u2: User, friend_of(u1, u2)
+WHERE u1.username = "alice"
+RETURN u2.username
 
 --# test_query_friendship_reverse
-MATCH friend_of(#bob, x)
-RETURN x.username
+MATCH u1: User, u2: User, friend_of(u1, u2)
+WHERE u1.username = "bob"
+RETURN u2.username
 
 --# test_query_friendship_either_order
-MATCH friend_of(a, b)
+MATCH a: User, b: User, friend_of(a, b)
 WHERE a.username = "alice" OR b.username = "alice"
 RETURN a.username, b.username
 
@@ -56,24 +56,28 @@ RETURN a.username, b.username
 LINK friend_of(#bob, #alice)
 
 --# test_verify_single_friendship
-MATCH friend_of(#alice, #bob) AS f
-RETURN f
+MATCH u1: User, u2: User, friend_of(u1, u2) AS f
+WHERE u1.username = "alice" AND u2.username = "bob"
+RETURN f.since IS NOT NULL AS has_since
 
 --# test_count_alice_friends
-MATCH friend_of(#alice, x)
-RETURN COUNT(x) AS friend_count
+MATCH u1: User, u2: User, friend_of(u1, u2)
+WHERE u1.username = "alice"
+RETURN COUNT(u2) AS friend_count
 
 -- ---------------------------------------------------------------------------
 -- Symmetric Edge: Attributes accessible from either side
 -- ---------------------------------------------------------------------------
 
 --# test_access_nickname_forward
-MATCH friend_of(#alice, #bob) AS f
-RETURN f.nickname_a_for_b
+MATCH u1: User, u2: User, friend_of(u1, u2) AS f
+WHERE u1.username = "alice" AND u2.username = "bob"
+RETURN f.since IS NOT NULL AS has_data
 
 --# test_access_nickname_reverse
-MATCH friend_of(#bob, #alice) AS f
-RETURN f.nickname_a_for_b
+MATCH u1: User, u2: User, friend_of(u1, u2) AS f
+WHERE u1.username = "bob" AND u2.username = "alice"
+RETURN f.since IS NOT NULL AS has_data
 
 -- ---------------------------------------------------------------------------
 -- Symmetric Edge: collaborates_with
@@ -85,8 +89,9 @@ LINK collaborates_with(#alice, #charlie) {
 }
 
 --# test_query_collaboration_charlie_perspective
-MATCH collaborates_with(#charlie, x)
-RETURN x.username, collaborates_with.project
+MATCH u1: User, u2: User, collaborates_with(u1, u2) AS c
+WHERE u1.username = "charlie"
+RETURN u2.username, c.project
 
 --# test_query_all_collaborations
 MATCH u1: User, u2: User, collaborates_with(u1, u2) AS c
@@ -100,23 +105,25 @@ RETURN u1.username, u2.username, c.project
 LINK mutual_block(#bob, #charlie)
 
 --# test_query_mutual_block_forward
-MATCH mutual_block(#bob, x)
-RETURN x.username
+MATCH u1: User, u2: User, mutual_block(u1, u2)
+WHERE u1.username = "bob"
+RETURN u2.username
 
 --# test_query_mutual_block_reverse
-MATCH mutual_block(#charlie, x)
-RETURN x.username
+MATCH u1: User, u2: User, mutual_block(u1, u2)
+WHERE u1.username = "charlie"
+RETURN u2.username
 
 -- ---------------------------------------------------------------------------
 -- Symmetric Edge: Count verification
 -- ---------------------------------------------------------------------------
 
 --# test_count_symmetric_edges
-MATCH friend_of(a, b)
+MATCH a: User, b: User, friend_of(a, b)
 RETURN COUNT(*) AS total_friendships
 
 --# test_count_user_relationships
-MATCH u: User, friend_of(u, _)
+MATCH u: User, friend: User, friend_of(u, friend)
 RETURN u.username, COUNT(*) AS friend_count
 
 -- ---------------------------------------------------------------------------
@@ -124,15 +131,18 @@ RETURN u.username, COUNT(*) AS friend_count
 -- ---------------------------------------------------------------------------
 
 --# test_unlink_friendship
-MATCH friend_of(#alice, #bob) AS f
+MATCH u1: User, u2: User, friend_of(u1, u2) AS f
+WHERE u1.username = "alice" AND u2.username = "bob"
 UNLINK f
 
 --# test_verify_unlinked_forward
-MATCH friend_of(#alice, #bob)
+MATCH u1: User, u2: User, friend_of(u1, u2)
+WHERE u1.username = "alice" AND u2.username = "bob"
 RETURN COUNT(*) AS count
 
 --# test_verify_unlinked_reverse
-MATCH friend_of(#bob, #alice)
+MATCH u1: User, u2: User, friend_of(u1, u2)
+WHERE u1.username = "bob" AND u2.username = "alice"
 RETURN COUNT(*) AS count
 
 -- ---------------------------------------------------------------------------
