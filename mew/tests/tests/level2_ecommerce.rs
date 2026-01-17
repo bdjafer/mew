@@ -527,3 +527,33 @@ mod format_advanced {
         scenario().run().unwrap();
     }
 }
+
+mod alias_chaining {
+    use super::*;
+
+    /// Tests type alias chaining where one alias references another.
+    /// Chain: Email -> RequiredEmail -> UniqueRequiredEmail
+    /// Tests that all modifiers from the chain are applied correctly.
+    pub fn scenario() -> Scenario {
+        Scenario::new("alias_chaining")
+            .ontology("level-2/ecommerce/ontology.mew")
+            .operations("level-2/ecommerce/operations/alias_chaining.mew")
+            // Valid email through chained alias
+            .step("test_alias_chain_valid_email", |a| a.created(1))
+            .step("test_alias_chain_second_subscriber", |a| a.created(1))
+            .step("test_alias_chain_verify_created", |a| a.rows(2))
+            // Format validation from base Email alias
+            .step("test_alias_chain_invalid_format", |a| a.error("format"))
+            // Required constraint from RequiredEmail alias
+            .step("test_alias_chain_missing_required", |a| a.error("required"))
+            // Unique constraint from UniqueRequiredEmail alias
+            .step("test_alias_chain_duplicate_fails", |a| a.error("unique"))
+            // Cleanup
+            .step("test_alias_chain_cleanup", |a| a.deleted(2))
+    }
+
+    #[test]
+    fn test_alias_chaining_inheritance() {
+        scenario().run().unwrap();
+    }
+}

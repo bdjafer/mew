@@ -12,7 +12,7 @@ Specification coverage for Level 2: Structure features.
 | Type alias with [match:] | modifiers/regex_validation.md | ✓ | ecommerce/type_aliases |
 | Type alias with [in:] | modifiers/enum_constraint.md | ✓ | ecommerce/type_aliases |
 | Type alias with [>= N]/[<= M] | modifiers/range_constraint.md | ✓ | ecommerce/type_aliases |
-| Alias chaining | declarations/type_alias.md | ✗ | — |
+| Alias chaining | declarations/type_alias.md | ✓ | ecommerce/alias_chaining |
 
 ---
 
@@ -232,7 +232,7 @@ Specification coverage for Level 2: Structure features.
 
 | Category | Covered | Total | Coverage |
 |----------|---------|-------|----------|
-| Type Aliases | 4 | 5 | 80% |
+| Type Aliases | 5 | 5 | 100% |
 | Inheritance | 5 | 6 | 83% |
 | Attribute Constraints | 17 | 17 | 100% |
 | Edge Features | 5 | 5 | 100% |

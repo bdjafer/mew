@@ -1,0 +1,63 @@
+-- ===========================================================================
+-- OPERATIONS: Alias Chaining
+-- DESCRIPTION: Tests type alias chaining where aliases reference other aliases
+-- FEATURES: declarations/type_alias.md (Alias Chaining)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Test chained alias: UniqueRequiredEmail
+-- Chain: Email [format: email] -> RequiredEmail [required] -> UniqueRequiredEmail [unique]
+-- Effective: String [format: email, required, unique]
+-- ---------------------------------------------------------------------------
+
+--# test_alias_chain_valid_email
+SPAWN sub1: Subscriber {
+  email = "test1@example.com",
+  name = "Alias Test 1"
+}
+
+--# test_alias_chain_second_subscriber
+SPAWN sub2: Subscriber {
+  email = "test2@example.com",
+  name = "Alias Test 2"
+}
+
+--# test_alias_chain_verify_created
+MATCH s: Subscriber WHERE s.name STARTS WITH "Alias Test"
+RETURN s.email, s.name
+
+-- ---------------------------------------------------------------------------
+-- Test format validation (inherited from Email alias)
+-- ---------------------------------------------------------------------------
+
+--# test_alias_chain_invalid_format
+SPAWN sub_invalid_format: Subscriber {
+  email = "not-an-email",
+  name = "Invalid Format"
+}
+
+-- ---------------------------------------------------------------------------
+-- Test required constraint (inherited from RequiredEmail alias)
+-- ---------------------------------------------------------------------------
+
+--# test_alias_chain_missing_required
+SPAWN sub_missing_email: Subscriber {
+  name = "Missing Email"
+}
+
+-- ---------------------------------------------------------------------------
+-- Test unique constraint (from UniqueRequiredEmail alias)
+-- ---------------------------------------------------------------------------
+
+--# test_alias_chain_duplicate_fails
+SPAWN sub_duplicate: Subscriber {
+  email = "test1@example.com",
+  name = "Duplicate Email"
+}
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_alias_chain_cleanup
+MATCH s: Subscriber WHERE s.name STARTS WITH "Alias Test" KILL s

@@ -32,11 +32,12 @@ permissions:
 jobs:
   write-pr:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        agent: [1, 2, 3]
-      max-parallel: 1   # Run sequentially to avoid race conditions
-      fail-fast: false  # Don't cancel others if one fails
+    # Single agent for now - expand to matrix later once working
+    # strategy:
+    #   matrix:
+    #     agent: [1, 2, 3]
+    #   max-parallel: 1
+    #   fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
