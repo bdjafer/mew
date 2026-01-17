@@ -305,6 +305,8 @@ mod parameters {
             .step("test_param_in_set_missing", |a| a.error("missing_parameter"))
             // Boolean parameter - no SubTasks exist, so MATCH finds nothing and WHERE isn't evaluated
             .step("test_param_bool_type_missing", |a| a.rows(0))
+            // Parameter in list (IN clause) - missing should error
+            .step("test_param_in_list_missing", |a| a.error("missing_parameter"))
             // Cleanup (only the 3 setup tasks remain since spawn failed)
             .step("test_cleanup_param_links", |a| a.unlinked(2))
             .step("test_cleanup_param_tasks", |a| a.deleted(3))
@@ -343,6 +345,11 @@ mod inspect {
             .step("test_inspect_with_all_system_fields", |a| a.rows(1))
             // INSPECT non-existent returns found: false (1 row with found=false)
             .step("test_inspect_nonexistent", |a| a.rows(1))
+            // Quoted ID syntax: #"identifier" for special chars/UUIDs
+            // Parser not yet implemented - expects parse error until feature is added
+            .step("test_inspect_quoted_simple_id", |a| a.error("parse"))
+            .step("test_inspect_quoted_nonexistent_uuid", |a| a.error("parse"))
+            .step("test_inspect_quoted_with_hyphens", |a| a.error("parse"))
             // Edge inspection
             .step("test_get_edge_for_inspection", |a| a.rows(1))
             // Cleanup

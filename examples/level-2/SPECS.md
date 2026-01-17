@@ -153,7 +153,7 @@ Specification coverage for Level 2: Structure features.
 | $param in pattern filter | expressions/parameters.md | ✓ | tasks/parameters |
 | $param in SPAWN | expressions/parameters.md | ✓ | tasks/parameters |
 | $param in SET | expressions/parameters.md | ✓ | tasks/parameters |
-| $param in list (IN clause) | expressions/parameters.md | ✗ | — |
+| $param in list (IN clause) | expressions/parameters.md | ✓ | tasks/parameters |
 | $param type inference | expressions/parameters.md | ✗ | — |
 | $param bool type | expressions/parameters.md | ✓ | tasks/parameters |
 | Missing parameter error | expressions/parameters.md | ✓ | tasks/parameters |
@@ -184,7 +184,7 @@ Specification coverage for Level 2: Structure features.
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
 | `#id` reference syntax | expressions/id_references.md | ✓ | tasks/inspect |
-| `#"uuid"` quoted syntax | expressions/id_references.md | ✗ | — |
+| `#"uuid"` quoted syntax | expressions/id_references.md | ✓ | tasks/inspect |
 | INSPECT by ID | statements/inspect.md | ✓ | tasks/inspect |
 | INSPECT with projection | statements/inspect.md | ✓ | tasks/inspect |
 
@@ -241,14 +241,14 @@ Specification coverage for Level 2: Structure features.
 | Bulk Operations | 9 | 9 | 100% |
 | LINK Variants | 7 | 7 | 100% |
 | UNLINK | 4 | 4 | 100% |
-| Parameters | 8 | 10 | 80% |
+| Parameters | 9 | 10 | 90% |
 | Time | 2 | 2 | 100% |
 | Type System | 3 | 3 | 100% |
-| ID Refs & Inspection | 3 | 4 | 75% |
+| ID Refs & Inspection | 4 | 4 | 100% |
 | Administration | 0 | 5 | 0% |
 | Policy/Authorization | 0 | 4 | 0% |
 | Errors | 8 | 8 | 100% |
-| **Total** | **98** | **112** | **88%** |
+| **Total** | **100** | **112** | **89%** |
 
 ---
 

@@ -87,6 +87,20 @@ RETURN *, _type, _id
 INSPECT #nonexistent_entity_xyz
 
 -- ---------------------------------------------------------------------------
+-- Quoted ID syntax: #"identifier"
+-- Used for IDs containing hyphens, UUIDs, or special characters
+-- ---------------------------------------------------------------------------
+
+--# test_inspect_quoted_simple_id
+INSPECT #"inspect_task"
+
+--# test_inspect_quoted_nonexistent_uuid
+INSPECT #"550e8400-e29b-41d4-a716-446655440000"
+
+--# test_inspect_quoted_with_hyphens
+INSPECT #"task-with-hyphens"
+
+-- ---------------------------------------------------------------------------
 -- Edge inspection
 -- ---------------------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 name: "Implem: Write PR"
 
 # Periodically picks failing tests and creates PRs to fix them.
-# Multiple agents run in parallel; coordination via draft PRs prevents conflicts.
+# Agents run SEQUENTIALLY to avoid race conditions on branch creation.
 
 on:
   schedule:
@@ -35,6 +35,7 @@ jobs:
     strategy:
       matrix:
         agent: [1, 2, 3]
+      max-parallel: 1   # Run sequentially to avoid race conditions
       fail-fast: false  # Don't cancel others if one fails
     steps:
       - name: Checkout repository

@@ -91,6 +91,13 @@ SET t.status = $newStatus
 MATCH s: SubTask WHERE s.is_blocking = $isBlocking RETURN s
 
 -- ---------------------------------------------------------------------------
+-- Parameter in list (IN clause) - missing should error
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_list_missing
+MATCH t: Task WHERE t.status IN $statusList RETURN t
+
+-- ---------------------------------------------------------------------------
 -- Cleanup
 -- ---------------------------------------------------------------------------
 
