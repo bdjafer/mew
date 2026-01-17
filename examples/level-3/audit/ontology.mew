@@ -116,29 +116,26 @@ edge conflict_in(conflict: Conflict, branch: Branch)
 -- ---------------------------------------------------------------------------
 
 -- Locked config sets cannot be modified
-constraint locked_readonly:
+constraint locked_readonly [message: "Cannot modify items in locked config set"]:
   s: ConfigSet, i: ConfigItem
   WHERE belongs_to(i, s)
   AND s.locked = true
   => false
-  [message: "Cannot modify items in locked config set"]
 
 -- Production configs require approval
-constraint production_approval:
+constraint production_approval [message: "Production changes require approval"]:
   r: ChangeRequest, i: ConfigItem
   WHERE change_for(r, i)
   AND i.environment = "production"
   AND r.status = "pending"
   => false
-  [message: "Production changes require approval"]
 
 -- Sensitive configs cannot be in development
-constraint sensitive_not_dev [soft]:
+constraint sensitive_not_dev [soft, message: "Sensitive configs should not be in development"]:
   i: ConfigItem
   WHERE i.sensitive = true
   AND i.environment = "development"
   => false
-  [message: "Sensitive configs should not be in development"]
 
 -- ---------------------------------------------------------------------------
 -- Rules
@@ -148,14 +145,16 @@ constraint sensitive_not_dev [soft]:
 rule update_timestamp [priority: 100]:
   i: ConfigItem
   WHERE i.updated_at IS NULL OR i.updated_at < now()
-  => SET i { updated_at = now() }
+  =>
+  SET i.updated_at = now()
 
 -- Increment config set version on any change
 rule increment_version [priority: 90]:
   s: ConfigSet, i: ConfigItem
   WHERE belongs_to(i, s)
   AND i.updated_at = now()
-  => SET s { version = s.version + 1 }
+  =>
+  SET s.version = s.version + 1
 
 -- Auto-approve development changes
 rule auto_approve_dev [priority: 80]:
@@ -163,17 +162,21 @@ rule auto_approve_dev [priority: 80]:
   WHERE change_for(r, i)
   AND i.environment = "development"
   AND r.status = "pending"
-  => SET r { status = "approved", approved_by = "auto", approved_at = now() }
+  =>
+  SET r.status = "approved",
+  SET r.approved_by = "auto",
+  SET r.approved_at = now()
 
 -- Create change log entry
 rule log_changes [priority: 70]:
   r: ChangeRequest, i: ConfigItem
   WHERE change_for(r, i)
   AND r.status = "approved"
-  AND NOT EXISTS(l: ChangeLog, log_for(l, i), l.changed_at >= r.approved_at)
-  => SPAWN l: ChangeLog {
-       action = r.change_type,
-       changed_by = r.requested_by,
-       reason = r.title
-     },
-     LINK log_for(l, i)
+  AND NOT EXISTS(l: ChangeLog, log_for(l, i))
+  =>
+  SPAWN l: ChangeLog {
+    action = r.change_type,
+    changed_by = r.requested_by,
+    reason = r.title
+  },
+  LINK log_for(l, i)

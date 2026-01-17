@@ -55,8 +55,8 @@ WHERE name = "initial-state"
 -- ---------------------------------------------------------------------------
 
 --# test_modify_after_snapshot
-SET #db_host { value = "db.production.local" }
-SET #db_port { value = "5433" }
+SET #db_host.value = "db.production.local"
+SET #db_port.value = "5433"
 
 --# test_verify_modifications
 MATCH i: ConfigItem WHERE i.key = "database.host"
@@ -118,8 +118,8 @@ BRANCH feature-new-db
 SWITCH feature-new-db
 
 --# test_modify_on_branch
-SET #db_host { value = "newdb.cluster.local" }
-SET #db_port { value = "5434" }
+SET #db_host.value = "newdb.cluster.local"
+SET #db_port.value = "5434"
 
 --# test_verify_branch_state
 MATCH i: ConfigItem WHERE i.key = "database.host"
@@ -151,11 +151,11 @@ RETURN i.value
 BRANCH conflict-branch
 
 --# test_modify_main
-SET #api_key { value = "main-key-456" }
+SET #api_key.value = "main-key-456"
 
 --# test_switch_and_modify_branch
 SWITCH conflict-branch
-SET #api_key { value = "branch-key-789" }
+SET #api_key.value = "branch-key-789"
 
 --# test_switch_back_to_main
 SWITCH main

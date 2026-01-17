@@ -98,8 +98,8 @@ mod versioning {
             .step("test_list_versions", |a| a.error("parse"))
             .step("test_list_versions_limit", |a| a.error("parse"))
             .step("test_list_branches", |a| a.error("parse"))
-            // Cleanup
-            .step("test_cleanup", |a| a.deleted(1))
+            // Cleanup (1 ConfigSet + 3 ConfigItems = 4 total)
+            .step("test_cleanup", |a| a.deleted(4))
     }
 
     #[test]
@@ -117,30 +117,30 @@ mod transactions {
             .operations("level-3/audit/operations/transactions.mew")
             // Setup
             .step("test_setup", |a| a.created(1))
-            // BEGIN/COMMIT expects parse error (transaction syntax)
-            .step("test_basic_transaction", |a| a.error("parse"))
-            .step("test_verify_committed", |a| a.rows_gte(0))
-            // ROLLBACK expects parse error
-            .step("test_rollback_transaction", |a| a.error("parse"))
+            // BEGIN/COMMIT works - transaction creates 1 node and 1 link
+            .step("test_basic_transaction", |a| a.created(1).linked(1))
+            .step("test_verify_committed", |a| a.rows(1))
+            // ROLLBACK works - spawned items are rolled back (0 created)
+            .step("test_rollback_transaction", |a| a.created(0))
             .step("test_verify_rollback", |a| a.value(0))
-            // SAVEPOINT expects parse error
+            // SAVEPOINT/ROLLBACK TO not implemented
             .step("test_savepoint_basic", |a| a.error("parse"))
             .step("test_verify_savepoint", |a| a.rows_gte(0))
-            // Multiple savepoints
+            // Multiple savepoints not implemented
             .step("test_multiple_savepoints", |a| a.error("parse"))
             .step("test_verify_multiple_savepoints", |a| a.rows_gte(0))
-            // Nested savepoints
+            // Nested savepoints not implemented
             .step("test_nested_savepoints", |a| a.error("parse"))
             .step("test_verify_nested", |a| a.rows_gte(0))
-            // Isolation levels
-            .step("test_read_committed", |a| a.error("parse"))
-            .step("test_serializable", |a| a.error("parse"))
+            // Isolation levels work
+            .step("test_read_committed", |a| a.created(1).linked(1))
+            .step("test_serializable", |a| a.created(1).linked(1))
             // Deferred constraints
-            .step("test_deferred_cardinality", |a| a.error("parse"))
-            // Rules in transaction
-            .step("test_rules_in_transaction", |a| a.error("parse"))
-            // Cleanup
-            .step("test_cleanup", |a| a.deleted(1))
+            .step("test_deferred_cardinality", |a| a.created(1))
+            // Rules in transaction work
+            .step("test_rules_in_transaction", |a| a.created(1).linked(1))
+            // Cleanup (1 ConfigSet + 5 ConfigItems from working transactions)
+            .step("test_cleanup", |a| a.deleted(6))
     }
 
     #[test]

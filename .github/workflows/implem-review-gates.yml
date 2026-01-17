@@ -81,13 +81,13 @@ jobs:
             --max-turns 60
             --allowedTools Bash,Read,Glob,Grep,Edit,Write
 
-  # Check if both gates passed and mark ready to merge
-  check-merge-ready:
+  # Check if both gates passed and merge directly
+  auto-merge:
     needs: [quality-review, spec-compliance]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check gates and update labels
+      - name: Check gates and merge if ready
         uses: actions/github-script@v7
         with:
           script: |
@@ -109,7 +109,7 @@ jobs:
             const awaitingHuman = labels.includes('awaiting-human');
 
             if (qualityPassed && specPassed && !awaitingHuman) {
-              // Add ready-to-merge label
+              // Add ready-to-merge label for tracking
               await github.rest.issues.addLabels({
                 owner,
                 repo,
@@ -117,7 +117,34 @@ jobs:
                 labels: ['ready-to-merge']
               });
 
-              console.log('Both gates passed. PR marked ready-to-merge.');
+              // Merge the PR directly
+              try {
+                await github.rest.pulls.merge({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  merge_method: 'squash',
+                  commit_title: pr.title,
+                  commit_message: `Auto-merged after passing all gates.\n\nGates passed:\n- gate/quality-passed\n- gate/spec-passed`
+                });
+                console.log('Both gates passed. PR merged successfully.');
+
+                // Delete the branch
+                try {
+                  await github.rest.git.deleteRef({
+                    owner,
+                    repo,
+                    ref: `heads/${pr.head.ref}`
+                  });
+                  console.log('Branch deleted.');
+                } catch (e) {
+                  console.log('Could not delete branch:', e.message);
+                }
+              } catch (e) {
+                console.log('Merge failed:', e.message);
+                core.setFailed(`Merge failed: ${e.message}`);
+              }
             } else {
               console.log('Gates status:', { qualityPassed, specPassed, awaitingHuman });
+              console.log('Not all gates passed or awaiting human review. Skipping merge.');
             }

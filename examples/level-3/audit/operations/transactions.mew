@@ -62,7 +62,7 @@ BEGIN
 
   SAVEPOINT sp1
 
-  SET #item3 { value = "after_savepoint" }
+  SET #item3.value = "after_savepoint"
 
   ROLLBACK TO sp1
 
@@ -83,13 +83,13 @@ BEGIN
   LINK belongs_to(#item4, #configs)
 
   SAVEPOINT sp1
-  SET #item4 { value = "v2" }
+  SET #item4.value = "v2"
 
   SAVEPOINT sp2
-  SET #item4 { value = "v3" }
+  SET #item4.value = "v3"
 
   SAVEPOINT sp3
-  SET #item4 { value = "v4" }
+  SET #item4.value = "v4"
 
   -- Roll back to sp2, keeping v2
   ROLLBACK TO sp2
@@ -114,8 +114,8 @@ BEGIN
     LINK belongs_to(#item6, #configs)
 
     SAVEPOINT inner_sp
-      SET #item5 { value = "modified_inner" }
-      SET #item6 { value = "also_modified" }
+      SET #item5.value = "modified_inner"
+      SET #item6.value = "also_modified"
     ROLLBACK TO inner_sp
 
     -- item5 and item6 should have original values
@@ -168,7 +168,7 @@ BEGIN
   LINK belongs_to(#item9, #configs)
 
   -- auto_update_timestamp rule should fire
-  SET #item9 { value = "updated" }
+  SET #item9.value = "updated"
 
   SAVEPOINT before_check
 

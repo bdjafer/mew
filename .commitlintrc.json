@@ -1,0 +1,21 @@
+{
+  "extends": ["@commitlint/config-conventional"],
+  "rules": {
+    "type-enum": [
+      2,
+      "always",
+      ["feat", "fix", "perf", "refactor", "docs", "test", "ci", "deps", "chore", "revert"]
+    ],
+    "scope-enum": [
+      1,
+      "always",
+      [
+        "core", "graph", "parser", "analyzer", "compiler", "registry",
+        "pattern", "query", "mutation", "constraint", "rule",
+        "transaction", "journal", "session", "repl",
+        "tests", "testgen", "examples"
+      ]
+    ],
+    "subject-case": [0]
+  }
+}

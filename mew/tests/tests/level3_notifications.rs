@@ -32,11 +32,11 @@ mod crud {
             .step("test_query_channel_subscribers", |a| a.rows_gte(1))
             .step("test_pause_subscriber", |a| a.modified(1))
             .step("test_activate_subscriber", |a| a.modified(1))
-            .step("test_cleanup_messages", |a| a.deleted(1))
+            .step("test_cleanup_messages", |a| a.deleted(3))
             .step("test_cleanup_deliveries", |a| a.deleted(0))
-            .step("test_cleanup_subscribers", |a| a.deleted(1))
+            .step("test_cleanup_subscribers", |a| a.deleted(3))
             .step("test_cleanup_groups", |a| a.deleted(1))
-            .step("test_cleanup_channels", |a| a.deleted(1))
+            .step("test_cleanup_channels", |a| a.deleted(4))
     }
 
     #[test]
@@ -75,7 +75,7 @@ mod watch {
             .step("test_watch_buffer_error", |a| a.error("parse"))
             .step("test_watch_joined_pattern", |a| a.error("parse"))
             .step("test_watch_with_subscriber", |a| a.error("parse"))
-            .step("test_cleanup", |a| a.deleted(2))
+            .step("test_cleanup", |a| a.deleted(4))
     }
 
     #[test]
@@ -114,7 +114,7 @@ mod consume {
             .step("test_query_dead_letters", |a| a.rows_gte(0))
             .step("test_watch_committed_visibility", |a| a.error("parse"))
             .step("test_watch_immediate_visibility", |a| a.error("parse"))
-            .step("test_cleanup", |a| a.deleted(1))
+            .step("test_cleanup", |a| a.deleted(5))
     }
 
     #[test]
@@ -151,7 +151,7 @@ mod management {
             .step("test_pause_nonexistent", |a| a.error("parse"))
             .step("test_resume_not_paused", |a| a.error("parse"))
             .step("test_alter_cancelled", |a| a.error("parse"))
-            .step("test_cleanup", |a| a.deleted(1))
+            .step("test_cleanup", |a| a.deleted(2))
     }
 
     #[test]

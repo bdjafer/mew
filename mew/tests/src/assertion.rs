@@ -171,47 +171,49 @@ impl Assertion {
             if result.nodes_created != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!(
-                        "expected {} created, got {}",
-                        expected, result.nodes_created
-                    ),
+                    format!("expected {} created, got {}", expected, result.nodes_created),
                 ));
             }
         }
-
+        if let Some(min) = self.created_min {
+            if result.nodes_created < min {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!("expected at least {} created, got {}", min, result.nodes_created),
+                ));
+            }
+        }
         if let Some(expected) = self.modified {
             let total_modified = result.nodes_modified + result.edges_modified;
             if total_modified != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!(
-                        "expected {} modified, got {}",
-                        expected, total_modified
-                    ),
+                    format!("expected {} modified, got {}", expected, total_modified),
                 ));
             }
         }
-
+        if let Some(min) = self.modified_min {
+            let total_modified = result.nodes_modified + result.edges_modified;
+            if total_modified < min {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!("expected at least {} modified, got {}", min, total_modified),
+                ));
+            }
+        }
         if let Some(expected) = self.deleted {
             if result.nodes_deleted != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!(
-                        "expected {} deleted, got {}",
-                        expected, result.nodes_deleted
-                    ),
+                    format!("expected {} deleted, got {}", expected, result.nodes_deleted),
                 ));
             }
         }
-
         if let Some(min) = self.deleted_min {
             if result.nodes_deleted < min {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!(
-                        "expected at least {} deleted, got {}",
-                        min, result.nodes_deleted
-                    ),
+                    format!("expected at least {} deleted, got {}", min, result.nodes_deleted),
                 ));
             }
         }
@@ -220,26 +222,34 @@ impl Assertion {
             if result.edges_created != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!(
-                        "expected {} linked, got {}",
-                        expected, result.edges_created
-                    ),
+                    format!("expected {} linked, got {}", expected, result.edges_created),
                 ));
             }
         }
-
+        if let Some(min) = self.linked_min {
+            if result.edges_created < min {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!("expected at least {} linked, got {}", min, result.edges_created),
+                ));
+            }
+        }
         if let Some(expected) = self.unlinked {
             if result.edges_deleted != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!(
-                        "expected {} unlinked, got {}",
-                        expected, result.edges_deleted
-                    ),
+                    format!("expected {} unlinked, got {}", expected, result.edges_deleted),
                 ));
             }
         }
-
+        if let Some(min) = self.unlinked_min {
+            if result.edges_deleted < min {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!("expected at least {} unlinked, got {}", min, result.edges_deleted),
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -651,6 +661,42 @@ impl AssertionBuilder {
     /// Assert that N edges were removed (unlinked).
     pub fn unlinked(mut self, n: usize) -> Self {
         self.assertion.unlinked = Some(n);
+        self
+    }
+
+    /// Assert that at least N nodes were created.
+    pub fn created_gte(mut self, n: usize) -> Self {
+        self.assertion.created_min = Some(n);
+        self
+    }
+
+    /// Assert that at least N nodes were modified.
+    pub fn modified_gte(mut self, n: usize) -> Self {
+        self.assertion.modified_min = Some(n);
+        self
+    }
+
+    /// Assert that at least N edges were linked.
+    pub fn linked_gte(mut self, n: usize) -> Self {
+        self.assertion.linked_min = Some(n);
+        self
+    }
+
+    /// Assert that at least N edges were unlinked.
+    pub fn unlinked_gte(mut self, n: usize) -> Self {
+        self.assertion.unlinked_min = Some(n);
+        self
+    }
+
+    /// Assert that N subscriptions were created.
+    pub fn subscribed(mut self, n: usize) -> Self {
+        self.assertion.subscribed = Some(n);
+        self
+    }
+
+    /// Assert that at least N subscriptions were created.
+    pub fn subscribed_gte(mut self, n: usize) -> Self {
+        self.assertion.subscribed_min = Some(n);
         self
     }
 

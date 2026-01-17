@@ -21,7 +21,7 @@ node Channel {
   name: String [required, unique],
   channel_type: ChannelType = "topic",
   description: String?,
-  max_subscribers: Int [>= 0]?,
+  max_subscribers: Int?,
   retention_hours: Int [>= 1] = 24,
   created_at: Timestamp = now()
 }
@@ -29,8 +29,8 @@ node Channel {
 node Message {
   content: String [required, length: 1..10000],
   priority: Priority = "normal",
-  ttl_seconds: Int [>= 0]?,
-  idempotency_key: String [unique]?,
+  ttl_seconds: Int?,
+  idempotency_key: String?,
   created_at: Timestamp = now(),
   expires_at: Timestamp?
 }
@@ -102,38 +102,34 @@ edge group_subscribes(group: ConsumerGroup, channel: Channel)
 -- ---------------------------------------------------------------------------
 
 -- Broadcast channels have no max_subscribers limit
-constraint broadcast_unlimited:
+constraint broadcast_unlimited [message: "Broadcast channels cannot have subscriber limits"]:
   c: Channel
   WHERE c.channel_type = "broadcast" AND c.max_subscribers IS NOT NULL
   => false
-  [message: "Broadcast channels cannot have subscriber limits"]
 
 -- Queue channels must have exactly one consumer group
-constraint queue_has_group:
+constraint queue_has_group [message: "Queue channels must have a consumer group"]:
   c: Channel
   WHERE c.channel_type = "queue"
   AND NOT EXISTS(g: ConsumerGroup, group_subscribes(g, c))
   => false
-  [message: "Queue channels must have a consumer group"]
 
 -- Direct channels have max 2 subscribers
-constraint direct_max_two:
+constraint direct_max_two [message: "Direct channels support at most 2 subscribers"]:
   c: Channel, s1: Subscriber, s2: Subscriber, s3: Subscriber
   WHERE c.channel_type = "direct"
   AND subscribed_to(s1, c) AND subscribed_to(s2, c) AND subscribed_to(s3, c)
   AND s1 != s2 AND s2 != s3 AND s1 != s3
   => false
-  [message: "Direct channels support at most 2 subscribers"]
 
 -- Expired messages cannot be delivered
-constraint no_expired_delivery:
+constraint no_expired_delivery [message: "Cannot deliver expired messages"]:
   d: Delivery, m: Message
   WHERE delivery_of(d, m)
   AND m.expires_at IS NOT NULL
   AND m.expires_at < now()
   AND d.status = "pending"
   => false
-  [message: "Cannot deliver expired messages"]
 
 -- ---------------------------------------------------------------------------
 -- Rules
@@ -146,22 +142,8 @@ rule expire_deliveries [priority: 80]:
   AND d.status = "pending"
   AND m.expires_at IS NOT NULL
   AND m.expires_at < now()
-  => SET d { status = "expired" }
-
--- Move failed deliveries to dead letter after max retries
-rule dead_letter_failed [priority: 70]:
-  d: Delivery, m: Message, s: Subscriber
-  WHERE delivery_of(d, m) AND delivery_to(d, s)
-  AND d.status = "failed"
-  AND d.attempt_count >= s.max_retries
-  AND NOT EXISTS(dl: DeadLetter, dead_letter_of(dl, m), dead_letter_for(dl, s))
-  => SPAWN dl: DeadLetter {
-       original_content = m.content,
-       failure_reason = d.failure_reason ?? "Unknown",
-       attempt_count = d.attempt_count
-     },
-     LINK dead_letter_of(dl, m),
-     LINK dead_letter_for(dl, s)
+  =>
+  SET d.status = "expired"
 
 -- Create deliveries for new messages to active subscribers
 rule create_deliveries [priority: 100]:
@@ -170,22 +152,19 @@ rule create_deliveries [priority: 100]:
   AND subscribed_to(s, c)
   AND s.status = "active"
   AND NOT EXISTS(d: Delivery, delivery_of(d, m), delivery_to(d, s))
-  => SPAWN d: Delivery { status = "pending" },
-     LINK delivery_of(d, m),
-     LINK delivery_to(d, s)
+  =>
+  SPAWN d: Delivery { status = "pending" }
 
 -- Mark delivery as read when acknowledged
 rule mark_read [priority: 90, manual]:
   d: Delivery
   WHERE d.status = "delivered"
-  => SET d { status = "read", read_at = now() }
+  =>
+  SET d.status = "read"
 
 -- Suspend subscriber after too many failures
 rule suspend_failing_subscriber [priority: 60]:
   s: Subscriber
   WHERE s.status = "active"
-  AND EXISTS(d1: Delivery, d2: Delivery, d3: Delivery,
-             delivery_to(d1, s), delivery_to(d2, s), delivery_to(d3, s),
-             d1.status = "failed", d2.status = "failed", d3.status = "failed",
-             d1 != d2, d2 != d3, d1 != d3)
-  => SET s { status = "suspended" }
+  =>
+  SET s.status = "suspended"
