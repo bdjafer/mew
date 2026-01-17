@@ -1,0 +1,15 @@
+-- ===========================================================================
+-- SEED: Minimal Notifications Setup
+-- ===========================================================================
+
+SPAWN alerts: Channel {
+  name = "alerts",
+  channel_type = "broadcast"
+}
+
+SPAWN client: Subscriber {
+  name = "Default Client",
+  endpoint = "ws://localhost:8080/events"
+}
+
+LINK subscribed_to(#client, #alerts)

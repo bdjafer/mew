@@ -1,0 +1,152 @@
+-- ===========================================================================
+-- OPERATIONS: Watch Subscriptions
+-- DESCRIPTION: Tests WATCH statement in observation mode
+-- FEATURES: statements/watch.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create channels and subscribers
+-- ---------------------------------------------------------------------------
+
+--# test_setup_broadcast_channel
+SPAWN alerts: Channel {
+  name = "system-alerts",
+  channel_type = "broadcast",
+  description = "System-wide alerts"
+}
+
+--# test_setup_topic_channel
+SPAWN updates: Channel {
+  name = "user-updates",
+  channel_type = "topic",
+  retention_hours = 48
+}
+
+--# test_setup_subscriber_one
+SPAWN sub1: Subscriber {
+  name = "Dashboard",
+  endpoint = "ws://dashboard.local/events"
+}
+
+--# test_setup_subscriber_two
+SPAWN sub2: Subscriber {
+  name = "Mobile App",
+  endpoint = "https://mobile.local/webhook"
+}
+
+--# test_link_subscriptions
+LINK subscribed_to(#sub1, #alerts)
+LINK subscribed_to(#sub2, #alerts)
+LINK subscribed_to(#sub1, #updates)
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Basic observation mode
+-- ---------------------------------------------------------------------------
+
+--# test_watch_basic
+WATCH m: Message, published_to(m, #alerts)
+RETURN m.content, m.priority
+
+--# test_watch_with_filter
+WATCH m: Message, published_to(m, #alerts)
+WHERE m.priority = "urgent"
+RETURN m.content
+
+--# test_watch_with_mode_explicit
+WATCH m: Message, published_to(m, #updates)
+  [mode: watch]
+RETURN m.content, m.created_at
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Ordering options
+-- ---------------------------------------------------------------------------
+
+--# test_watch_ordering_arrival
+WATCH m: Message, published_to(m, #updates)
+  [ordering: arrival]
+RETURN m.content
+
+--# test_watch_ordering_attribute
+WATCH m: Message, published_to(m, #alerts)
+  [ordering: attribute(m.priority DESC)]
+RETURN m.content, m.priority
+
+--# test_watch_ordering_causal
+WATCH m: Message, published_to(m, #alerts)
+  [ordering: causal]
+RETURN m.content
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Initial state options
+-- ---------------------------------------------------------------------------
+
+--# test_watch_initial_full
+WATCH m: Message, published_to(m, #updates)
+  [initial: full]
+RETURN m.content
+
+--# test_watch_initial_none
+WATCH m: Message, published_to(m, #updates)
+  [initial: none]
+RETURN m.content
+
+--# test_watch_initial_since
+WATCH m: Message, published_to(m, #updates)
+  [initial: since(100)]
+RETURN m.content
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Window options
+-- ---------------------------------------------------------------------------
+
+--# test_watch_tumbling_window
+WATCH m: Message, published_to(m, #updates)
+  [window: tumbling(1m)]
+RETURN COUNT(m) AS message_count
+
+--# test_watch_sliding_window
+WATCH m: Message, published_to(m, #alerts)
+  [window: sliding(5m, 1m)]
+RETURN m.priority, COUNT(m) AS count
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Buffer management
+-- ---------------------------------------------------------------------------
+
+--# test_watch_buffer_limit
+WATCH m: Message, published_to(m, #updates)
+  [buffer: 100, on_full: drop]
+RETURN m.content
+
+--# test_watch_buffer_block
+WATCH m: Message, published_to(m, #alerts)
+  [buffer: 50, on_full: block]
+RETURN m.content
+
+--# test_watch_buffer_error
+WATCH m: Message, published_to(m, #updates)
+  [buffer: 25, on_full: error]
+RETURN m.content
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Multiple patterns
+-- ---------------------------------------------------------------------------
+
+--# test_watch_joined_pattern
+WATCH m: Message, c: Channel, published_to(m, c)
+WHERE c.channel_type = "broadcast"
+RETURN m.content, c.name
+
+--# test_watch_with_subscriber
+WATCH d: Delivery, m: Message, s: Subscriber,
+      delivery_of(d, m), delivery_to(d, s)
+WHERE d.status = "pending"
+RETURN m.content, s.name, d.attempt_count
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH s: Subscriber KILL s
+MATCH c: Channel KILL c

@@ -1,0 +1,191 @@
+-- ===========================================================================
+-- ONTOLOGY: Notifications & Real-Time Messaging
+-- FOCUS: Watch subscriptions, consumer patterns, delivery tracking
+-- FEATURES: statements/watch.md, statements/ack.md, statements/watch_management.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Type Aliases
+-- ---------------------------------------------------------------------------
+
+type Priority = String [in: ["urgent", "high", "normal", "low"]]
+type DeliveryStatus = String [in: ["pending", "delivered", "read", "failed", "expired"]]
+type ChannelType = String [in: ["broadcast", "direct", "topic", "queue"]]
+type SubscriberStatus = String [in: ["active", "paused", "suspended"]]
+
+-- ---------------------------------------------------------------------------
+-- Nodes
+-- ---------------------------------------------------------------------------
+
+node Channel {
+  name: String [required, unique],
+  channel_type: ChannelType = "topic",
+  description: String?,
+  max_subscribers: Int [>= 0]?,
+  retention_hours: Int [>= 1] = 24,
+  created_at: Timestamp = now()
+}
+
+node Message {
+  content: String [required, length: 1..10000],
+  priority: Priority = "normal",
+  ttl_seconds: Int [>= 0]?,
+  idempotency_key: String [unique]?,
+  created_at: Timestamp = now(),
+  expires_at: Timestamp?
+}
+
+node Subscriber {
+  name: String [required],
+  endpoint: String [required],
+  status: SubscriberStatus = "active",
+  max_batch_size: Int [>= 1] = 10,
+  ack_timeout_seconds: Int [>= 1] = 30,
+  max_retries: Int [>= 0] = 3,
+  subscribed_at: Timestamp = now()
+}
+
+node Delivery {
+  status: DeliveryStatus = "pending",
+  attempt_count: Int [>= 0] = 0,
+  delivered_at: Timestamp?,
+  read_at: Timestamp?,
+  failed_at: Timestamp?,
+  failure_reason: String?,
+  last_attempt_at: Timestamp?
+}
+
+node DeadLetter {
+  original_content: String [required],
+  failure_reason: String [required],
+  attempt_count: Int [>= 0],
+  created_at: Timestamp = now()
+}
+
+node ConsumerGroup {
+  name: String [required, unique],
+  partition_strategy: String [in: ["round_robin", "hash", "sticky"]] = "round_robin",
+  rebalance_timeout_seconds: Int [>= 1] = 60,
+  created_at: Timestamp = now()
+}
+
+-- ---------------------------------------------------------------------------
+-- Edges
+-- ---------------------------------------------------------------------------
+
+-- Message belongs to channel
+edge published_to(message: Message, channel: Channel) [message -> 1] {
+  published_at: Timestamp = now()
+}
+
+-- Subscriber subscribes to channel
+edge subscribed_to(subscriber: Subscriber, channel: Channel) {
+  filter_expression: String?,
+  priority_override: Priority?,
+  since: Timestamp = now()
+}
+
+-- Delivery tracks message to subscriber
+edge delivery_of(delivery: Delivery, message: Message) [delivery -> 1]
+edge delivery_to(delivery: Delivery, subscriber: Subscriber) [delivery -> 1]
+
+-- Dead letter references original message
+edge dead_letter_of(dead_letter: DeadLetter, message: Message) [dead_letter -> 1]
+edge dead_letter_for(dead_letter: DeadLetter, subscriber: Subscriber) [dead_letter -> 1]
+
+-- Consumer group membership
+edge member_of_group(subscriber: Subscriber, group: ConsumerGroup) [subscriber -> 0..1]
+edge group_subscribes(group: ConsumerGroup, channel: Channel)
+
+-- ---------------------------------------------------------------------------
+-- Constraints
+-- ---------------------------------------------------------------------------
+
+-- Broadcast channels have no max_subscribers limit
+constraint broadcast_unlimited:
+  c: Channel
+  WHERE c.channel_type = "broadcast" AND c.max_subscribers IS NOT NULL
+  => false
+  [message: "Broadcast channels cannot have subscriber limits"]
+
+-- Queue channels must have exactly one consumer group
+constraint queue_has_group:
+  c: Channel
+  WHERE c.channel_type = "queue"
+  AND NOT EXISTS(g: ConsumerGroup, group_subscribes(g, c))
+  => false
+  [message: "Queue channels must have a consumer group"]
+
+-- Direct channels have max 2 subscribers
+constraint direct_max_two:
+  c: Channel, s1: Subscriber, s2: Subscriber, s3: Subscriber
+  WHERE c.channel_type = "direct"
+  AND subscribed_to(s1, c) AND subscribed_to(s2, c) AND subscribed_to(s3, c)
+  AND s1 != s2 AND s2 != s3 AND s1 != s3
+  => false
+  [message: "Direct channels support at most 2 subscribers"]
+
+-- Expired messages cannot be delivered
+constraint no_expired_delivery:
+  d: Delivery, m: Message
+  WHERE delivery_of(d, m)
+  AND m.expires_at IS NOT NULL
+  AND m.expires_at < now()
+  AND d.status = "pending"
+  => false
+  [message: "Cannot deliver expired messages"]
+
+-- ---------------------------------------------------------------------------
+-- Rules
+-- ---------------------------------------------------------------------------
+
+-- Auto-expire pending deliveries when message expires
+rule expire_deliveries [priority: 80]:
+  d: Delivery, m: Message
+  WHERE delivery_of(d, m)
+  AND d.status = "pending"
+  AND m.expires_at IS NOT NULL
+  AND m.expires_at < now()
+  => SET d { status = "expired" }
+
+-- Move failed deliveries to dead letter after max retries
+rule dead_letter_failed [priority: 70]:
+  d: Delivery, m: Message, s: Subscriber
+  WHERE delivery_of(d, m) AND delivery_to(d, s)
+  AND d.status = "failed"
+  AND d.attempt_count >= s.max_retries
+  AND NOT EXISTS(dl: DeadLetter, dead_letter_of(dl, m), dead_letter_for(dl, s))
+  => SPAWN dl: DeadLetter {
+       original_content = m.content,
+       failure_reason = d.failure_reason ?? "Unknown",
+       attempt_count = d.attempt_count
+     },
+     LINK dead_letter_of(dl, m),
+     LINK dead_letter_for(dl, s)
+
+-- Create deliveries for new messages to active subscribers
+rule create_deliveries [priority: 100]:
+  m: Message, c: Channel, s: Subscriber
+  WHERE published_to(m, c)
+  AND subscribed_to(s, c)
+  AND s.status = "active"
+  AND NOT EXISTS(d: Delivery, delivery_of(d, m), delivery_to(d, s))
+  => SPAWN d: Delivery { status = "pending" },
+     LINK delivery_of(d, m),
+     LINK delivery_to(d, s)
+
+-- Mark delivery as read when acknowledged
+rule mark_read [priority: 90, manual]:
+  d: Delivery
+  WHERE d.status = "delivered"
+  => SET d { status = "read", read_at = now() }
+
+-- Suspend subscriber after too many failures
+rule suspend_failing_subscriber [priority: 60]:
+  s: Subscriber
+  WHERE s.status = "active"
+  AND EXISTS(d1: Delivery, d2: Delivery, d3: Delivery,
+             delivery_to(d1, s), delivery_to(d2, s), delivery_to(d3, s),
+             d1.status = "failed", d2.status = "failed", d3.status = "failed",
+             d1 != d2, d2 != d3, d1 != d3)
+  => SET s { status = "suspended" }

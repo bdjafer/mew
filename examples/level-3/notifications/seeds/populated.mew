@@ -1,0 +1,77 @@
+-- ===========================================================================
+-- SEED: Populated Notifications Setup
+-- ===========================================================================
+
+-- Channels
+SPAWN broadcast: Channel {
+  name = "system-broadcast",
+  channel_type = "broadcast"
+}
+
+SPAWN topic: Channel {
+  name = "order-events",
+  channel_type = "topic",
+  retention_hours = 168
+}
+
+SPAWN queue: Channel {
+  name = "task-queue",
+  channel_type = "queue"
+}
+
+-- Consumer Group for queue
+SPAWN workers: ConsumerGroup {
+  name = "task-workers",
+  partition_strategy = "round_robin"
+}
+LINK group_subscribes(#workers, #queue)
+
+-- Subscribers
+SPAWN web: Subscriber {
+  name = "Web Dashboard",
+  endpoint = "wss://app.local/events"
+}
+
+SPAWN mobile: Subscriber {
+  name = "Mobile App",
+  endpoint = "https://push.local/notify"
+}
+
+SPAWN worker1: Subscriber {
+  name = "Worker-1",
+  endpoint = "grpc://worker1.local:9000"
+}
+
+SPAWN worker2: Subscriber {
+  name = "Worker-2",
+  endpoint = "grpc://worker2.local:9000"
+}
+
+-- Subscriptions
+LINK subscribed_to(#web, #broadcast)
+LINK subscribed_to(#mobile, #broadcast)
+LINK subscribed_to(#web, #topic)
+LINK subscribed_to(#mobile, #topic)
+LINK subscribed_to(#worker1, #queue)
+LINK subscribed_to(#worker2, #queue)
+LINK member_of_group(#worker1, #workers)
+LINK member_of_group(#worker2, #workers)
+
+-- Sample messages
+SPAWN m1: Message {
+  content = "System startup complete",
+  priority = "normal"
+}
+LINK published_to(#m1, #broadcast)
+
+SPAWN m2: Message {
+  content = "Order #12345 received",
+  priority = "high"
+}
+LINK published_to(#m2, #topic)
+
+SPAWN m3: Message {
+  content = "Process invoice #9876",
+  priority = "normal"
+}
+LINK published_to(#m3, #queue)

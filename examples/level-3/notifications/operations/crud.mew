@@ -1,0 +1,169 @@
+-- ===========================================================================
+-- OPERATIONS: Basic CRUD for Notifications
+-- DESCRIPTION: Tests basic operations for the notifications ontology
+-- FEATURES: Core CRUD operations
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Create: Channels
+-- ---------------------------------------------------------------------------
+
+--# test_create_broadcast
+SPAWN broadcast: Channel {
+  name = "announcements",
+  channel_type = "broadcast",
+  description = "Company-wide announcements"
+}
+
+--# test_create_topic
+SPAWN topic: Channel {
+  name = "order-events",
+  channel_type = "topic",
+  retention_hours = 168
+}
+
+--# test_create_direct
+SPAWN dm: Channel {
+  name = "support-chat-123",
+  channel_type = "direct",
+  max_subscribers = 2
+}
+
+--# test_create_queue
+SPAWN queue: Channel {
+  name = "background-jobs",
+  channel_type = "queue"
+}
+
+-- ---------------------------------------------------------------------------
+-- Create: Subscribers
+-- ---------------------------------------------------------------------------
+
+--# test_create_subscriber_web
+SPAWN web: Subscriber {
+  name = "Web Dashboard",
+  endpoint = "wss://app.example.com/events",
+  max_batch_size = 50
+}
+
+--# test_create_subscriber_mobile
+SPAWN mobile: Subscriber {
+  name = "Mobile Push",
+  endpoint = "https://push.example.com/notify",
+  ack_timeout_seconds = 10,
+  max_retries = 5
+}
+
+--# test_create_subscriber_email
+SPAWN email: Subscriber {
+  name = "Email Digest",
+  endpoint = "smtp://mail.example.com",
+  max_batch_size = 100,
+  status = "paused"
+}
+
+-- ---------------------------------------------------------------------------
+-- Link: Subscriptions
+-- ---------------------------------------------------------------------------
+
+--# test_subscribe_web_to_broadcast
+LINK subscribed_to(#web, #broadcast)
+
+--# test_subscribe_mobile_to_topic
+LINK subscribed_to(#mobile, #topic) {
+  priority_override = "high"
+}
+
+--# test_subscribe_with_filter
+LINK subscribed_to(#web, #topic) {
+  filter_expression = "priority = 'urgent' OR priority = 'high'"
+}
+
+-- ---------------------------------------------------------------------------
+-- Create: Messages
+-- ---------------------------------------------------------------------------
+
+--# test_create_urgent_message
+SPAWN urgent: Message {
+  content = "System maintenance in 5 minutes",
+  priority = "urgent",
+  ttl_seconds = 300
+}
+LINK published_to(#urgent, #broadcast)
+
+--# test_create_normal_message
+SPAWN normal: Message {
+  content = "New feature released",
+  priority = "normal"
+}
+LINK published_to(#normal, #broadcast)
+
+--# test_create_message_with_expiry
+SPAWN expiring: Message {
+  content = "Flash sale ends soon!",
+  priority = "high",
+  ttl_seconds = 3600
+}
+LINK published_to(#expiring, #topic)
+
+-- ---------------------------------------------------------------------------
+-- Create: Consumer Group
+-- ---------------------------------------------------------------------------
+
+--# test_create_consumer_group
+SPAWN workers: ConsumerGroup {
+  name = "job-processors",
+  partition_strategy = "hash"
+}
+
+--# test_link_group_to_queue
+LINK group_subscribes(#workers, #queue)
+
+-- ---------------------------------------------------------------------------
+-- Query: Messages and Deliveries
+-- ---------------------------------------------------------------------------
+
+--# test_query_urgent_messages
+MATCH m: Message
+WHERE m.priority = "urgent"
+RETURN m.content, m.created_at
+
+--# test_query_pending_deliveries
+MATCH d: Delivery, m: Message, s: Subscriber,
+      delivery_of(d, m), delivery_to(d, s)
+WHERE d.status = "pending"
+RETURN m.content, s.name, d.attempt_count
+
+--# test_query_channel_subscribers
+MATCH c: Channel, s: Subscriber, subscribed_to(s, c)
+WHERE c.name = "announcements"
+RETURN s.name, s.endpoint
+
+-- ---------------------------------------------------------------------------
+-- Update: Subscriber status
+-- ---------------------------------------------------------------------------
+
+--# test_pause_subscriber
+SET #email { status = "paused" }
+
+--# test_activate_subscriber
+SET #email { status = "active" }
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_messages
+MATCH m: Message KILL m
+
+--# test_cleanup_deliveries
+MATCH d: Delivery KILL d
+
+--# test_cleanup_subscribers
+MATCH s: Subscriber KILL s
+
+--# test_cleanup_groups
+MATCH g: ConsumerGroup KILL g
+
+--# test_cleanup_channels
+MATCH c: Channel KILL c

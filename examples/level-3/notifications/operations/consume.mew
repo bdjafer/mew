@@ -1,0 +1,140 @@
+-- ===========================================================================
+-- OPERATIONS: Consume Mode & Acknowledgment
+-- DESCRIPTION: Tests WATCH consume mode with ACK/NACK semantics
+-- FEATURES: statements/watch.md, statements/ack.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create queue channel with consumer group
+-- ---------------------------------------------------------------------------
+
+--# test_setup_queue_channel
+SPAWN queue: Channel {
+  name = "task-queue",
+  channel_type = "queue",
+  retention_hours = 72
+}
+
+--# test_setup_consumer_group
+SPAWN workers: ConsumerGroup {
+  name = "task-workers",
+  partition_strategy = "round_robin"
+}
+
+--# test_link_group_to_queue
+LINK group_subscribes(#workers, #queue)
+
+--# test_setup_worker_one
+SPAWN w1: Subscriber {
+  name = "Worker-1",
+  endpoint = "grpc://worker1.local:9000",
+  ack_timeout_seconds = 60,
+  max_retries = 5
+}
+
+--# test_setup_worker_two
+SPAWN w2: Subscriber {
+  name = "Worker-2",
+  endpoint = "grpc://worker2.local:9000",
+  ack_timeout_seconds = 60,
+  max_retries = 5
+}
+
+--# test_link_workers_to_group
+LINK member_of_group(#w1, #workers)
+LINK member_of_group(#w2, #workers)
+LINK subscribed_to(#w1, #queue)
+LINK subscribed_to(#w2, #queue)
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Consume mode (destructive reads)
+-- ---------------------------------------------------------------------------
+
+--# test_watch_consume_basic
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume]
+RETURN m.content
+
+--# test_watch_consume_with_group
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume, group: "task-workers"]
+RETURN m.content, m.priority
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Delivery guarantees
+-- ---------------------------------------------------------------------------
+
+--# test_watch_best_effort
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume, delivery: best_effort]
+RETURN m.content
+
+--# test_watch_reliable
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume, delivery: reliable, ack_timeout: 30s]
+RETURN m.content
+
+--# test_watch_reliable_with_retries
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume, delivery: reliable, ack_timeout: 60s, max_redeliveries: 5]
+RETURN m.content
+
+-- ---------------------------------------------------------------------------
+-- ACK/NACK: Acknowledgment protocol
+-- ---------------------------------------------------------------------------
+
+--# test_publish_message_for_ack
+SPAWN msg1: Message {
+  content = "Process this task",
+  priority = "high"
+}
+LINK published_to(#msg1, #queue)
+
+--# test_ack_delivery
+ACK $delivery_id
+
+--# test_nack_with_retry
+NACK $delivery_id
+
+--# test_nack_no_retry
+NACK $delivery_id [no_retry]
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Dead letter handling
+-- ---------------------------------------------------------------------------
+
+--# test_watch_with_dead_letter
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume, delivery: reliable, max_redeliveries: 3, dead_letter: #dead_letter_channel]
+RETURN m.content
+
+--# test_query_dead_letters
+MATCH dl: DeadLetter, m: Message, s: Subscriber,
+      dead_letter_of(dl, m), dead_letter_for(dl, s)
+RETURN dl.failure_reason, dl.attempt_count, m.content, s.name
+
+-- ---------------------------------------------------------------------------
+-- WATCH: Visibility options
+-- ---------------------------------------------------------------------------
+
+--# test_watch_committed_visibility
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume, visibility: committed]
+RETURN m.content
+
+--# test_watch_immediate_visibility
+WATCH m: Message, published_to(m, #queue)
+  [mode: consume, visibility: immediate]
+RETURN m.content
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH dl: DeadLetter KILL dl
+MATCH d: Delivery KILL d
+MATCH m: Message KILL m
+MATCH s: Subscriber KILL s
+MATCH g: ConsumerGroup KILL g
+MATCH c: Channel KILL c

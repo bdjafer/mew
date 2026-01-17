@@ -1,0 +1,104 @@
+-- ===========================================================================
+-- OPERATIONS: Watch Management
+-- DESCRIPTION: Tests PAUSE, RESUME, CANCEL, ALTER watch statements
+-- FEATURES: statements/watch_management.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create channel and active subscription
+-- ---------------------------------------------------------------------------
+
+--# test_setup_channel
+SPAWN events: Channel {
+  name = "live-events",
+  channel_type = "topic"
+}
+
+--# test_setup_subscriber
+SPAWN client: Subscriber {
+  name = "Event Client",
+  endpoint = "ws://client.local/events"
+}
+
+--# test_link_subscription
+LINK subscribed_to(#client, #events)
+
+-- ---------------------------------------------------------------------------
+-- Create a watch to manage
+-- ---------------------------------------------------------------------------
+
+--# test_create_watch
+WATCH m: Message, published_to(m, #events)
+  [mode: watch, buffer: 100]
+RETURN m.content, m.priority
+AS live_feed
+
+-- ---------------------------------------------------------------------------
+-- PAUSE: Temporarily stop receiving events
+-- ---------------------------------------------------------------------------
+
+--# test_pause_watch
+PAUSE WATCH #live_feed
+
+--# test_verify_paused_subscriber
+MATCH s: Subscriber WHERE s.name = "Event Client"
+RETURN s.status
+
+-- ---------------------------------------------------------------------------
+-- RESUME: Continue receiving events
+-- ---------------------------------------------------------------------------
+
+--# test_resume_watch
+RESUME WATCH #live_feed
+
+--# test_verify_resumed
+MATCH s: Subscriber WHERE s.name = "Event Client"
+RETURN s.status
+
+-- ---------------------------------------------------------------------------
+-- ALTER: Modify watch parameters
+-- ---------------------------------------------------------------------------
+
+--# test_alter_buffer_size
+ALTER WATCH #live_feed SET [buffer: 200]
+
+--# test_alter_multiple_options
+ALTER WATCH #live_feed SET [buffer: 500, on_full: block]
+
+--# test_alter_ordering
+ALTER WATCH #live_feed SET [ordering: attribute(m.priority DESC)]
+
+--# test_alter_window
+ALTER WATCH #live_feed SET [window: tumbling(5m)]
+
+-- ---------------------------------------------------------------------------
+-- CANCEL: Permanently stop and remove watch
+-- ---------------------------------------------------------------------------
+
+--# test_cancel_watch
+CANCEL WATCH #live_feed
+
+--# test_verify_cancelled
+MATCH s: Subscriber WHERE s.name = "Event Client"
+RETURN s.status
+
+-- ---------------------------------------------------------------------------
+-- Error cases: Invalid operations
+-- ---------------------------------------------------------------------------
+
+--# test_pause_nonexistent
+PAUSE WATCH #nonexistent_watch
+
+--# test_resume_not_paused
+RESUME WATCH #active_watch
+
+--# test_alter_cancelled
+ALTER WATCH #cancelled_watch SET [buffer: 100]
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH s: Subscriber KILL s
+MATCH c: Channel KILL c
