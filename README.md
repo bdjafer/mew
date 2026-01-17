@@ -6,28 +6,63 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
 
-> ⚠️ **Development Status**: This project uses TDD-first development. Tests are written before implementation, so many tests are expected to fail until features are implemented.
+> ⚠️ **Development Status**: TDD - Tests are written before implementation, so many tests are expected to fail until features are implemented.
 
 ## What is MEW?
 
 Declare an ontology — types, relations, constraints, rules — compile it, then query and mutate a typed higher-order hypergraph where constraints hold and rules fire automatically.
 
 ```mew
-node Person {
-    name: String @required
-    email: String @unique
+-- Schema: types and relations
+node Task { 
+  title: String [required],
+  status: String = "todo"
+}
+node Person { 
+  name: String [required] 
+}
+edge assigned(task: Task, person: Person)
+
+-- Hyperedge: n-ary relation
+edge reviewed(task: Task, reviewer: Person, approver: Person) {
+  approved: Bool = false
 }
 
-edge knows: Person -> Person {
-    since: Date
+-- Higher-order edge: edge about an edge
+edge confidence(about: edge<assigned>) {
+  level: Float [>= 0.0, <= 1.0]
 }
 
-constraint email_format:
-    p: Person => p.email MATCHES ".*@.*\\..*"
+-- Constraint, Rule, Policy
+constraint done_needs_timestamp:
+  t: Task WHERE t.status = "done" AND t.completed_at = null
+  => FAIL "Completed tasks need completed_at"
 
-rule auto_timestamp:
-    WHEN SPAWN p: Person
-    THEN SET p.created_at = now()
+rule auto_archive:
+  t: Task WHERE t.status = "done" => SET t.archived = true
+
+policy assignee_only:
+  ON SET(t: Task, "status") ALLOW IF assigned(t, current_actor())
+```
+
+```mew
+-- Mutations
+SPAWN Task { title: "Write docs" } AS t
+LINK assigned(t, current_actor()) AS a   -- capture edge
+LINK confidence(a) { level = 0.9 }       -- edge about edge
+
+-- Query all tasks assigned with confidence > 0.8
+MATCH t: Task, assigned(t, p) AS a, confidence(a) AS c
+WHERE c.level > 0.8
+RETURN t.title, p.name, c.level
+
+-- Query all non self-reviewed tasks
+MATCH reviewed(t, reviewer, approver) WHERE approver != reviewer
+RETURN t.title, reviewer.name, approver.name
+
+-- Subscribe to changes
+WATCH t: Task WHERE t.status = "done"
+RETURN t.title, t.completed_at
 ```
 
 ## Quick Start
@@ -136,18 +171,9 @@ just ci
 
 ## Documentation
 
-- [CONTEXT.md](CONTEXT.md) — Vision and philosophy
-- [CONTRIBUTING.md](CONTRIBUTING.md) — How to contribute
-- [examples/LEVELS.md](examples/LEVELS.md) — Ontology complexity levels
+- [examples/](examples/) — Scenarios examples
 - [specs/](specs/) — Technical specifications
 
 ## License
 
-[MIT](LICENSE)
-
-## Acknowledgments
-
-Built with inspiration from:
-- [Wolfram Physics Project](https://www.wolframphysics.org/) — Hypergraph rewriting
-- [Category Theory](https://ncatlab.org/) — Compositionality and structure
-- [Description Logics](https://www.w3.org/TR/owl2-overview/) — Formal ontologies
+[AGPLv3](LICENSE)

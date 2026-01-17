@@ -80,9 +80,9 @@ ci: fmt-check lint build test-unit
 repl:
     cd mew && cargo run --bin mew
 
-# Start REPL with a file
+# Start REPL with a file (path relative to project root)
 repl-file file:
-    cd mew && cargo run --bin mew -- {{file}}
+    cd mew && cargo run --bin mew -- ../{{file}}
 
 # Start REPL in verbose mode
 repl-verbose:

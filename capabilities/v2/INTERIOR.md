@@ -966,7 +966,7 @@ node Navigator [has_interior] {
 
 ## 8.1 Interiors as Time Scopes
 
-Each world interior has its own **logical time** that can be configured relative to its parent. See [TIME_CLOCK.md](./TIME_CLOCK.md) for time concepts (wall_time, logical_time, now, presets).
+Each world interior has its own **logical time** that can be configured relative to its parent. See [TIME.md](../TIME.md) for time concepts (wall_time, logical_time, now, tick semantics).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1007,9 +1007,8 @@ logical_time(ROOT)          -- root's tick count
 
 wall_time()                 -- always global wall clock
 
-now()                       -- configured per interior:
-                           -- if time.now_source = "logical": logical_time()
-                           -- if time.now_source = "wall": wall_time()
+now()                       -- configurable alias (defaults to wall_time)
+                           -- can be bound to logical_time for determinism
 ```
 
 ## 8.3 Tick Propagation

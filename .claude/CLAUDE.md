@@ -2,6 +2,53 @@
 
 ---
 
+## ⛔ TEST INTEGRITY — READ THIS FIRST ⛔
+
+**Tests define correct behavior. Tests are the spec. Tests are sacred.**
+
+A failing test is NOT a problem to solve by changing the test. A failing test means: **implement the feature**.
+
+### The One Rule
+
+> **Tests must always expect the CORRECT result according to the scenario — whether the implementation exists or not.**
+
+If a feature isn't implemented → the test FAILS. That's the point. That's TDD. Leave it failing.
+
+### FORBIDDEN Actions (No Exceptions)
+
+| ❌ NEVER DO THIS | ✅ DO THIS INSTEAD |
+|------------------|-------------------|
+| Change `.rows(5)` to `.rows(0)` because query isn't implemented | Leave test failing, implement the query |
+| Change `.modified(1)` to `.modified(2)` to match buggy output | Leave test failing, fix the implementation |
+| Comment out `#[test]` or add `#[ignore]` | Leave test failing |
+| Split one complex test into simpler passing tests | Leave test failing, implement the complex behavior |
+| Weaken assertions (exact → partial, strict → loose) | Leave test failing |
+| Add "TODO" comments and skip the assertion | Leave test failing |
+| Change expected values to match actual (wrong) output | Leave test failing |
+
+### Why This Matters
+
+- A test that expects wrong results is **worse than no test** — it creates false confidence
+- "Making tests pass" by changing expectations is **cheating**, not progress
+- The test suite is the **definition of done** — corrupting it corrupts the project
+
+### How to Know If You're Gaming
+
+Ask yourself: *"Am I changing the test because I discovered the expected value was wrong, or because I don't want to implement the feature?"*
+
+If the answer is the latter → STOP. Leave the test failing.
+
+### The Only Valid Reason to Change a Test
+
+The expected value was **actually incorrect** according to the spec. In this case:
+1. Derive the correct value from first principles (see `verify-scenario` skill)
+2. Show your derivation
+3. Then update the test
+
+"The implementation returns X" is NOT a derivation. The spec defines correct behavior, not the current implementation.
+
+---
+
 ## Commands
 
 ```bash
@@ -83,17 +130,4 @@ Specifications can contain errors discovered during implementation.
 
 ## Commit Messages (unspecified)
 
-
 ---
-
-NEVER:
-- comment out some tests just because they "fail" and features not yet implemented => its the goal of leaving the test to fail until we implement what's needed
-- simplify the test to make it pass, because we're lazy, or doesn't feel implementing everything / rewriting the test to make it simpler
-example: a test was trying to test multiple chained "spawn" like:
-SPAWN ...
-SPAWN ...
-SPAWN ...
-and the AI separate this test into 3 separete tests, testing each spawn individually (like completely cheating)
-=> basically should never try to max GAMING
-
-
