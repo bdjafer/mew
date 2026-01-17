@@ -3,6 +3,7 @@ spec: type_checking
 version: "1.0"
 status: stable
 category: expression
+capability: type_checking
 requires: []
 priority: common
 ---
@@ -14,8 +15,6 @@ priority: common
 The type check expression `x:Type` tests whether a value is of a specific type at runtime. Returns `true` if the value's type equals or inherits from the specified type.
 
 **Why needed:** When a variable has union type or `any` type, code may need to branch on the actual runtime type before accessing type-specific attributes.
-
----
 
 ## Syntax
 
@@ -34,8 +33,6 @@ x:Person              -- true if x is Person or subtype
 entity:Task           -- true if entity is Task
 node:Event            -- true if node is Event or subtype
 ```
-
----
 
 ## Semantics
 
@@ -98,8 +95,6 @@ x.manager:Employee
 -- Parses as: (x.manager):Employee
 ```
 
----
-
 ## Layer 0
 
 ### Nodes
@@ -124,8 +119,6 @@ constraint _type_check_has_operand:
   => EXISTS(op: _Expr, _type_check_operand(e, op))
 ```
 
----
-
 ## Compilation
 ```
 x:Person
@@ -142,8 +135,6 @@ _VarRefExpr node:
 _type_check_operand edge:
   (type_check_expr, var_ref_expr)
 ```
-
----
 
 ## Examples
 
@@ -187,15 +178,9 @@ RETURN e
 -- Employees whose manager is a Director
 ```
 
----
-
 ## Errors
 
 | Condition | Message |
 |-----------|---------|
 | Unknown type | `"Unknown type 'X'"` |
 | Type check on edge variable | `"Type check not supported on edge variables"` |
-
----
-
-*End of Spec: Type Checking Expression*

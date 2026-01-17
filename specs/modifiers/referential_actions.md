@@ -3,6 +3,7 @@ spec: referential_actions
 version: "1.0"
 status: stable
 category: modifier
+capability: referential_actions
 requires: [rules]
 priority: common
 ---

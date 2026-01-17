@@ -3,6 +3,7 @@ spec: edge_symmetry
 version: "1.0"
 status: stable
 category: modifier
+capability: edge_symmetry
 requires: []
 priority: specialized
 ---

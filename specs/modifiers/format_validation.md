@@ -3,6 +3,7 @@ spec: format_validation
 version: "1.0"
 status: stable
 category: modifier
+capability: format_validation
 requires: []
 priority: specialized
 ---

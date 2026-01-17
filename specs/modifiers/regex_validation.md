@@ -3,6 +3,7 @@ spec: regex_validation
 version: "1.0"
 status: draft
 category: modifier
+capability: regex_validation
 requires: []
 priority: specialized
 ---

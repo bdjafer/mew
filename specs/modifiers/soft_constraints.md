@@ -3,8 +3,9 @@ spec: soft_constraints
 version: "1.0"
 status: draft
 category: modifier
+capability: soft_constraints
 requires: []
-priotity: convenience
+priority: convenience
 ---
 
 # Spec: Soft Constraints

@@ -3,6 +3,7 @@ spec: acyclic_edges
 version: "1.0"
 status: stable
 category: modifier
+capability: acyclic_edges
 requires: [transitive_patterns]
 priority: specialized
 ---

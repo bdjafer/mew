@@ -3,6 +3,7 @@ spec: cardinality
 version: "1.0"
 status: stable
 category: modifier
+capability: cardinality
 requires: []
 priority: common
 ---
