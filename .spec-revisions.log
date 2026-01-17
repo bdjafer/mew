@@ -70,3 +70,45 @@ Resolution:
 
 Propagated to: specs/specification/1_LANGUAGE.md (complete)
 ---
+---
+Date: 2026-01-17
+Document: specs/v2/POLICY.md
+Section: Entire document
+Problem: Terminology uses "Authorization" but should use "Policy" per design decision
+Evidence: Policy&Watch.md FAQ specifies: "Authorization" → "Policy" (less enterprise baggage, more neutral)
+Resolution: Complete terminology transformation from "Authorization" to "Policy"
+Changes made:
+  - Title: "Authorization System" → "Policy System"
+  - DSL keyword: `authorization` → `policy`
+  - Layer 0 types: `_AuthorizationRule` → `_PolicyRule`
+  - Edges: `_auth_has_*` → `_policy_has_*`, `_ontology_declares_auth` → `_ontology_declares_policy`
+  - Error code: E7004 AUTH_EVAL_ERROR → POLICY_EVAL_ERROR
+  - All narrative references updated throughout
+  - Glossary term "Authorization" removed, "Policy" definition updated
+  - Part XI renamed "Observation Policy" (was "Observation Authorization")
+Propagated to: specs/v2/POLICY.md (single file revision)
+---
+Additional propagation:
+  - specs/v2/WATCH.md: Updated 3 references from "authorization" to "policy"
+Note: specs/plans/authorization.md retains old terminology (planning document, separate revision if needed)
+---
+---
+Date: 2026-01-17
+Document: specs/v2/WATCH.md
+Section: Entire document
+Problem: Terminology uses "Subscription/SUBSCRIBE" but should use "Watch/WATCH" per design decision
+Evidence: Policy&Watch.md FAQ specifies: "Subscription" → "Watch" (active, clear, mirrors MATCH)
+Resolution: Complete terminology transformation:
+  - "Subscription System" → "Watch System"
+  - `SUBSCRIBE` keyword → `WATCH` keyword
+  - `_Subscription` → `_Watch`
+  - "SubscribeStmt" → "WatchStmt"
+  - All narrative references updated throughout
+Propagated to:
+  - specs/v2/WATCH.md (complete rewrite)
+  - specs/v2/INTERIOR.md (28 references updated for watch, policy terminology)
+---
+Additional propagation:
+  - specs/v2/TIME_CLOCK.md: Updated 2 references (Subscription → Watch)
+  - specs/v2/REPRESENTATION.md: Updated 6 references (Subscription → Watch)
+---

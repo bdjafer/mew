@@ -1,4 +1,4 @@
-# MEW Subscription System
+# MEW Watch System
 
 **Version:** 1.0
 **Status:** Specification
@@ -34,7 +34,7 @@ Both "watching changes" and "receiving messages" are push mechanisms:
 
 | Traditional View | Unified View |
 |-----------------|--------------|
-| Subscription = Watch pattern | Subscription = Watch pattern |
+| Subscription = Watch pattern | Watch = Watch pattern |
 | Channel = Message queue | Channel = Watch "messages to me" pattern |
 | Different primitives | Same primitive, different modes |
 
@@ -46,7 +46,7 @@ The difference is **what happens after delivery**:
 
 | Principle | Meaning |
 |-----------|---------|
-| **Single primitive** | Subscription handles both watching and messaging |
+| **Single primitive** | Watch handles both observing and messaging |
 | **Pattern-based** | Full query power for defining scope |
 | **Modal** | Watch vs consume determines semantics |
 | **Composable** | Options combine orthogonally |
@@ -56,16 +56,16 @@ The difference is **what happens after delivery**:
 
 # Part II: Core Model
 
-## 2.1 Subscription Definition
+## 2.1 Watch Definition
 
-A subscription is a persistent query that pushes results to a client:
+A watch is a persistent query that pushes results to a client:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      SUBSCRIPTION ANATOMY                            │
+│                        WATCH ANATOMY                                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  SUBSCRIBE                                                          │
+│  WATCH                                                              │
 │    pattern       -- what to match                                   │
 │    [options]     -- how to behave                                   │
 │    RETURN        -- what to return                                  │
@@ -78,23 +78,23 @@ A subscription is a persistent query that pushes results to a client:
 │                                                                      │
 │  Result:                                                            │
 │                                                                      │
-│    Subscription handle (for management)                            │
+│    Watch handle (for management)                                    │
 │    Stream of events (changes matching pattern)                     │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## 2.2 Subscription Lifecycle
+## 2.2 Watch Lifecycle
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                   SUBSCRIPTION LIFECYCLE                             │
+│                      WATCH LIFECYCLE                                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  CREATE                                                             │
 │  ──────                                                             │
-│     SUBSCRIBE pattern [options] RETURN projection                  │
-│     → Returns: subscription_handle                                 │
+│     WATCH pattern [options] RETURN projection                      │
+│     → Returns: watch_handle                                        │
 │     → Sends: initial results (current matches)                     │
 │                                                                      │
 │  ACTIVE                                                             │
@@ -104,21 +104,21 @@ A subscription is a persistent query that pushes results to a client:
 │                                                                      │
 │  PAUSE / RESUME                                                     │
 │  ─────────────                                                      │
-│     PAUSE SUBSCRIPTION #handle                                     │
-│     RESUME SUBSCRIPTION #handle                                    │
+│     PAUSE WATCH #handle                                            │
+│     RESUME WATCH #handle                                           │
 │     Paused: changes accumulate or are dropped (configurable)       │
 │                                                                      │
 │  CANCEL                                                             │
 │  ──────                                                             │
-│     CANCEL SUBSCRIPTION #handle                                    │
-│     Subscription removed, no more events                           │
+│     CANCEL WATCH #handle                                           │
+│     Watch removed, no more events                                  │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 2.3 Event Types
 
-Subscriptions emit events describing changes:
+Watches emit events describing changes:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -127,7 +127,7 @@ Subscriptions emit events describing changes:
 │                                                                      │
 │  INITIAL                                                            │
 │  ───────                                                            │
-│  Sent once on subscription creation.                               │
+│  Sent once on watch creation.                                      │
 │  Contains all current matches.                                     │
 │                                                                      │
 │    { type: "initial", matches: [...] }                             │
@@ -162,7 +162,7 @@ Subscriptions emit events describing changes:
 
 ---
 
-# Part III: Subscription Modes
+# Part III: Watch Modes
 
 ## 3.1 Watch Mode (Default)
 
@@ -173,14 +173,14 @@ Non-destructive observation of graph changes.
 │                        WATCH MODE                                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  SUBSCRIBE MATCH t: Task WHERE t.status = "done"                   │
+│  WATCH t: Task WHERE t.status = "done"                             │
 │    [mode: watch]                                                   │
 │    RETURN t.id, t.title, t.completed_at                           │
 │                                                                      │
 │  Semantics:                                                         │
 │  ──────────                                                         │
-│  • Multiple subscribers all see all matches                        │
-│  • Matches persist in graph (not affected by subscription)        │
+│  • Multiple watchers all see all matches                           │
+│  • Matches persist in graph (not affected by watch)               │
 │  • Events: initial, added, removed, changed                       │
 │  • No acknowledgment required                                      │
 │                                                                      │
@@ -194,11 +194,11 @@ Non-destructive observation of graph changes.
 │                                                                      │
 │  Diagram:                                                           │
 │                                                                      │
-│    Graph ───changes───┬──▶ Subscriber A (sees all)                │
-│                       ├──▶ Subscriber B (sees all)                │
-│                       └──▶ Subscriber C (sees all)                │
+│    Graph ───changes───┬──▶ Watcher A (sees all)                   │
+│                       ├──▶ Watcher B (sees all)                   │
+│                       └──▶ Watcher C (sees all)                   │
 │                                                                      │
-│    Graph unchanged by subscriptions                                │
+│    Graph unchanged by watches                                      │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -212,13 +212,13 @@ Destructive consumption — each match delivered once, then removed.
 │                       CONSUME MODE                                   │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  SUBSCRIBE MATCH j: Job WHERE j.status = "pending"                 │
+│  WATCH j: Job WHERE j.status = "pending"                           │
 │    [mode: consume]                                                 │
 │    RETURN j                                                        │
 │                                                                      │
 │  Semantics:                                                         │
 │  ──────────                                                         │
-│  • Each match delivered to exactly one subscriber (in group)       │
+│  • Each match delivered to exactly one watcher (in group)          │
 │  • Match removed from graph after acknowledgment                   │
 │  • Events: initial (empty), consumed                              │
 │  • Acknowledgment required (ACK/NACK)                              │
@@ -233,13 +233,13 @@ Destructive consumption — each match delivered once, then removed.
 │                                                                      │
 │  Diagram:                                                           │
 │                                                                      │
-│    Graph ───match───▶ Subscriber A ───ACK───▶ Match deleted        │
+│    Graph ───match───▶ Watcher A ───ACK───▶ Match deleted           │
 │                                                                      │
 │    With competing consumers (group):                               │
 │                                                                      │
-│    Graph ───match1───▶ Subscriber A (in group "workers")          │
-│          ───match2───▶ Subscriber B (in group "workers")          │
-│          ───match3───▶ Subscriber A                                │
+│    Graph ───match1───▶ Watcher A (in group "workers")             │
+│          ───match2───▶ Watcher B (in group "workers")             │
+│          ───match3───▶ Watcher A                                   │
 │                                                                      │
 │    Each match goes to exactly one group member                     │
 │                                                                      │
@@ -254,14 +254,14 @@ Destructive consumption — each match delivered once, then removed.
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  1. MATCH FOUND                                                     │
-│     Match satisfies subscription pattern                           │
+│     Match satisfies watch pattern                                  │
 │     Match marked "pending" (invisible to other consumers)          │
 │                                                                      │
 │  2. DELIVER                                                         │
-│     Event sent to subscriber:                                      │
+│     Event sent to watcher:                                         │
 │     { type: "consumed", match: {...}, delivery_id: "abc123" }     │
 │                                                                      │
-│  3. SUBSCRIBER PROCESSES                                            │
+│  3. WATCHER PROCESSES                                               │
 │     Application handles the message                                │
 │                                                                      │
 │  4. ACKNOWLEDGE                                                     │
@@ -294,12 +294,12 @@ Destructive consumption — each match delivered once, then removed.
 
 ---
 
-# Part IV: Subscription Options
+# Part IV: Watch Options
 
 ## 4.1 Complete Options Reference
 
 ```
-SUBSCRIBE pattern
+WATCH pattern
   [mode: watch | consume]
   [group: "group_name"]
   [ordering: arrival | causal | attribute(expr)]
@@ -321,7 +321,7 @@ SUBSCRIBE pattern
 
   watch (default):
     Non-destructive observation
-    All subscribers see all matches
+    All watchers see all matches
     No acknowledgment
 
   consume:
@@ -337,12 +337,12 @@ SUBSCRIBE pattern
 [group: "group_name"]
 
   No group (default):
-    Each subscriber independent
+    Each watcher independent
     In watch mode: all see all
     In consume mode: single consumer
 
   With group:
-    Subscribers in same group coordinate
+    Watchers in same group coordinate
     In watch mode: all see all (group ignored)
     In consume mode: competing consumers
       - Each match to exactly one group member
@@ -354,12 +354,12 @@ Example: Work queue with competing consumers
 
 ```
 -- Worker 1
-SUBSCRIBE MATCH j: Job WHERE j.status = "pending"
+WATCH j: Job WHERE j.status = "pending"
   [mode: consume, group: "workers"]
   RETURN j
 
 -- Worker 2 (same group)
-SUBSCRIBE MATCH j: Job WHERE j.status = "pending"
+WATCH j: Job WHERE j.status = "pending"
   [mode: consume, group: "workers"]
   RETURN j
 
@@ -452,13 +452,13 @@ SUBSCRIBE MATCH j: Job WHERE j.status = "pending"
 ```
 [buffer: N]
 
-  Maximum events to buffer when subscriber is slow.
+  Maximum events to buffer when watcher is slow.
   Behavior when full:
 
     [buffer: 1000]                    -- default behavior: drop oldest
     [buffer: 1000, on_full: drop]     -- drop oldest
     [buffer: 1000, on_full: block]    -- backpressure (slow producer)
-    [buffer: 1000, on_full: error]    -- cancel subscription
+    [buffer: 1000, on_full: error]    -- cancel watch
 ```
 
 ## 4.9 Initial Results
@@ -467,7 +467,7 @@ SUBSCRIBE MATCH j: Job WHERE j.status = "pending"
 [initial: full | none | since(tick)]
 
   full (default):
-    Send all current matches on subscribe
+    Send all current matches on watch creation
     Then incremental updates
 
   none:
@@ -485,7 +485,7 @@ SUBSCRIBE MATCH j: Job WHERE j.status = "pending"
 
 ## 5.1 The Channel Pattern
 
-Channels are subscriptions to "messages addressed to me":
+Channels are watches on "messages addressed to me":
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -509,7 +509,7 @@ Channels are subscriptions to "messages addressed to me":
 │      LINK pending(#alice_inbox, m)                                 │
 │                                                                      │
 │    Receive:                                                         │
-│      SUBSCRIBE MATCH m: Message, pending(#my_inbox, m)             │
+│      WATCH m: Message, pending(#my_inbox, m)                       │
 │        [mode: consume]                                             │
 │        [ordering: attribute(m.sent_at)]                            │
 │        RETURN m                                                    │
@@ -517,7 +517,7 @@ Channels are subscriptions to "messages addressed to me":
 │  Benefits:                                                          │
 │  • Messages are queryable graph structure                          │
 │  • Full pattern power (filter, join)                               │
-│  • Existing authorization applies                                  │
+│  • Existing policy applies                                         │
 │  • No separate messaging system                                    │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -537,8 +537,8 @@ edge inbox(recipient: Actor, message: Message)
 SPAWN m: Message { content = "hello", sent_at = wall_time() }
 LINK inbox(#bob, m)
 
--- Receive (Bob's subscription)
-SUBSCRIBE MATCH m: Message, inbox(#self, m)
+-- Receive (Bob's watch)
+WATCH m: Message, inbox(#self, m)
   [mode: consume, ordering: attribute(m.sent_at)]
   RETURN m.content, m.sent_at
 ```
@@ -556,12 +556,12 @@ edge subscribed(actor: Actor, topic: Topic)
 SPAWN p: Publication { content = "news!", published_at = wall_time() }
 LINK published(#news_topic, p)
 
--- Subscribe to topic (watch mode - all see all)
-SUBSCRIBE MATCH p: Publication, published(#news_topic, p)
+-- Watch topic (watch mode - all see all)
+WATCH p: Publication, published(#news_topic, p)
   [mode: watch]
   RETURN p
 
--- Fan-out: each subscriber independently sees all publications
+-- Fan-out: each watcher independently sees all publications
 ```
 
 ### Work Queue (Competing Consumers)
@@ -576,7 +576,7 @@ SPAWN j: Job { payload = "...", priority = 5, created_at = wall_time() }
 LINK pending_job(j)
 
 -- Workers (competing)
-SUBSCRIBE MATCH j: Job, pending_job(j)
+WATCH j: Job, pending_job(j)
   [mode: consume]
   [group: "workers"]
   [ordering: attribute(j.priority DESC, j.created_at ASC)]
@@ -602,13 +602,13 @@ SPAWN req: Request {
 }
 LINK request_to(req, #user_service)
 
--- Service subscription
-SUBSCRIBE MATCH r: Request, request_to(r, #self)
+-- Service watch
+WATCH r: Request, request_to(r, #self)
   [mode: consume]
   RETURN r
 
 -- Client waits for specific response
-SUBSCRIBE MATCH r: Response, response_to(r, #self)
+WATCH r: Response, response_to(r, #self)
   WHERE r.correlation_id = "corr_abc"
   [mode: consume]
   RETURN r
@@ -616,21 +616,21 @@ SUBSCRIBE MATCH r: Response, response_to(r, #self)
 
 ---
 
-# Part VI: Subscription Management
+# Part VI: Watch Management
 
-## 6.1 Subscription Handle
+## 6.1 Watch Handle
 
-Creating a subscription returns a handle:
+Creating a watch returns a handle:
 
 ```
-sub = SUBSCRIBE MATCH t: Task WHERE t.status = "done"
-        [mode: watch]
-        RETURN t
+w = WATCH t: Task WHERE t.status = "done"
+      [mode: watch]
+      RETURN t
 
--- sub is a handle: #subscription_abc123
+-- w is a handle: #watch_abc123
 
 -- Handle is a node in the graph (queryable!)
-MATCH s: _Subscription WHERE s.id = #sub
+MATCH s: _Watch WHERE s.id = #w
 RETURN s.pattern, s.mode, s.created_at
 ```
 
@@ -638,28 +638,28 @@ RETURN s.pattern, s.mode, s.created_at
 
 ```
 -- Pause (stop receiving, optionally buffer)
-PAUSE SUBSCRIPTION #sub
+PAUSE WATCH #w
 
 -- Resume
-RESUME SUBSCRIPTION #sub
+RESUME WATCH #w
 
 -- Cancel (permanent)
-CANCEL SUBSCRIPTION #sub
+CANCEL WATCH #w
 
 -- Modify (some options changeable)
-ALTER SUBSCRIPTION #sub SET [buffer: 2000]
+ALTER WATCH #w SET [buffer: 2000]
 
--- List active subscriptions
-MATCH s: _Subscription WHERE s.session = current_session()
+-- List active watches
+MATCH s: _Watch WHERE s.session = current_session()
 RETURN s
 ```
 
-## 6.3 Subscription Metadata
+## 6.3 Watch Metadata
 
-Subscriptions are nodes in Layer 0:
+Watches are nodes in Layer 0:
 
 ```
-node _Subscription {
+node _Watch {
   pattern: String,          -- serialized pattern
   mode: String,             -- "watch" | "consume"
   group: String?,
@@ -673,8 +673,8 @@ node _Subscription {
 ```
 
 This allows:
-- Querying subscription status
-- Monitoring subscription health
+- Querying watch status
+- Monitoring watch health
 - Administrative management
 - Self-describing system
 
@@ -682,12 +682,12 @@ This allows:
 
 # Part VII: Server-Side Processing
 
-## 7.1 Aggregating Subscriptions
+## 7.1 Aggregating Watches
 
-Subscriptions can include aggregation:
+Watches can include aggregation:
 
 ```
-SUBSCRIBE MATCH t: Task, belongs_to(t, #project_1)
+WATCH t: Task, belongs_to(t, #project_1)
   [window: tumbling(10s)]
   RETURN COUNT(t) AS total,
          COUNT(t WHERE t.status = "done") AS done,
@@ -697,12 +697,12 @@ SUBSCRIBE MATCH t: Task, belongs_to(t, #project_1)
 -- Not individual task events
 ```
 
-## 7.2 Subscription Triggers (Actions)
+## 7.2 Watch Triggers (Actions)
 
-Subscriptions can trigger server-side actions:
+Watches can trigger server-side actions:
 
 ```
-SUBSCRIBE MATCH t: Task WHERE t.priority > 8
+WATCH t: Task WHERE t.priority > 8
   [mode: watch]
   ON MATCH DO
     SPAWN n: Notification { 
@@ -715,16 +715,16 @@ SUBSCRIBE MATCH t: Task WHERE t.priority > 8
 -- 2. No client needed to be connected
 ```
 
-This bridges subscriptions and rules:
+This bridges watches and rules:
 - Rules: Always active, fire on any matching change
-- Subscription triggers: Active while subscribed, client-controlled
+- Watch triggers: Active while watch exists, client-controlled
 
-## 7.3 Subscription Filters (Server-Side)
+## 7.3 Watch Filters (Server-Side)
 
 Reduce data sent to client:
 
 ```
-SUBSCRIBE MATCH t: Task
+WATCH t: Task
   [filter: t.assignee = current_actor()]
   RETURN t
 
@@ -820,21 +820,21 @@ SUBSCRIBE MATCH t: Task
 
 # Part IX: Interaction with Other Systems
 
-## 9.1 Authorization
+## 9.1 Policy
 
-Subscriptions are subject to authorization:
+Watches are subject to policy:
 
 ```
--- Subscription pattern must be authorized
-SUBSCRIBE MATCH t: Task WHERE t.secret = true
+-- Watch pattern must pass policy check
+WATCH t: Task WHERE t.secret = true
   RETURN t
 
--- Authorization checks:
--- 1. Can current_actor() create subscriptions? (META READ-like)
+-- Policy checks:
+-- 1. Can current_actor() create watches? (META READ-like)
 -- 2. Can current_actor() MATCH Task? (data access)
 -- 3. Can current_actor() see secret tasks? (field-level)
 
--- If any check fails, subscription rejected
+-- If any check fails, watch rejected
 
 -- For consume mode:
 -- Also checks: can current_actor() delete matched items?
@@ -845,24 +845,24 @@ SUBSCRIBE MATCH t: Task WHERE t.secret = true
 In branching execution:
 
 ```
--- Default: subscription sees current branch only
-SUBSCRIBE MATCH t: Task
+-- Default: watch sees current branch only
+WATCH t: Task
   RETURN t
 
 -- Explicit branch:
-SUBSCRIBE MATCH t: Task
+WATCH t: Task
   [branch: #branch_123]
   RETURN t
 
 -- All branches:
-SUBSCRIBE MATCH t: Task
+WATCH t: Task
   [branches: all]
   RETURN t, branch.id, branch.weight
 ```
 
 ## 9.3 Timing
 
-When are subscription events delivered?
+When are watch events delivered?
 
 ```
 With tick-based execution:
@@ -893,14 +893,14 @@ With streaming execution (best_effort quiescence):
 ## 9.4 Transactions
 
 ```
-Subscriber sees consistent snapshots:
+Watcher sees consistent snapshots:
 
   BEGIN
-    SPAWN t: Task { status = "todo" }    -- not visible to subscribers
-    SET t.status = "done"                -- not visible to subscribers
-  COMMIT                                 -- subscriber sees: added (status=done)
+    SPAWN t: Task { status = "todo" }    -- not visible to watchers
+    SET t.status = "done"                -- not visible to watchers
+  COMMIT                                 -- watcher sees: added (status=done)
 
-Subscriber never sees intermediate state (status=todo).
+Watcher never sees intermediate state (status=todo).
 Unless [visibility: immediate] specified.
 ```
 
@@ -909,12 +909,12 @@ Unless [visibility: immediate] specified.
 # Part X: Grammar
 
 ```
-SubscribeStmt =
-    "SUBSCRIBE" MatchPattern SubscribeOptions? ReturnClause
+WatchStmt =
+    "WATCH" MatchPattern WatchOptions? ReturnClause
 
-SubscribeOptions = "[" SubscribeOption ("," SubscribeOption)* "]"
+WatchOptions = "[" WatchOption ("," WatchOption)* "]"
 
-SubscribeOption =
+WatchOption =
     "mode" ":" ("watch" | "consume")
   | "group" ":" StringLiteral
   | "ordering" ":" OrderingSpec
@@ -955,12 +955,12 @@ AckStmt =
 
 NoRetryClause = "[" "no_retry" "]"
 
-PauseStmt = "PAUSE" "SUBSCRIPTION" NodeRef
-ResumeStmt = "RESUME" "SUBSCRIPTION" NodeRef
-CancelStmt = "CANCEL" "SUBSCRIPTION" NodeRef
-AlterSubscriptionStmt = "ALTER" "SUBSCRIPTION" NodeRef "SET" SubscribeOptions
+PauseStmt = "PAUSE" "WATCH" NodeRef
+ResumeStmt = "RESUME" "WATCH" NodeRef
+CancelStmt = "CANCEL" "WATCH" NodeRef
+AlterWatchStmt = "ALTER" "WATCH" NodeRef "SET" WatchOptions
 
-SubscribeTrigger = "ON" "MATCH" "DO" Action+
+WatchTrigger = "ON" "MATCH" "DO" Action+
 ```
 
 ---
@@ -971,7 +971,7 @@ SubscribeTrigger = "ON" "MATCH" "DO" Action+
 
 | Concept | Definition |
 |---------|------------|
-| **Subscription** | Persistent query that pushes matching changes |
+| **Watch** | Persistent query that pushes matching changes |
 | **Watch mode** | Non-destructive observation, broadcast |
 | **Consume mode** | Destructive receipt, exactly-once per group |
 | **Group** | Named set of competing consumers |
@@ -983,7 +983,7 @@ SubscribeTrigger = "ON" "MATCH" "DO" Action+
 | Aspect | Watch | Consume |
 |--------|-------|---------|
 | Graph effect | None | Deletes matched |
-| Multiple subscribers | All see all | Each sees different |
+| Multiple watchers | All see all | Each sees different |
 | Acknowledgment | No | Required |
 | Use case | Dashboards, monitoring | Queues, messaging |
 | Delivery | Best-effort or reliable | Exactly-once |
@@ -1008,22 +1008,22 @@ SubscribeTrigger = "ON" "MATCH" "DO" Action+
 │                      UNIFIED VIEW                                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  SUBSCRIPTION is the single push primitive.                        │
+│  WATCH is the single push primitive.                                │
 │                                                                      │
 │  What traditional systems call:           In MEW:                   │
 │  ─────────────────────────────────────────────────────────────     │
-│  Live query / real-time query     →   SUBSCRIBE [mode: watch]      │
-│  Message queue / channel          →   SUBSCRIBE [mode: consume]    │
-│  Topic / pubsub                   →   SUBSCRIBE pattern [watch]    │
-│  Work queue                       →   SUBSCRIBE [consume, group]   │
+│  Live query / real-time query     →   WATCH [mode: watch]          │
+│  Message queue / channel          →   WATCH [mode: consume]        │
+│  Topic / pubsub                   →   WATCH pattern [watch]        │
+│  Work queue                       →   WATCH [consume, group]       │
 │  Request-reply                    →   Pattern with correlation     │
-│  Event stream                     →   SUBSCRIBE [watch, causal]    │
+│  Event stream                     →   WATCH [watch, causal]        │
 │                                                                      │
-│  All unified under pattern-based subscription with modal options.  │
+│  All unified under pattern-based watch with modal options.         │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-*End of MEW Subscription System Specification*
+*End of MEW Watch System Specification*

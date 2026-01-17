@@ -709,7 +709,7 @@ QUEUED INPUT MODE
     Default: "process"
 ```
 
-## 7.2 Subscription Timing
+## 7.2 Watch Timing
 
 When do subscribers see changes?
 
@@ -737,7 +737,7 @@ When do subscribers see changes?
 │                                                                      │
 │  Configuration:                                                     │
 │                                                                      │
-│     SUBSCRIBE pattern [visibility: committed | immediate]          │
+│     WATCH pattern [visibility: committed | immediate]              │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```

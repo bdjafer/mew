@@ -42,12 +42,12 @@ The resolution: **one logical model, one physical layout, partitioned by type st
 
 ## Part II: Core Principles
 
-### 2.1 Principle: Everything is an Entity
+### 2.1 Principle: Everything is a Glyph
 
-At the conceptual level, nodes and edges are both entities:
+At the conceptual level, nodes and edges are both glyphs:
 
 ```
-Entity
+Glyph
 ├── id: GlobalId           -- unique, immutable
 ├── type_tag: TypeId       -- concrete type
 ├── alive: Bool            -- existence flag
@@ -55,7 +55,7 @@ Entity
 └── targets: [GlobalId]?   -- if present, this is an edge
 ```
 
-An edge is simply an entity with targets. This unification enables:
+An edge is simply a glyph with targets. This unification enables:
 - Higher-order edges (edge targets are just GlobalIds of other edges)
 - Uniform ID space for cross-references
 - Consistent mutation semantics
@@ -78,7 +78,7 @@ All storage is columnar:
 - Each attribute is a dense array
 - Subtype-specific attributes are sparse (nulls for other types)
 - Edge targets are dense arrays of GlobalIds
-- Bitmaps track entity liveness
+- Bitmaps track glyph liveness
 
 Columnar layout enables:
 - Coalesced GPU memory access
@@ -104,7 +104,7 @@ Synchronization happens at transaction/tick boundaries:
 
 ### 2.5 Principle: Edges Stay Inside
 
-Cross-scope references (between worlds/interiors) use ID attributes, not edges. A projection is an interior node that holds a `represents: GlobalId` attribute pointing to an external entity.
+Cross-scope references (between worlds/interiors) use ID attributes, not edges. A projection is an interior node that holds a `represents: GlobalId` attribute pointing to an external glyph.
 
 No edge crosses a world boundary. This maintains:
 - Clean isolation semantics
@@ -117,7 +117,7 @@ No edge crosses a world boundary. This maintains:
 
 ### 3.1 GlobalId Space
 
-Every entity (node or edge) across all worlds has a unique GlobalId. The ID space is partitioned:
+Every glyph (node or edge) across all worlds has a unique GlobalId. The ID space is partitioned:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -385,7 +385,7 @@ Worlds nest arbitrarily. Each interior is a complete, isolated database.
 
 ### 4.3 Cross-World References: Projections
 
-Worlds reference external entities through projections, not edges.
+Worlds reference external glyphs through projections, not edges.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -427,7 +427,7 @@ All mutations append to a delta buffer. The buffer is processed at sync boundari
 │                                                                      │
 │   Delta                                                             │
 │   ├── op: SPAWN | KILL | LINK | UNLINK | SET                        │
-│   ├── entity_id: GlobalId                                           │
+│   ├── glyph_id: GlobalId                                            │
 │   ├── type_id: TypeId | EdgeTypeId                                  │
 │   ├── local_idx: u32                  -- slot in table              │
 │   ├── targets: [GlobalId]?            -- for LINK                   │
@@ -447,11 +447,11 @@ All mutations append to a delta buffer. The buffer is processed at sync boundari
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 Entity Lifecycle
+### 5.2 Glyph Lifecycle
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       ENTITY LIFECYCLE                               │
+│                       GLYPH LIFECYCLE                                │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   SPAWN                                                             │
@@ -464,7 +464,7 @@ All mutations append to a delta buffer. The buffer is processed at sync boundari
 │                                                                      │
 │   KILL                                                              │
 │   ────                                                              │
-│   • Validate: no edges reference this entity (or cascade)           │
+│   • Validate: no edges reference this glyph (or cascade)            │
 │   • Clear: alive bit                                                │
 │   • Reclaim: add slot to free list                                  │
 │   • Unregister: remove from ID mapping                              │
@@ -475,7 +475,7 @@ All mutations append to a delta buffer. The buffer is processed at sync boundari
 │   • If unique: check constraint, update index                       │
 │   • Write: new value to column                                      │
 │                                                                      │
-│   Deleted entities leave tombstones (alive=0). Periodic             │
+│   Deleted glyphs leave tombstones (alive=0). Periodic               │
 │   compaction reclaims space and rebuilds indexes.                   │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -657,7 +657,7 @@ tick(world):
     2. Check constraints (pattern match on GPU)
     3. Execute rules (pattern match + production)
     4. Increment local_tick
-    5. Process subscriptions (diff + notify)
+    5. Process watches (diff + notify)
     6. Propagate tick to children (based on time mode)
 ```
 
@@ -667,7 +667,7 @@ tick(world):
 
 ### 8.1 Spatial Positioning
 
-Entities can be positioned in named spaces. Position is stored as additional columns.
+Glyphs can be positioned in named spaces. Position is stored as additional columns.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -687,7 +687,7 @@ Entities can be positioned in named spaces. Position is stored as additional col
 │   FamilyTable<Landmark>                                             │
 │   ├── ... standard columns ...                                      │
 │   ├── pos_Physical: [f32 × 3]         -- position in Physical space │
-│   ├── has_pos_Physical: bitmap        -- which entities have pos    │
+│   ├── has_pos_Physical: bitmap        -- which glyphs have pos      │
 │   ├── pos_Semantic: [f32 × 128]       -- position in Semantic space │
 │   └── has_pos_Semantic: bitmap                                      │
 │                                                                      │
@@ -942,19 +942,19 @@ META operations modify the compiled ontology at runtime.
 
 ---
 
-## Part XIII: Subscriptions
+## Part XIII: Watches
 
-### 13.1 Subscription as Perception
+### 13.1 Watch as Perception
 
-Subscriptions implement cross-scope perception (sensors).
+Watches implement cross-scope perception (sensors).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    SUBSCRIPTION MODEL                                │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│   Subscription                                                      │
-│   ├── subscriber: World               -- who is watching            │
+│   Watch                                                             │
+│   ├── watcher: World                  -- who is watching            │
 │   ├── target: World                   -- what is being watched      │
 │   ├── pattern: CompiledPattern        -- what to watch for          │
 │   ├── on_create: CompiledProduction   -- handler for new matches    │
@@ -1058,7 +1058,7 @@ Federation connects independent MEW instances (kernels).
 │   • remote_id: GlobalId                                             │
 │   • sync_id: String (for federation protocol)                       │
 │                                                                      │
-│   Federation subscriptions enable cross-kernel perception.          │
+│   Federation watches enable cross-kernel perception.                │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -1071,12 +1071,12 @@ Federation connects independent MEW instances (kernels).
 
 | Abstraction | Definition |
 |-------------|------------|
-| **Entity** | Anything with identity: nodes and edges unified |
+| **Glyph** | Anything with identity: nodes and edges unified |
 | **GlobalId** | Universal identifier encoding world, table, index |
 | **FamilyTable** | Columnar storage for node inheritance hierarchy |
 | **EdgeTensor** | Sparse tensor storage per edge type |
 | **World** | Scoped database with own schema and storage |
-| **Projection** | Interior entity referencing exterior by ID attribute |
+| **Projection** | Interior glyph referencing exterior by ID attribute |
 | **Delta** | Atomic mutation record |
 | **CompiledPattern** | Tensor operation plan from query/constraint/rule |
 
@@ -1092,7 +1092,7 @@ Federation connects independent MEW instances (kernels).
 
 ### 16.3 Design Qualities
 
-**Unified:** One conceptual model (Entity) regardless of node/edge distinction.
+**Unified:** One conceptual model (Glyph) regardless of node/edge distinction.
 
 **Partitioned:** Physical storage follows type structure for efficiency.
 

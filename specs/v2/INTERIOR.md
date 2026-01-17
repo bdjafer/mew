@@ -79,7 +79,7 @@ This avoids duplicating policy logic in static type declarations.
 | **Ontology** | Interior has its own local ontology (types, edges, constraints, rules) |
 | **Policies** | Gate cross-scope access; interior access is policy-controlled |
 | **META Mode** | Used to modify interior ontology dynamically |
-| **Subscriptions** | Implement perception (sensors) via subscription to external patterns |
+| **Watches** | Implement perception (sensors) via watch on external patterns |
 | **Time Domains** | Interior can have independent tick rate (like existing DOMAIN concept) |
 | **Spaces** | Interior can declare local spaces or reference parent spaces |
 | **Federation** | Each kernel is a root; federation bridges roots |
@@ -424,12 +424,12 @@ A **projection** is an interior node that represents an external entity. It cont
 
 Three patterns, from most automated to most manual:
 
-### 4.2.1 SUBSCRIBE Pattern (Continuous Sync)
+### 4.2.1 WATCH Pattern (Continuous Sync)
 
 ```
 -- Most common for agents: automatically maintain projections
 
-SUBSCRIBE TO Landmark IN ROOT 
+WATCH Landmark IN ROOT 
 WHERE distance(Landmark, owner_of(SELF), Physical) < 100
 [mode: watch]
 ON_CREATE(lm): 
@@ -448,7 +448,7 @@ ON_DELETE(lm):
   KILL lr
 ```
 
-This is the **sensor pattern**: the subscription watches ROOT and maintains projections automatically.
+This is the **sensor pattern**: the watch monitors ROOT and maintains projections automatically.
 
 ### 4.2.2 INTERNALIZE Pattern (One-Shot Snapshot)
 
@@ -501,7 +501,7 @@ Projections can become stale. This is **correct behavior** — it models real pe
 │                                                                      │
 │   This is CORRECT. The world's model doesn't auto-update.          │
 │   To get fresh data, the world must:                                │
-│   • Have an active subscription (auto-sync)                        │
+│   • Have an active watch (auto-sync)                               │
 │   • Explicitly re-query and update                                 │
 │   • Accept that its model may be outdated                          │
 │                                                                      │
@@ -509,7 +509,7 @@ Projections can become stale. This is **correct behavior** — it models real pe
 │   ────────────────                                                  │
 │   Real agents don't have perfect information.                      │
 │   Modeling staleness is modeling reality.                          │
-│   If you want auto-sync, use SUBSCRIBE.                            │
+│   If you want auto-sync, use WATCH.                            │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -1152,24 +1152,24 @@ policy perception_range:
 
 ---
 
-# Part X: Subscriptions as Sensors
+# Part X: Watches as Sensors
 
 ## 10.1 The Sensor Pattern
 
-**Sensors are subscriptions to external scopes.** This unifies concepts:
+**Sensors are watches on external scopes.** This unifies concepts:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                SUBSCRIPTIONS AS SENSORS                              │
+│                   WATCHES AS SENSORS                                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   TRADITIONAL VIEW                   MEW VIEW                       │
 │   ────────────────                   ────────                       │
 │                                                                      │
-│   "Agent has sensors for            "Agent subscribes to            │
+│   "Agent has sensors for            "Agent watches                  │
 │    perceiving Landmarks"             Landmarks in ROOT"             │
 │                                                                      │
-│   sensor: Landmark                   SUBSCRIBE TO Landmark IN ROOT  │
+│   sensor: Landmark                   WATCH Landmark IN ROOT         │
 │                                        [mode: watch]                │
 │                                        ON_CREATE: ...               │
 │                                        ON_UPDATE: ...               │
@@ -1178,21 +1178,21 @@ policy perception_range:
 │   THE UNIFICATION                                                   │
 │   ───────────────                                                   │
 │                                                                      │
-│   • Perception IS subscription                                      │
+│   • Perception IS watching                                          │
 │   • What you can perceive = what you're authorized to query        │
-│   • Updates propagate via subscription events                      │
-│   • Projection maintenance is subscription handler logic           │
+│   • Updates propagate via watch events                             │
+│   • Projection maintenance is watch handler logic                  │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## 10.2 Sensor Subscription Patterns
+## 10.2 Sensor Watch Patterns
 
 ### 10.2.1 Simple Observation Sensor
 
 ```
 -- Perceive all visible landmarks
-SUBSCRIBE TO Landmark IN ROOT
+WATCH Landmark IN ROOT
 WHERE Landmark.visible = true
 [mode: watch, initial: full]
 ON_CREATE(lm):
@@ -1204,15 +1204,15 @@ ON_DELETE(lm):
   MATCH lr: LandmarkRef IN SELF WHERE lr.represents = lm.id
   KILL lr
 
--- This subscription IS the sensor
+-- This watch IS the sensor
 -- It defines what the world perceives and how it updates its model
 ```
 
-### 10.2.2 Proximity Sensor (Spatial + Subscription)
+### 10.2.2 Proximity Sensor (Spatial + Watch)
 
 ```
 -- Perceive nearby landmarks
-SUBSCRIBE TO Landmark IN ROOT
+WATCH Landmark IN ROOT
 WHERE distance(Landmark, owner_of(SELF), Physical) < perception_radius()
 [mode: watch]
 ON_CREATE(lm):
@@ -1231,14 +1231,14 @@ ON_DELETE(lm):
   SET lr.last_seen = now()  -- keep stale, don't delete
 
 -- Spatial filtering happens server-side
--- Only nearby landmarks trigger subscription events
+-- Only nearby landmarks trigger watch events
 ```
 
 ### 10.2.3 Selective Sensor (Type-Filtered)
 
 ```
 -- Only perceive specific types
-SUBSCRIBE TO (Landmark | Obstacle | Waypoint) IN ROOT
+WATCH (Landmark | Obstacle | Waypoint) IN ROOT
 WHERE relevance_score(current_scope(), $) > 0.5
 [mode: watch]
 ON_CREATE(entity):
@@ -1251,27 +1251,27 @@ ON_CREATE(entity):
 
 ## 10.3 Sensor Policy Integration
 
-Sensors (subscriptions) are subject to observation policies:
+Sensors (watches) are subject to observation policies:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │              SENSOR POLICIES                                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│   SUBSCRIPTION CREATION                                             │
-│   ─────────────────────                                             │
+│   WATCH CREATION                                                    │
+│   ──────────────                                                    │
 │                                                                      │
-│   When creating a subscription, policy is checked:                  │
-│   • Can current_scope() create subscriptions?                       │
+│   When creating a watch, policy is checked:                         │
+│   • Can current_scope() create watches?                             │
 │   • Can current_scope() MATCH the pattern in target scope?         │
 │                                                                      │
-│   If either fails, subscription creation is denied.                │
+│   If either fails, watch creation is denied.                        │
 │                                                                      │
 │                                                                      │
 │   EVENT FILTERING                                                   │
 │   ───────────────                                                   │
 │                                                                      │
-│   Even with a valid subscription, events are filtered:              │
+│   Even with a valid watch, events are filtered:                     │
 │   • Each event checked against observation policies                │
 │   • Events for unauthorized entities are not delivered             │
 │   • Policies can change over time                                  │
@@ -1280,7 +1280,7 @@ Sensors (subscriptions) are subject to observation policies:
 │   EXAMPLE                                                           │
 │   ───────                                                           │
 │                                                                      │
-│   Agent subscribes to: Landmark IN ROOT                             │
+│   Agent watches: Landmark IN ROOT                                   │
 │   Agent can see: public Landmarks only                             │
 │   Agent receives: CREATE events only for public Landmarks          │
 │                                                                      │
@@ -1665,13 +1665,13 @@ SPAWN ref: RemoteLandmarkRef IN SELF {
 }
 ```
 
-## 14.3 Federation Subscriptions
+## 14.3 Federation Watches
 
-Subscribing across kernels for cross-kernel perception:
+Watching across kernels for cross-kernel perception:
 
 ```
--- Subscribe to remote kernel (via federation bridge)
-SUBSCRIBE TO Landmark IN REMOTE("kernel_b")
+-- Watch remote kernel (via federation bridge)
+WATCH Landmark IN REMOTE("kernel_b")
 WHERE Landmark.shared = true
 [mode: watch]
 ON_CREATE(lm):
@@ -1832,11 +1832,11 @@ ScopeContextFunc =
   | "is_interior" "(" Expr ")"
   | "owner_of" "(" Expr ")"
 
-(* Subscription Extensions *)
-SubscribeStmt = "SUBSCRIBE" "TO" Pattern ScopeSpec? 
-                SubscribeOptions? SubscribeHandlers?
+(* Watch Extensions *)
+WatchStmt = "WATCH" Pattern ScopeSpec? 
+            WatchOptions? WatchHandlers?
 
-SubscribeHandlers = 
+WatchHandlers = 
     OnCreateHandler? OnUpdateHandler? OnDeleteHandler?
 
 OnCreateHandler = "ON_CREATE" "(" Variable ")" ":" ActionBlock
@@ -1928,8 +1928,8 @@ node Navigator [has_interior] {
 -- Create navigator
 SPAWN nav: Navigator { name = "Explorer" }
 
--- Navigator's sensor (subscription to ROOT)
-SUBSCRIBE TO Landmark IN ROOT
+-- Navigator's sensor (watch on ROOT)
+WATCH Landmark IN ROOT
 WHERE distance(Landmark, #nav, Physical) < 100
 [mode: watch]
 ON_CREATE(lm):
@@ -2054,7 +2054,7 @@ SPAWN x: SomeRootType IN ROOT  -- from sandbox context: DENIED
 | **Projection** | Interior node representing an external entity via `represents: ID` |
 | **Scope** | The context in which queries/mutations execute |
 | **IN keyword** | Specifies target scope for operations |
-| **Sensor** | Subscription to external scope for perception |
+| **Sensor** | Watch on external scope for perception |
 | **Actuator** | Mutation to external scope for action |
 
 ## 18.2 Design Principles
@@ -2076,7 +2076,7 @@ SPAWN x: SomeRootType IN ROOT  -- from sandbox context: DENIED
 | **Ontology** | Interior has local ontology; types can shadow |
 | **Policies** | Scope-aware policies; cross-scope grants |
 | **META** | Modify own ontology dynamically |
-| **Subscriptions** | Sensors for perception; projection maintenance |
+| **Watches** | Sensors for perception; projection maintenance |
 | **Time** | Interior as time domain; configurable tick relationship (ratio = slower) |
 | **Space** | Local spaces; reference parent spaces |
 | **Rules** | Scoped execution; actuator pattern for external effects |

@@ -1,4 +1,4 @@
-# MEW Authorization System
+# MEW Policy System
 
 **Version:** 1.0
 **Status:** Specification
@@ -17,11 +17,11 @@ MEW graphs can represent worlds with multiple actors — users, agents, services
 - Admins who can modify system configuration
 - Automated agents with carefully scoped access
 
-Without authorization, any actor can perform any operation. This is unacceptable for real-world systems.
+Without policy, any actor can perform any operation. This is unacceptable for real-world systems.
 
-## 1.2 Why Authorization Is Not Constraints
+## 1.2 Why Policy Is Not Constraints
 
-Constraints and authorization appear similar but differ fundamentally:
+Constraints and policy appear similar but differ fundamentally:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -41,7 +41,7 @@ Constraints and authorization appear similar but differ fundamentally:
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        AUTHORIZATION                                 │
+│                            POLICY                                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  Question: "Is this actor allowed to perform this operation?"       │
@@ -52,20 +52,20 @@ Constraints and authorization appear similar but differ fundamentally:
 │  On fail:  Reject immediately (no mutation attempted)               │
 │                                                                      │
 │  Example:  "Only assignees can modify task status"                  │
-│            authorization: ON SET(t: Task, "status")                 │
-│                           ALLOW IF assigned_to(t, current_actor())  │
+│            policy: ON SET(t: Task, "status")                        │
+│                    ALLOW IF assigned_to(t, current_actor())         │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-The critical difference: **authorization requires execution context** (who is acting), not just graph state.
+The critical difference: **policy requires execution context** (who is acting), not just graph state.
 
 ## 1.3 Design Principles
 
 | Principle | Meaning |
 |-----------|---------|
-| **Enforcement in kernel** | Every operation passes through authorization. Not optional. Not bypassable. |
-| **Definitions in graph** | Authorization rules are graph structure. Queryable. Evolvable. Self-describing. |
+| **Enforcement in kernel** | Every operation passes through policy. Not optional. Not bypassable. |
+| **Definitions in graph** | Policy rules are graph structure. Queryable. Evolvable. Self-describing. |
 | **Policy vs grants** | Policy logic compiles rarely. Grant relationships change constantly. |
 | **Pre-check semantics** | Deny before mutation, not rollback after. |
 | **Explicit actor binding** | Sessions must declare who is acting. No ambient authority. |
@@ -78,7 +78,7 @@ The critical difference: **authorization requires execution context** (who is ac
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      AUTHORIZATION CONCEPTS                          │
+│                        POLICY CONCEPTS                               │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ACTOR                                                              │
@@ -124,7 +124,7 @@ This is the central architectural insight:
 │                                                                      │
 │   "Admins can delete tasks"            "Alice is an admin"          │
 │                                                                      │
-│   authorization admin_delete:          LINK has_role(alice, admin)  │
+│   policy admin_delete:                 LINK has_role(alice, admin)  │
 │     ON KILL(t: Task)                                                │
 │     ALLOW IF has_role(                 ← Policy queries grants      │
 │       current_actor(),                                              │
@@ -165,8 +165,8 @@ Every session operates on behalf of an actor:
 └─────────────────────────────────────────────────────────────────────┘
 
 BEGIN SESSION AS #alice
-  SPAWN t: Task { title = "Test" }    ← Authorized as Alice
-  SET t.status = "done"               ← Authorized as Alice
+  SPAWN t: Task { title = "Test" }    ← Policy checked as Alice
+  SET t.status = "done"               ← Policy checked as Alice
 COMMIT
 ```
 
@@ -174,7 +174,7 @@ Sessions without an actor operate in **system context** — typically unrestrict
 
 ## 3.2 Operation Interception
 
-Authorization evaluates **before** any mutation:
+Policy evaluates **before** any mutation:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -185,7 +185,7 @@ Authorization evaluates **before** any mutation:
 │         │                                                            │
 │         ▼                                                            │
 │   ┌───────────────────────────────────────────────────────────┐    │
-│   │                  AUTHORIZATION CHECK                       │    │
+│   │                     POLICY CHECK                          │    │
 │   │                                                            │    │
 │   │   Extract:  actor      = session.actor                    │    │
 │   │             operation  = "SET"                            │    │
@@ -265,17 +265,17 @@ Policy conditions have access to context beyond the graph:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-These functions are **only valid in authorization conditions** — they require execution context that doesn't exist in normal constraints or rules.
+These functions are **only valid in policy conditions** — they require execution context that doesn't exist in normal constraints or rules.
 
 ---
 
-# Part IV: Authorization DSL
+# Part IV: Policy DSL
 
 ## 4.1 Syntax
 
 ```
-AuthorizationDecl =
-    "authorization" Identifier Modifiers? ":"
+PolicyDecl =
+    "policy" Identifier Modifiers? ":"
     "ON" OperationPattern
     Decision "IF" Condition
     Message?
@@ -301,22 +301,22 @@ Message = "MESSAGE" StringLiteral
 
 ```
 -- Unconditional access for superadmins
-authorization superadmin_bypass [priority: 1000]:
+policy superadmin_bypass [priority: 1000]:
   ON *
   ALLOW IF EXISTS(has_role(current_actor(), r) WHERE r.name = "superadmin")
 
 -- Type-level: only admins can spawn Projects
-authorization admin_create_project:
+policy admin_create_project:
   ON SPAWN(p: Project)
   ALLOW IF has_role(current_actor(), admin_role)
 
 -- Attribute-level: only assignees can change task status
-authorization assignee_set_status:
+policy assignee_set_status:
   ON SET(t: Task, "status")
   ALLOW IF assigned_to(t, current_actor())
 
 -- Resource-level: project members can read project tasks
-authorization member_read_tasks:
+policy member_read_tasks:
   ON MATCH(t: Task)
   ALLOW IF EXISTS(
     p: Project,
@@ -325,25 +325,25 @@ authorization member_read_tasks:
   )
 
 -- Compound: editors can modify, admins can delete
-authorization editor_modify:
+policy editor_modify:
   ON SET(t: Task, _) | LINK(_, t) | UNLINK(_, t)
   ALLOW IF has_project_role(current_actor(), task_project(t), "editor")
 
-authorization admin_delete:
+policy admin_delete:
   ON KILL(t: Task)
   ALLOW IF has_project_role(current_actor(), task_project(t), "admin")
 
 -- META operations: schema access requires elevated permission
-authorization meta_read:
+policy meta_read:
   ON META MATCH(_)
   ALLOW IF has_capability(current_actor(), "schema_read")
 
-authorization meta_write:
+policy meta_write:
   ON META SPAWN(_) | META SET(_) | META LINK(_) | META UNLINK(_)
   ALLOW IF has_capability(current_actor(), "schema_write")
 
 -- Default deny (lowest priority)
-authorization default_deny [priority: -1000]:
+policy default_deny [priority: -1000]:
   ON *
   DENY IF true
   MESSAGE "Permission denied"
@@ -398,7 +398,7 @@ authorization default_deny [priority: -1000]:
 │                                                                      │
 │   Policy:                                                           │
 │   ───────                                                           │
-│   authorization rbac [priority: 100]:                               │
+│   policy rbac [priority: 100]:                                      │
 │     ON *                                                            │
 │     ALLOW IF EXISTS(                                                │
 │       r: Role, p: Permission,                                       │
@@ -428,17 +428,17 @@ authorization default_deny [priority: -1000]:
 │   ─────────────────                                                 │
 │                                                                      │
 │   -- Same department access                                         │
-│   authorization same_department:                                    │
+│   policy same_department:                                           │
 │     ON MATCH(doc: Document)                                         │
 │     ALLOW IF current_actor().department = doc.department            │
 │                                                                      │
 │   -- Clearance-based access                                         │
-│   authorization clearance_check:                                    │
+│   policy clearance_check:                                           │
 │     ON MATCH(doc: Document)                                         │
 │     ALLOW IF current_actor().clearance >= doc.classification        │
 │                                                                      │
 │   -- Time-based restriction                                         │
-│   authorization business_hours:                                     │
+│   policy business_hours:                                            │
 │     ON SET(_, _)                                                    │
 │     DENY IF hour(now()) < 9 OR hour(now()) > 17                     │
 │     MESSAGE "Modifications only during business hours"              │
@@ -459,7 +459,7 @@ authorization default_deny [priority: -1000]:
 │                                                                      │
 │   "Can access task if member of task's project"                     │
 │                                                                      │
-│   authorization project_member_access:                              │
+│   policy project_member_access:                                     │
 │     ON MATCH(t: Task) | SET(t: Task, _)                             │
 │     ALLOW IF EXISTS(                                                │
 │       p: Project,                                                   │
@@ -474,7 +474,7 @@ authorization default_deny [priority: -1000]:
 │                                                                      │
 │   "Can access reports of anyone in your management chain"           │
 │                                                                      │
-│   authorization management_chain:                                   │
+│   policy management_chain:                                          │
 │     ON MATCH(r: Report)                                             │
 │     ALLOW IF EXISTS(                                                │
 │       author: Person,                                               │
@@ -497,7 +497,7 @@ authorization default_deny [priority: -1000]:
 │                                                                      │
 │   edge owned_by(resource: any, owner: Person)                       │
 │                                                                      │
-│   authorization owner_full_access:                                  │
+│   policy owner_full_access:                                         │
 │     ON *                                                            │
 │     ALLOW IF target() != null                                       │
 │       AND EXISTS(owned_by(target(), current_actor()))               │
@@ -515,7 +515,7 @@ authorization default_deny [priority: -1000]:
 │                                                                      │
 │   edge can_delegate(owner: Person, delegate: Person, resource: any) │
 │                                                                      │
-│   authorization delegated_access:                                   │
+│   policy delegated_access:                                          │
 │     ON *                                                            │
 │     ALLOW IF target() != null                                       │
 │       AND EXISTS(can_delegate(_, current_actor(), target()))        │
@@ -529,11 +529,11 @@ authorization default_deny [priority: -1000]:
 
 ## 6.1 Schema Access Control
 
-META operations have their own authorization scope:
+META operations have their own policy scope:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    META AUTHORIZATION LEVELS                         │
+│                      META POLICY LEVELS                              │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   META READ                                                         │
@@ -555,37 +555,37 @@ META operations have their own authorization scope:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## 6.2 Self-Modifying Authorization
+## 6.2 Self-Modifying Policy
 
 The system can reason about and modify its own access control:
 
 ```
 -- Query own permissions
-META MATCH a: _AuthorizationRule
-WHERE policy_affects_type(a, "Task")
-RETURN a.name, a.decision, a.priority
+META MATCH p: _PolicyRule
+WHERE policy_affects_type(p, "Task")
+RETURN p.name, p.decision, p.priority
 
 -- AGI adjusting its own capabilities (with appropriate meta permission)
-META CREATE AUTHORIZATION learned_access_pattern:
+META CREATE POLICY learned_access_pattern:
   ON MATCH(c: LearnedConcept)
   ALLOW IF confidence_above(c, 0.8)
 ```
 
-## 6.3 Authorization for Authorization
+## 6.3 Policy for Policy
 
-Meta-level: who can modify authorization rules?
+Meta-level: who can modify policy rules?
 
 ```
-authorization meta_auth_read:
-  ON META MATCH(a: _AuthorizationRule)
-  ALLOW IF has_capability(current_actor(), "auth_admin")
+policy meta_policy_read:
+  ON META MATCH(p: _PolicyRule)
+  ALLOW IF has_capability(current_actor(), "policy_admin")
 
-authorization meta_auth_write:
-  ON META CREATE AUTHORIZATION(_) | META SET(a: _AuthorizationRule, _)
-  ALLOW IF has_capability(current_actor(), "auth_admin")
+policy meta_policy_write:
+  ON META CREATE POLICY(_) | META SET(p: _PolicyRule, _)
+  ALLOW IF has_capability(current_actor(), "policy_admin")
   
-authorization meta_auth_delete:
-  ON META KILL(a: _AuthorizationRule)
+policy meta_policy_delete:
+  ON META KILL(p: _PolicyRule)
   ALLOW IF has_capability(current_actor(), "root")
 ```
 
@@ -595,7 +595,7 @@ authorization meta_auth_delete:
 
 ## 7.1 Cache Hierarchy
 
-Authorization is on the critical path. Caching is essential:
+Policy is on the critical path. Caching is essential:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -621,17 +621,17 @@ Authorization is on the critical path. Caching is essential:
 │   Key:        (actor, operation, target_type, target_id?)           │
 │   Value:      ALLOW | DENY                                          │
 │   Lifetime:   Transaction or short TTL                              │
-│   Invalidate: Any auth-relevant edge change                         │
+│   Invalidate: Any policy-relevant edge change                       │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 7.2 Cache Invalidation
 
-The kernel tracks which edge types affect authorization:
+The kernel tracks which edge types affect policy:
 
 ```
-Auth-relevant edge types (derived from policy conditions):
+Policy-relevant edge types (derived from policy conditions):
   • has_role
   • role_has_permission
   • member_of
@@ -639,7 +639,7 @@ Auth-relevant edge types (derived from policy conditions):
   • owned_by
   • ...
 
-On LINK/UNLINK of auth-relevant edge:
+On LINK/UNLINK of policy-relevant edge:
   → Invalidate affected cache entries
   → Subsequent operations re-evaluate
 ```
@@ -648,16 +648,16 @@ On LINK/UNLINK of auth-relevant edge:
 
 # Part VIII: Error Model
 
-## 8.1 Authorization Errors
+## 8.1 Policy Errors
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    AUTHORIZATION ERRORS                              │
+│                       POLICY ERRORS                                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   E7001 - PERMISSION_DENIED                                         │
 │   ─────────────────────────                                         │
-│   Operation rejected by authorization policy.                       │
+│   Operation rejected by policy.                                     │
 │                                                                      │
 │   Fields:                                                           │
 │     actor:      The requesting actor                                │
@@ -674,8 +674,8 @@ On LINK/UNLINK of auth-relevant edge:
 │   ─────────────────────                                             │
 │   Bound actor does not exist or is not a valid actor type.         │
 │                                                                      │
-│   E7004 - AUTH_EVAL_ERROR                                           │
-│   ───────────────────────                                           │
+│   E7004 - POLICY_EVAL_ERROR                                         │
+│   ─────────────────────────                                         │
 │   Policy condition failed to evaluate.                              │
 │   (Graph inconsistency, missing data, etc.)                         │
 │                                                                      │
@@ -705,10 +705,10 @@ Error: Permission denied
 
 ## 9.1 Constraints
 
-Authorization runs **before** constraints:
+Policy runs **before** constraints:
 
 ```
-Operation → AUTHORIZATION → Mutation → Constraints → Rules → Commit
+Operation → POLICY → Mutation → Constraints → Rules → Commit
               ↑
               Deny here = no mutation attempted
 ```
@@ -732,22 +732,22 @@ Rules can optionally inherit session authority:
 rule user_triggered_action [inherit_authority]:
   t: Task WHERE t.status = "approved"
   =>
-  LINK published(t, ...)      ← Authorized as session actor
+  LINK published(t, ...)      ← Policy checked as session actor
 ```
 
 ## 9.3 Transactions
 
-Authorization is checked **per operation**, not per transaction:
+Policy is checked **per operation**, not per transaction:
 
 ```
 BEGIN
-  SPAWN t: Task { ... }       ← Auth check
-  SET t.priority = 5          ← Auth check  
-  LINK belongs_to(t, p)       ← Auth check
+  SPAWN t: Task { ... }       ← Policy check
+  SET t.priority = 5          ← Policy check  
+  LINK belongs_to(t, p)       ← Policy check
 COMMIT
 ```
 
-Each operation independently authorized. Transaction commits only if all pass.
+Each operation independently checked. Transaction commits only if all pass.
 
 ---
 
@@ -755,27 +755,27 @@ Each operation independently authorized. Transaction commits only if all pass.
 
 ## 10.1 v1 Anticipation
 
-Authorization is deferred to v2, but v1 must anticipate:
+Policy is deferred to v2, but v1 must anticipate:
 
 | Element | v1 Requirement |
 |---------|----------------|
 | Session.actor | Field exists, optional, unused |
 | Pre-check hook | Method exists, returns Ok(()) |
 | EvalContext | Struct exists with optional fields |
-| Registry | Extensible for future auth rules |
+| Registry | Extensible for future policy rules |
 
 ## 10.2 v2 Implementation
 
-Full authorization system:
+Full policy system:
 
 | Element | v2 Delivery |
 |---------|-------------|
-| Authorization DSL | Parser, compiler support |
-| _AuthorizationRule | Layer 0 type |
-| Policy evaluation | Auth component |
+| Policy DSL | Parser, compiler support |
+| _PolicyRule | Layer 0 type |
+| Policy evaluation | Policy component |
 | Context functions | current_actor(), etc. |
 | Caching | Multi-level cache system |
-| META integration | Auth for schema operations |
+| META integration | Policy for schema operations |
 
 ## 10.3 Future Extensions
 
@@ -784,7 +784,7 @@ Full authorization system:
 | Row-level security | Automatic MATCH filtering by policy |
 | Capability delegation | Actors granting subsets of their access |
 | Temporal policies | Time-bounded access grants |
-| Audit integration | Authorization decisions in audit log |
+| Audit integration | Policy decisions in audit log |
 | Policy simulation | "What if" analysis for policy changes |
 
 ---
@@ -792,13 +792,13 @@ Full authorization system:
 # Appendix A: Complete Grammar
 
 ```ebnf
-(* Authorization Declarations *)
-AuthDecl         = "authorization" Identifier AuthMods? ":" 
+(* Policy Declarations *)
+PolicyDecl       = "policy" Identifier PolicyMods? ":" 
                    "ON" OpPattern 
                    Decision "IF" Expr 
                    Message?
 
-AuthMods         = "[" "priority:" IntLiteral "]"
+PolicyMods       = "[" "priority:" IntLiteral "]"
 
 OpPattern        = "*"
                  | OpType
@@ -813,7 +813,7 @@ Decision         = "ALLOW" | "DENY"
 
 Message          = "MESSAGE" StringLiteral
 
-(* Context Functions - valid only in authorization conditions *)
+(* Context Functions - valid only in policy conditions *)
 ContextFunc      = "current_actor" "(" ")"
                  | "operation" "(" ")"
                  | "target" "(" ")"
@@ -830,7 +830,7 @@ SessionStmt      = "BEGIN" "SESSION" "AS" NodeRef
 # Appendix B: Layer 0 Extensions
 
 ```
-node _AuthorizationRule {
+node _PolicyRule {
   name: String [required, unique],
   priority: Int = 0,
   decision: String [in: ["allow", "deny"]],
@@ -844,19 +844,19 @@ node _OperationPattern {
   target_attr: String?       -- for SET
 }
 
-edge _auth_has_pattern(
-  rule: _AuthorizationRule, 
+edge _policy_has_pattern(
+  rule: _PolicyRule, 
   pattern: _OperationPattern
 )
 
-edge _auth_has_condition(
-  rule: _AuthorizationRule, 
+edge _policy_has_condition(
+  rule: _PolicyRule, 
   condition: _Expr
 )
 
-edge _ontology_declares_auth(
+edge _ontology_declares_policy(
   ontology: _Ontology, 
-  rule: _AuthorizationRule
+  rule: _PolicyRule
 )
 ```
 
@@ -867,19 +867,18 @@ edge _ontology_declares_auth(
 | Term | Definition |
 |------|------------|
 | **Actor** | Entity performing operations; bound to session |
-| **Authorization** | Determining if an actor may perform an operation |
+| **Policy** | Rule defining when operations are allowed or denied |
 | **Grant** | Edge conferring capability; runtime data |
-| **Policy** | Rule defining access; compiled schema |
 | **Decision** | ALLOW or DENY outcome |
-| **Execution context** | Actor + operation + target; available in auth conditions |
-| **Pre-check** | Authorization evaluation before mutation |
+| **Execution context** | Actor + operation + target; available in policy conditions |
+| **Pre-check** | Policy evaluation before mutation |
 | **System authority** | Operations not attributed to any actor |
 
 ---
 
-Let me think through what observation authorization should look like if we're matching reality.
+# Part XI: Observation Policy
 
-## The Core Intuition
+## 11.1 The Core Intuition
 
 In the physical world:
 - I can only see what I have access to
@@ -887,27 +886,23 @@ In the physical world:
 - My view of the world is naturally filtered by my access
 - Counting things means counting what I can perceive
 
-This suggests: **Observation authorization is filtering, not gating.**
+This suggests: **Observation policy is filtering, not gating.**
 
 The query runs. Results are filtered to what the actor can see. No errors for "unauthorized" rows — they simply don't appear in results.
 
----
-
-## Draft: Observation Authorization Specification
-
-### 1. Filtering Semantics
+## 11.2 Filtering Semantics
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                  OBSERVATION AUTHORIZATION MODEL                     │
+│                  OBSERVATION POLICY MODEL                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│   Observation authorization is FILTERING, not GATING.               │
+│   Observation policy is FILTERING, not GATING.                      │
 │                                                                      │
 │   User query:                                                       │
 │     MATCH t: Task WHERE t.priority > 5 RETURN t                     │
 │                                                                      │
-│   Authorization policy:                                             │
+│   Policy:                                                           │
 │     ON MATCH(t: Task)                                               │
 │     ALLOW IF EXISTS(p: Project, belongs_to(t, p),                   │
 │                     member_of(current_actor(), p))                  │
@@ -924,9 +919,9 @@ The query runs. Results are filtered to what the actor can see. No errors for "u
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Authorization predicates **compose into the query**, not wrap it.
+Policy predicates **compose into the query**, not wrap it.
 
-### 2. Three Levels of Observation Authorization
+## 11.3 Three Levels of Observation Policy
 
 | Level | Question | Enforcement | Example |
 |-------|----------|-------------|---------|
@@ -934,28 +929,28 @@ Authorization predicates **compose into the query**, not wrap it.
 | **Instance-level** | Which instances can actor see? | Query predicate injection | "Users see tasks in their projects" |
 | **Attribute-level** | Which attributes are visible? | Result projection | "Users see task.title but not task.internal_score" |
 
-### 3. Syntax Distinction
+## 11.4 Syntax Distinction
 
 ```
 -- Type-level: condition does NOT reference the bound variable
-authorization no_audit_for_guests:
+policy no_audit_for_guests:
   ON MATCH(_: AuditLog)
   ALLOW IF has_role(current_actor(), r) WHERE r.name != "guest"
 
 -- Instance-level: condition REFERENCES the bound variable  
-authorization project_member_sees_tasks:
+policy project_member_sees_tasks:
   ON MATCH(t: Task)
   ALLOW IF EXISTS(p: Project, belongs_to(t, p), member_of(current_actor(), p))
 
 -- Attribute-level: new syntax for attribute projection
-authorization hide_internal_score:
+policy hide_internal_score:
   ON MATCH(t: Task).internal_score
   DENY IF NOT has_role(current_actor(), "analyst")
 ```
 
 Type-level policies gate. Instance-level policies filter. Attribute-level policies project.
 
-### 4. Policy Composition for Filtering
+## 11.5 Policy Composition for Filtering
 
 When multiple instance-level policies apply:
 
@@ -986,9 +981,9 @@ When multiple instance-level policies apply:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5. Edge Visibility
+## 11.6 Edge Visibility
 
-Edges require their own authorization, not derivation from nodes:
+Edges require their own policy, not derivation from nodes:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1000,9 +995,9 @@ Edges require their own authorization, not derivation from nodes:
 │   Default: Edge visible only if ALL targets visible                 │
 │            (prevents information leakage about hidden nodes)        │
 │                                                                      │
-│   Override: Explicit edge authorization can relax this              │
+│   Override: Explicit edge policy can relax this                     │
 │                                                                      │
-│   authorization see_public_connections:                             │
+│   policy see_public_connections:                                    │
 │     ON MATCH(e: follows)                                            │
 │     ALLOW IF follows(current_actor(), source(e))                    │
 │     -- Can see who your followees follow, even if you can't see     │
@@ -1011,7 +1006,7 @@ Edges require their own authorization, not derivation from nodes:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 6. Aggregate Semantics
+## 11.7 Aggregate Semantics
 
 Aggregates operate on the **filtered** result set:
 
@@ -1019,7 +1014,7 @@ Aggregates operate on the **filtered** result set:
 User query:
   MATCH t: Task RETURN COUNT(t)
 
-With authorization filtering to 3 of 10 total tasks:
+With policy filtering to 3 of 10 total tasks:
   Result: 3
 
 NOT 10. NOT "access denied". The actor's world contains 3 tasks.
@@ -1027,28 +1022,28 @@ NOT 10. NOT "access denied". The actor's world contains 3 tasks.
 
 This is the only coherent semantics — aggregates reflect what you can see.
 
-### 7. Query Planning Integration
+## 11.8 Query Planning Integration
 
-Authorization predicates inject at planning time, not as post-filters:
+Policy predicates inject at planning time, not as post-filters:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                 QUERY PLANNING WITH AUTHORIZATION                    │
+│                  QUERY PLANNING WITH POLICY                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   User query:  MATCH t: Task WHERE t.priority > 5                   │
 │                                                                      │
-│   Auth policy: ALLOW IF EXISTS(belongs_to(t, p),                    │
+│   Policy:      ALLOW IF EXISTS(belongs_to(t, p),                    │
 │                               member_of(current_actor(), p))        │
 │                                                                      │
 │   Naive (post-filter):                                              │
 │     1. Fetch all Tasks where priority > 5                           │
-│     2. For each, check authorization                                │
-│     3. Filter out unauthorized                                      │
+│     2. For each, check policy                                       │
+│     3. Filter out hidden                                            │
 │     → Wasteful: fetches rows just to discard them                   │
 │                                                                      │
 │   Optimized (predicate injection):                                  │
-│     1. Rewrite query to include auth joins                          │
+│     1. Rewrite query to include policy joins                        │
 │     2. Plan combined query with indexes                             │
 │     3. Execute once, results are already filtered                   │
 │                                                                      │
@@ -1057,12 +1052,12 @@ Authorization predicates inject at planning time, not as post-filters:
 │     IndexScan(belongs_to, project IN project_ids) → task_ids       │
 │     IndexScan(Task, id IN task_ids, priority > 5)                   │
 │                                                                      │
-│   Authorization becomes part of the access path, not a filter.     │
+│   Policy becomes part of the access path, not a filter.             │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 8. The Existence Problem
+## 11.9 The Existence Problem
 
 Subtle case: Can the actor know something exists even if they can't see its content?
 
@@ -1084,7 +1079,7 @@ Subtle case: Can the actor know something exists even if they can't see its cont
 │   MEW default: Option A (full filtering)                            │
 │                                                                      │
 │   Explicit override possible:                                       │
-│     authorization existence_visible:                                │
+│     policy existence_visible:                                       │
 │       ON MATCH(t: Task).existence    ← special attribute            │
 │       ALLOW IF true                                                 │
 │                                                                      │
@@ -1094,9 +1089,9 @@ Subtle case: Can the actor know something exists even if they can't see its cont
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 9. WALK and Transitive Authorization
+## 11.10 WALK and Transitive Policy
 
-Path traversal has authorization at each hop:
+Path traversal has policy at each hop:
 
 ```
 WALK FROM #start FOLLOW follows [depth: 3] RETURN PATH
@@ -1110,7 +1105,7 @@ If either fails, that branch terminates (not error — just no further traversal
 Result: The subgraph reachable within actor's visibility.
 ```
 
-### 10. Implementation Phases
+## 11.11 Implementation Phases
 
 | Phase | Scope | Complexity |
 |-------|-------|------------|
@@ -1125,7 +1120,7 @@ Result: The subgraph reachable within actor's visibility.
 
 ## Open Question
 
-One thing I'm uncertain about: **silent filtering vs. explicit indication**.
+One thing uncertain: **silent filtering vs. explicit indication**.
 
 Should the actor know their view is filtered?
 
@@ -1151,4 +1146,4 @@ MATCH t: Task RETURN t WITH VISIBILITY_INFO
 -- Returns results + { total: 10, visible: 3, filtered: true }
 ```
 
-*End of MEW Authorization System Specification*
+*End of MEW Policy System Specification*
