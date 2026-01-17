@@ -126,23 +126,26 @@ RETURN p.content, p.visibility
 -- ---------------------------------------------------------------------------
 
 --# test_query_alice_friends
-MATCH friend_of(#alice, friend)
-RETURN friend.username
+MATCH u1: User, u2: User, friend_of(u1, u2)
+WHERE u1.username = "alice"
+RETURN u2.username
 
 --# test_query_followers
-MATCH follows(follower, #alice)
-RETURN follower.username
+MATCH u1: User, u2: User, follows(u1, u2)
+WHERE u2.username = "alice"
+RETURN u1.username
 
 --# test_query_group_members
-MATCH member_of(user, #devs) AS m
-RETURN user.username, m.role
+MATCH u: User, g: Group, member_of(u, g) AS m
+WHERE g.name = "Developers"
+RETURN u.username, m.role
 
 -- ---------------------------------------------------------------------------
 -- Update: User profile
 -- ---------------------------------------------------------------------------
 
 --# test_update_bio
-SET #alice { bio = "Updated bio: Open source advocate" }
+SET #alice.bio = "Updated bio: Open source advocate"
 
 --# test_verify_update
 MATCH u: User WHERE u.username = "alice"
@@ -153,10 +156,8 @@ RETURN u.bio
 -- ---------------------------------------------------------------------------
 
 --# test_edit_post
-SET #pub_post {
-  content = "Just launched my new project! Edit: Now with more features!",
-  edited_at = now()
-}
+SET #pub_post.content = "Just launched my new project! Edit: Now with more features!"
+SET #pub_post.edited_at = now()
 
 -- ---------------------------------------------------------------------------
 -- Cleanup
