@@ -1,7 +1,15 @@
 name: "Scenarios: Verify"
 
 # Verifies scenario/test pairs after merges.
-# Creates a verification PR, then runs agents to check assertions.
+# Phase 1 (push): Creates a verification PR with the scenarios/needs-verify label
+# Phase 2 (label): Runs Claude agent to verify assertions
+# Phase 3 (label): Independent confirmation of fixes
+
+# NOTE: The verify/confirm phases require label events because claude-code-action
+# only supports PR-related events. The label added in Phase 1 doesn't trigger
+# Phase 2 due to GITHUB_TOKEN limitations. Toggle the label manually to trigger,
+# or use: gh pr edit <number> --remove-label "scenarios/needs-verify" && \
+#         gh pr edit <number> --add-label "scenarios/needs-verify"
 
 on:
   push:
@@ -29,7 +37,6 @@ jobs:
     outputs:
       pr_number: ${{ steps.create-pr.outputs.pr_number }}
       has_changes: ${{ steps.detect.outputs.has_changes }}
-      matrix: ${{ steps.detect.outputs.matrix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -69,130 +76,84 @@ jobs:
 
           if [ -z "$PAIRS" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
           else
-            MATRIX='{"include":['
-            FIRST=true
-            for PAIR in $PAIRS; do
-              LEVEL=$(echo "$PAIR" | cut -d: -f1)
-              ONTOLOGY=$(echo "$PAIR" | cut -d: -f2)
-              if [ "$FIRST" = true ]; then
-                FIRST=false
-              else
-                MATRIX="$MATRIX,"
-              fi
-              MATRIX="$MATRIX{\"level\":\"$LEVEL\",\"ontology\":\"$ONTOLOGY\"}"
-            done
-            MATRIX="$MATRIX]}"
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-            echo "Detected changes: $MATRIX"
+            echo "pairs=$PAIRS" >> $GITHUB_OUTPUT
+            echo "Detected changes: $PAIRS"
           fi
 
       - name: Create verification PR
         id: create-pr
         if: steps.detect.outputs.has_changes == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const { execSync } = require('child_process');
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-            // Configure git
-            execSync('git config user.name "github-actions[bot]"');
-            execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
+          # Create branch
+          BRANCH="verify/scenarios-$(date +%s)"
+          git checkout -b "$BRANCH"
 
-            // Create branch
-            const branch = `verify/scenarios-${Date.now()}`;
-            execSync(`git checkout -b ${branch}`);
+          # Create empty commit to trigger PR
+          git commit --allow-empty -m "chore: trigger scenario verification"
+          git push -u origin "$BRANCH"
 
-            // Create empty commit to trigger PR
-            execSync('git commit --allow-empty -m "chore: trigger scenario verification"');
-            execSync(`git push -u origin ${branch}`);
+          # Create PR
+          PAIRS="${{ steps.detect.outputs.pairs }}"
+          BODY="## Scenario Verification
 
-            // Create PR with matrix info in body
-            const matrix = ${{ steps.detect.outputs.matrix }};
-            const pairs = matrix.include.map(m => `- level-${m.level}/${m.ontology}`).join('\n');
+          Checking assertions for:
+          $(for PAIR in $PAIRS; do
+            LEVEL=$(echo "$PAIR" | cut -d: -f1)
+            ONTOLOGY=$(echo "$PAIR" | cut -d: -f2)
+            echo "- level-$LEVEL/$ONTOLOGY"
+          done)
 
-            const { data: pr } = await github.rest.pulls.create({
-              owner,
-              repo,
-              title: 'verify: scenario assertions',
-              head: branch,
-              base: 'main',
-              body: `## Scenario Verification
+          This PR will be auto-closed after verification.
 
-            Checking assertions for:
-            ${pairs}
+          ---
+          To trigger verification manually:
+          \`\`\`
+          gh pr edit <number> --remove-label scenarios/needs-verify
+          gh pr edit <number> --add-label scenarios/needs-verify
+          \`\`\`"
 
-            This PR will be auto-closed after verification.`
-            });
+          PR_URL=$(gh pr create --title "verify: scenario assertions" --body "$BODY" --base main --head "$BRANCH")
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
 
-            // Add label to trigger verification
-            await github.rest.issues.addLabels({
-              owner,
-              repo,
-              issue_number: pr.number,
-              labels: ['scenarios/needs-verify']
-            });
+          # Add label
+          gh pr edit "$PR_NUMBER" --add-label "scenarios/needs-verify"
 
-            core.setOutput('pr_number', pr.number);
-            console.log(`Created verification PR #${pr.number}`);
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "Created verification PR #$PR_NUMBER"
 
-  # Phase 2: Run verification agents
-  # Triggered either by create-verification-pr completing OR by label event
+      - name: Trigger verification workflow
+        if: steps.detect.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.create-pr.outputs.pr_number }}"
+
+          # Wait a moment for PR to be fully created
+          sleep 3
+
+          # Toggle the label to trigger the verification workflow
+          # This works because gh CLI operations with user token CAN trigger workflows
+          gh pr edit "$PR_NUMBER" --remove-label "scenarios/needs-verify" || true
+          sleep 1
+          gh pr edit "$PR_NUMBER" --add-label "scenarios/needs-verify"
+
+          echo "Triggered verification for PR #$PR_NUMBER"
+
+  # Phase 2: On label, run verification agents
   verify:
-    needs: [create-verification-pr]
     if: |
-      always() && (
-        (github.event_name == 'push' && needs.create-verification-pr.outputs.has_changes == 'true') ||
-        (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'scenarios/needs-verify'))
-      )
+      github.event_name == 'pull_request_target' &&
+      contains(github.event.pull_request.labels.*.name, 'scenarios/needs-verify')
     runs-on: ubuntu-latest
     steps:
-      - name: Get PR info (from push)
-        if: github.event_name == 'push'
-        id: pr-from-push
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // Wait for PR to be available
-            await new Promise(r => setTimeout(r, 5000));
-
-            const prNumber = ${{ needs.create-verification-pr.outputs.pr_number || 0 }};
-            if (!prNumber) {
-              core.setFailed('No PR number available');
-              return;
-            }
-
-            const { owner, repo } = context.repo;
-            const { data: pr } = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: prNumber
-            });
-
-            core.setOutput('pr_number', prNumber);
-            core.setOutput('head_ref', pr.head.ref);
-
-      - name: Get PR info (from label)
-        if: github.event_name == 'pull_request_target'
-        id: pr-from-label
-        run: |
-          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-          echo "head_ref=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
-
-      - name: Set PR context
-        id: pr
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "number=${{ steps.pr-from-push.outputs.pr_number }}" >> $GITHUB_OUTPUT
-            echo "head_ref=${{ steps.pr-from-push.outputs.head_ref }}" >> $GITHUB_OUTPUT
-          else
-            echo "number=${{ steps.pr-from-label.outputs.pr_number }}" >> $GITHUB_OUTPUT
-            echo "head_ref=${{ steps.pr-from-label.outputs.head_ref }}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout main
         uses: actions/checkout@v6
         with:
@@ -262,7 +223,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const prNumber = ${{ steps.pr.outputs.number }};
+            const prNumber = context.payload.pull_request.number;
             const { execSync } = require('child_process');
 
             // Check if any files were modified
@@ -331,8 +292,6 @@ jobs:
             }
 
   # Phase 3: Confirm fixes independently
-  # Note: This only triggers via label event (confirm phase doesn't chain from verify
-  # because we want an independent agent for the double-check)
   confirm:
     if: |
       github.event_name == 'pull_request_target' &&
