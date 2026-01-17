@@ -141,6 +141,12 @@ impl<'r> Evaluator<'r> {
             Value::NodeRef(node_id) => {
                 // Get the attribute from the node
                 if let Some(node) = graph.get_node(node_id) {
+                    // Validate that the attribute exists on the type schema
+                    if let Some(type_def) = self.registry.get_type(node.type_id) {
+                        if !type_def.has_attr(attr) {
+                            return Err(PatternError::unknown_attribute(attr, &type_def.name));
+                        }
+                    }
                     Ok(node.get_attr(attr).cloned().unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -149,6 +155,12 @@ impl<'r> Evaluator<'r> {
             Value::EdgeRef(edge_id) => {
                 // Get the attribute from the edge
                 if let Some(edge) = graph.get_edge(edge_id) {
+                    // Validate that the attribute exists on the edge type schema
+                    if let Some(edge_def) = self.registry.get_edge_type(edge.type_id) {
+                        if edge_def.get_attr(attr).is_none() {
+                            return Err(PatternError::unknown_attribute(attr, &edge_def.name));
+                        }
+                    }
                     Ok(edge.get_attr(attr).cloned().unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -184,8 +196,8 @@ impl<'r> Evaluator<'r> {
             BinaryOp::Mod => self.eval_mod(&left_val, &right_val),
 
             // Comparison
-            BinaryOp::Eq => Ok(Value::Bool(self.values_equal(&left_val, &right_val))),
-            BinaryOp::NotEq => Ok(Value::Bool(!self.values_equal(&left_val, &right_val))),
+            BinaryOp::Eq => self.eval_eq(&left_val, &right_val),
+            BinaryOp::NotEq => self.eval_neq(&left_val, &right_val),
             BinaryOp::Lt => self.eval_lt(&left_val, &right_val),
             BinaryOp::LtEq => self.eval_lte(&left_val, &right_val),
             BinaryOp::Gt => self.eval_gt(&left_val, &right_val),
@@ -700,18 +712,51 @@ impl<'r> Evaluator<'r> {
 
     // ========== Comparison helpers ==========
 
-    fn values_equal(&self, left: &Value, right: &Value) -> bool {
+    fn eval_eq(&self, left: &Value, right: &Value) -> PatternResult<Value> {
         match (left, right) {
-            (Value::Null, Value::Null) => true,
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Int(a), Value::Int(b)) => a == b,
-            (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
-            (Value::Int(a), Value::Float(b)) => (*a as f64 - b).abs() < f64::EPSILON,
-            (Value::Float(a), Value::Int(b)) => (a - *b as f64).abs() < f64::EPSILON,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::NodeRef(a), Value::NodeRef(b)) => a == b,
-            (Value::EdgeRef(a), Value::EdgeRef(b)) => a == b,
-            _ => false,
+            // Null equality: null = null is true (IS NULL semantics)
+            (Value::Null, Value::Null) => Ok(Value::Bool(true)),
+            // Non-null compared with null: returns false (like IS NULL check failing)
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Bool(false)),
+            (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a == b)),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool((a - b).abs() < f64::EPSILON)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64 - b).abs() < f64::EPSILON)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool((a - *b as f64).abs() < f64::EPSILON)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
+            (Value::NodeRef(a), Value::NodeRef(b)) => Ok(Value::Bool(a == b)),
+            (Value::EdgeRef(a), Value::EdgeRef(b)) => Ok(Value::Bool(a == b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a == b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a == b)),
+            (Value::List(a), Value::List(b)) => Ok(Value::Bool(a == b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} = {:?}",
+                left, right
+            ))),
+        }
+    }
+
+    fn eval_neq(&self, left: &Value, right: &Value) -> PatternResult<Value> {
+        match (left, right) {
+            // Null inequality: null != null is false
+            (Value::Null, Value::Null) => Ok(Value::Bool(false)),
+            // Non-null compared with null: returns true (not IS NULL)
+            (Value::Null, _) | (_, Value::Null) => Ok(Value::Bool(true)),
+            (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a != b)),
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a != b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool((a - b).abs() >= f64::EPSILON)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64 - b).abs() >= f64::EPSILON)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool((a - *b as f64).abs() >= f64::EPSILON)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
+            (Value::NodeRef(a), Value::NodeRef(b)) => Ok(Value::Bool(a != b)),
+            (Value::EdgeRef(a), Value::EdgeRef(b)) => Ok(Value::Bool(a != b)),
+            (Value::Timestamp(a), Value::Timestamp(b)) => Ok(Value::Bool(a != b)),
+            (Value::Duration(a), Value::Duration(b)) => Ok(Value::Bool(a != b)),
+            (Value::List(a), Value::List(b)) => Ok(Value::Bool(a != b)),
+            _ => Err(PatternError::type_error(format!(
+                "cannot compare {:?} != {:?}",
+                left, right
+            ))),
         }
     }
 

@@ -14,7 +14,7 @@ pub enum PatternError {
     MissingParameter { name: String },
 
     /// Type mismatch in expression.
-    #[error("Type error: {message}")]
+    #[error("type error: {message}")]
     TypeError { message: String },
 
     /// Unknown type name.

@@ -323,7 +323,7 @@ impl<'r> QueryPlanner<'r> {
                     let edge_type_id = self
                         .registry
                         .get_edge_type_id(&ep.edge_type)
-                        .ok_or_else(|| QueryError::unknown_type(&ep.edge_type))?;
+                        .ok_or_else(|| QueryError::unknown_edge_type(&ep.edge_type))?;
 
                     if let Some(p) = plan {
                         plan = Some(PlanOp::EdgeJoin {
