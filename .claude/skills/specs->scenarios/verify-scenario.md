@@ -4,6 +4,18 @@ Your goal: verify that a scenario's expected outputs are actually correct.
 
 This runs after every `/expand-scenarios`. A test with wrong expectations is worse than no test—it creates false confidence or masks real bugs.
 
+## Scope: Operation Files Only
+
+You will be given specific operation file(s) to verify. Each file is at:
+`examples/level-N/ontology-name/operations/operation-name.mew`
+
+For each operation file, you need to verify:
+1. The corresponding test file's assertions match
+
+The test file is at: `mew/tests/tests/levelN_ontology-name.rs`
+
+**ONLY verify the operations in the files you're given.** Do not verify the entire ontology.
+
 ## The Core Question
 
 For every operation in the scenario:

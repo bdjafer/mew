@@ -43,43 +43,41 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Detect changed ontologies
+      - name: Detect changed operation files
         id: detect
         run: |
           # Get changed files
           CHANGED=$(git diff --name-only HEAD~1 HEAD)
 
-          # Extract unique level/ontology pairs
-          PAIRS=""
+          # Collect specific operation files that changed
+          FILES=""
 
           for file in $CHANGED; do
-            if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/ ]]; then
-              LEVEL="${BASH_REMATCH[1]}"
-              ONTOLOGY="${BASH_REMATCH[2]}"
-              PAIR="${LEVEL}:${ONTOLOGY}"
-              if [[ ! "$PAIRS" =~ "$PAIR" ]]; then
-                PAIRS="$PAIRS $PAIR"
+            # Match operation files: examples/level-N/ontology/operations/name.mew
+            if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/operations/([^/]+)\.mew$ ]]; then
+              if [[ ! "$FILES" =~ "$file" ]]; then
+                FILES="$FILES $file"
               fi
             fi
-          done
-
-          for file in $CHANGED; do
+            # Match test files: mew/tests/tests/levelN_ontology.rs
             if [[ "$file" =~ ^mew/tests/tests/level([0-9]+)_([^.]+)\.rs$ ]]; then
               LEVEL="${BASH_REMATCH[1]}"
               ONTOLOGY="${BASH_REMATCH[2]}"
-              PAIR="${LEVEL}:${ONTOLOGY}"
-              if [[ ! "$PAIRS" =~ "$PAIR" ]]; then
-                PAIRS="$PAIRS $PAIR"
-              fi
+              # Find corresponding operation files for this test
+              for opfile in examples/level-$LEVEL/$ONTOLOGY/operations/*.mew; do
+                if [ -f "$opfile" ] && [[ ! "$FILES" =~ "$opfile" ]]; then
+                  FILES="$FILES $opfile"
+                fi
+              done
             fi
           done
 
-          if [ -z "$PAIRS" ]; then
+          if [ -z "$FILES" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "pairs=$PAIRS" >> $GITHUB_OUTPUT
-            echo "Detected changes: $PAIRS"
+            echo "files=$FILES" >> $GITHUB_OUTPUT
+            echo "Detected operation files: $FILES"
           fi
 
       - name: Create verification PR
@@ -101,14 +99,12 @@ jobs:
           git push -u origin "$BRANCH"
 
           # Create PR
-          PAIRS="${{ steps.detect.outputs.pairs }}"
+          FILES="${{ steps.detect.outputs.files }}"
           BODY="## Scenario Verification
 
           Checking assertions for:
-          $(for PAIR in $PAIRS; do
-            LEVEL=$(echo "$PAIR" | cut -d: -f1)
-            ONTOLOGY=$(echo "$PAIR" | cut -d: -f2)
-            echo "- level-$LEVEL/$ONTOLOGY"
+          $(for FILE in $FILES; do
+            echo "- \`$FILE\`"
           done)
 
           This PR will be auto-closed after verification.
@@ -163,44 +159,48 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Detect ontologies to verify
+      - name: Detect operation files to verify
         id: detect
         run: |
           # Get changed files from the merge that created this PR
           CHANGED=$(git diff --name-only HEAD~1 HEAD)
 
-          PAIRS=""
+          FILES=""
           for file in $CHANGED; do
-            if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/ ]]; then
-              PAIR="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"
-              if [[ ! "$PAIRS" =~ "$PAIR" ]]; then
-                PAIRS="$PAIRS $PAIR"
+            # Match operation files
+            if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/operations/([^/]+)\.mew$ ]]; then
+              if [[ ! "$FILES" =~ "$file" ]]; then
+                FILES="$FILES $file"
               fi
             fi
+            # Match test files - find corresponding operations
             if [[ "$file" =~ ^mew/tests/tests/level([0-9]+)_([^.]+)\.rs$ ]]; then
-              PAIR="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"
-              if [[ ! "$PAIRS" =~ "$PAIR" ]]; then
-                PAIRS="$PAIRS $PAIR"
-              fi
+              LEVEL="${BASH_REMATCH[1]}"
+              ONTOLOGY="${BASH_REMATCH[2]}"
+              for opfile in examples/level-$LEVEL/$ONTOLOGY/operations/*.mew; do
+                if [ -f "$opfile" ] && [[ ! "$FILES" =~ "$opfile" ]]; then
+                  FILES="$FILES $opfile"
+                fi
+              done
             fi
           done
 
-          echo "pairs=$PAIRS" >> $GITHUB_OUTPUT
+          echo "files=$FILES" >> $GITHUB_OUTPUT
 
       - name: Load skill prompt
         id: skill
         run: |
-          PAIRS="${{ steps.detect.outputs.pairs }}"
+          FILES="${{ steps.detect.outputs.files }}"
           {
             echo "prompt<<SKILL_EOF"
             echo "# Scenario Verification"
             echo ""
-            echo "Verify the following ontologies:"
-            for PAIR in $PAIRS; do
-              LEVEL=$(echo "$PAIR" | cut -d: -f1)
-              ONTOLOGY=$(echo "$PAIR" | cut -d: -f2)
-              echo "- Level $LEVEL: $ONTOLOGY"
+            echo "Verify ONLY the following operation files (do NOT verify other files):"
+            for FILE in $FILES; do
+              echo "- \`$FILE\`"
             done
+            echo ""
+            echo "For each file, verify that the test assertions match what the operations should produce."
             echo ""
             cat ".claude/skills/specs->scenarios/verify-scenario.md"
             echo "SKILL_EOF"
