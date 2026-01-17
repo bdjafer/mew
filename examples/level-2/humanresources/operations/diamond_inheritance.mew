@@ -1,0 +1,101 @@
+-- ===========================================================================
+-- OPERATIONS: Diamond Inheritance
+-- DESCRIPTION: Tests diamond inheritance resolution where attributes come from
+--              common ancestor through multiple inheritance paths
+-- FEATURES: declarations/node.md (Diamond Resolution)
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Diamond Structure:
+--         Trackable (tracked_by, tracking_notes)
+--           /    \
+--      Billable  Scheduled
+--           \    /
+--        BillableEvent
+--
+-- The attribute 'tracked_by' is inherited via BOTH Billable and Scheduled
+-- Diamond resolution: the attribute should appear only once
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Test creating BillableEvent - uses attributes from all ancestors
+-- ---------------------------------------------------------------------------
+
+--# test_diamond_spawn_billable_event
+SPAWN diamond_event: BillableEvent {
+  event_name = "Diamond Test Meeting",
+  event_type = "meeting",
+  tracked_by = "System",
+  tracking_notes = "Testing diamond inheritance",
+  billing_rate = 150.00,
+  billing_code = "MEET-001",
+  scheduled_at = now(),
+  duration_minutes = 90
+}
+
+--# test_diamond_verify_event_created
+MATCH e: BillableEvent WHERE e.event_name = "Diamond Test Meeting"
+RETURN e.event_name, e.tracked_by, e.billing_rate, e.duration_minutes
+
+-- ---------------------------------------------------------------------------
+-- Test that Trackable attributes work correctly (only one copy)
+-- ---------------------------------------------------------------------------
+
+--# test_diamond_set_tracked_by
+MATCH e: BillableEvent WHERE e.event_name = "Diamond Test Meeting"
+SET e.tracked_by = "Updated Tracker"
+
+--# test_diamond_verify_single_tracked_by
+MATCH e: BillableEvent WHERE e.event_name = "Diamond Test Meeting"
+RETURN e.tracked_by, e.tracking_notes
+
+-- ---------------------------------------------------------------------------
+-- Test querying as each ancestor type (polymorphism)
+-- ---------------------------------------------------------------------------
+
+--# test_diamond_query_as_trackable
+MATCH t: Trackable WHERE t.tracked_by = "Updated Tracker"
+RETURN t.tracked_by
+
+--# test_diamond_query_as_billable
+MATCH b: Billable WHERE b.billing_code = "MEET-001"
+RETURN b.billing_rate
+
+--# test_diamond_query_as_scheduled
+MATCH s: Scheduled WHERE s.duration_minutes = 90
+RETURN s.scheduled_at
+
+-- ---------------------------------------------------------------------------
+-- Test spawning intermediate types directly
+-- ---------------------------------------------------------------------------
+
+--# test_diamond_spawn_billable_only
+SPAWN billable_item: Billable {
+  tracked_by = "Billing System",
+  billing_rate = 100.00,
+  billing_code = "BILL-001"
+}
+
+--# test_diamond_spawn_scheduled_only
+SPAWN scheduled_item: Scheduled {
+  tracked_by = "Calendar System",
+  scheduled_at = now(),
+  duration_minutes = 30
+}
+
+--# test_diamond_verify_intermediate_types
+MATCH t: Trackable WHERE t.tracked_by IN ["Billing System", "Calendar System"]
+RETURN t.tracked_by
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_diamond_cleanup_event
+MATCH e: BillableEvent WHERE e.event_name = "Diamond Test Meeting" KILL e
+
+--# test_diamond_cleanup_billable
+MATCH b: Billable WHERE b.billing_code = "BILL-001" KILL b
+
+--# test_diamond_cleanup_scheduled
+MATCH s: Scheduled WHERE s.duration_minutes = 30 AND s.tracked_by = "Calendar System" KILL s

@@ -1,0 +1,67 @@
+-- ===========================================================================
+-- OPERATIONS: Policy & Authorization
+-- DESCRIPTION: Tests policy declarations and session management
+-- FEATURES: declarations/policy.md, expressions/context_functions.md,
+--           statements/session.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create actors for policy testing
+-- ---------------------------------------------------------------------------
+
+--# test_policy_setup_person_alice
+SPAWN alice: Person {
+  name = "Alice Admin",
+  email = "alice@example.com"
+}
+
+--# test_policy_setup_person_bob
+SPAWN bob: Person {
+  name = "Bob User",
+  email = "bob@example.com"
+}
+
+-- ---------------------------------------------------------------------------
+-- BEGIN SESSION: Bind actor to session
+-- ---------------------------------------------------------------------------
+
+--# test_begin_session_alice
+BEGIN SESSION AS #alice
+
+--# test_verify_session_active
+SPAWN alice_task: Task {
+  title = "Task created by Alice",
+  status = "todo",
+  priority = 3
+}
+
+--# test_end_session_alice
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- current_actor(): Access the current session actor
+-- This function is only valid in policy conditions
+-- ---------------------------------------------------------------------------
+
+--# test_begin_session_bob
+BEGIN SESSION AS #bob
+
+--# test_bob_create_task
+SPAWN bob_task: Task {
+  title = "Task created by Bob",
+  status = "todo",
+  priority = 5
+}
+
+--# test_end_session_bob
+END SESSION
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_policy_cleanup_tasks
+MATCH t: Task WHERE t.title STARTS WITH "Task created by" KILL t
+
+--# test_policy_cleanup_people
+MATCH p: Person WHERE p.email IN ["alice@example.com", "bob@example.com"] KILL p

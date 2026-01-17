@@ -1,0 +1,85 @@
+-- ===========================================================================
+-- OPERATIONS: Administration Commands
+-- DESCRIPTION: Tests SHOW statements and INDEX management
+-- FEATURES: statements/admin.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SHOW TYPES: List all node types in the ontology
+-- ---------------------------------------------------------------------------
+
+--# test_show_types
+SHOW TYPES
+
+-- ---------------------------------------------------------------------------
+-- SHOW TYPE: Show details of a specific type
+-- ---------------------------------------------------------------------------
+
+--# test_show_type_task
+SHOW TYPE Task
+
+--# test_show_type_subtask
+SHOW TYPE SubTask
+
+--# test_show_type_tag
+SHOW TYPE Tag
+
+-- ---------------------------------------------------------------------------
+-- SHOW EDGES: List all edge types in the ontology
+-- ---------------------------------------------------------------------------
+
+--# test_show_edges
+SHOW EDGES
+
+-- ---------------------------------------------------------------------------
+-- SHOW EDGE: Show details of a specific edge
+-- ---------------------------------------------------------------------------
+
+--# test_show_edge_subtask_of
+SHOW EDGE subtask_of
+
+--# test_show_edge_tagged
+SHOW EDGE tagged
+
+--# test_show_edge_blocks
+SHOW EDGE blocks
+
+-- ---------------------------------------------------------------------------
+-- SHOW CONSTRAINTS: List all constraints
+-- ---------------------------------------------------------------------------
+
+--# test_show_constraints
+SHOW CONSTRAINTS
+
+-- ---------------------------------------------------------------------------
+-- SHOW INDEXES: List all indexes
+-- ---------------------------------------------------------------------------
+
+--# test_show_indexes
+SHOW INDEXES
+
+-- ---------------------------------------------------------------------------
+-- CREATE INDEX: Create an index for query optimization
+-- ---------------------------------------------------------------------------
+
+--# test_create_index_priority
+CREATE INDEX task_priority_idx ON Task(priority)
+
+--# test_create_index_status
+CREATE INDEX task_status_idx ON Task(status)
+
+--# test_verify_indexes_created
+SHOW INDEXES
+
+-- ---------------------------------------------------------------------------
+-- DROP INDEX: Remove an index
+-- ---------------------------------------------------------------------------
+
+--# test_drop_index_priority
+DROP INDEX task_priority_idx
+
+--# test_drop_index_status
+DROP INDEX task_status_idx
+
+--# test_verify_indexes_dropped
+SHOW INDEXES

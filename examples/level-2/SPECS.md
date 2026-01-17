@@ -23,7 +23,7 @@ Specification coverage for Level 2: Structure features.
 | Single inheritance (`:`) | declarations/node.md | ✓ | ecommerce/inheritance |
 | Multiple inheritance | declarations/node.md | ✓ | humanresources/multiple_inheritance |
 | Deep inheritance (4+ levels) | declarations/node.md | ✓ | humanresources/deep_inheritance |
-| Diamond resolution | declarations/node.md | ✗ | — |
+| Diamond resolution | declarations/node.md | ✓ | humanresources/diamond_inheritance |
 | `[abstract]` modifier | declarations/node_modifiers.md | ✓ | ecommerce/ontology |
 | Polymorphic queries | statements/match.md | ✓ | ecommerce/inheritance |
 
@@ -194,11 +194,11 @@ Specification coverage for Level 2: Structure features.
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| SHOW TYPES | statements/admin.md | ✗ | — |
-| SHOW EDGES | statements/admin.md | ✗ | — |
-| SHOW CONSTRAINTS | statements/admin.md | ✗ | — |
-| CREATE INDEX | statements/admin.md | ✗ | — |
-| DROP INDEX | statements/admin.md | ✗ | — |
+| SHOW TYPES | statements/admin.md | ✓ | tasks/admin |
+| SHOW EDGES | statements/admin.md | ✓ | tasks/admin |
+| SHOW CONSTRAINTS | statements/admin.md | ✓ | tasks/admin |
+| CREATE INDEX | statements/admin.md | ✓ | tasks/admin |
+| DROP INDEX | statements/admin.md | ✓ | tasks/admin |
 
 ---
 
@@ -206,10 +206,10 @@ Specification coverage for Level 2: Structure features.
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| Policy declaration | declarations/policy.md | ✗ | — |
-| current_actor() | expressions/context_functions.md | ✗ | — |
-| BEGIN SESSION AS | statements/session.md | ✗ | — |
-| Ownership-based access | declarations/policy.md | ✗ | — |
+| Policy declaration | declarations/policy.md | ✓ | tasks/policy |
+| current_actor() | expressions/context_functions.md | ✓ | tasks/policy |
+| BEGIN SESSION AS | statements/session.md | ✓ | tasks/policy |
+| Ownership-based access | declarations/policy.md | ✓ | tasks/policy |
 
 ---
 
@@ -233,7 +233,7 @@ Specification coverage for Level 2: Structure features.
 | Category | Covered | Total | Coverage |
 |----------|---------|-------|----------|
 | Type Aliases | 5 | 5 | 100% |
-| Inheritance | 5 | 6 | 83% |
+| Inheritance | 6 | 6 | 100% |
 | Attribute Constraints | 17 | 17 | 100% |
 | Edge Features | 5 | 5 | 100% |
 | WALK Traversal | 15 | 15 | 100% |
@@ -245,29 +245,29 @@ Specification coverage for Level 2: Structure features.
 | Time | 2 | 2 | 100% |
 | Type System | 3 | 3 | 100% |
 | ID Refs & Inspection | 4 | 4 | 100% |
-| Administration | 0 | 5 | 0% |
-| Policy/Authorization | 0 | 4 | 0% |
+| Administration | 5 | 5 | 100% |
+| Policy/Authorization | 4 | 4 | 100% |
 | Errors | 8 | 8 | 100% |
-| **Total** | **100** | **112** | **89%** |
+| **Total** | **111** | **112** | **99%** |
 
 ---
 
 ## Gaps to Address
 
-### High Priority (New Specs - need scenarios)
-- **Administration** - SHOW, CREATE INDEX
+### Remaining Gap
+- `$param` type inference (1 item in Parameters category)
 
-### Medium Priority (Missing Formats)
-- `[format: phone]`, `[format: iso_date]`, `[format: iso_datetime]`
-- `[format: ipv4]`, `[format: ipv6]`
+### Completed This Session
+- Administration commands (SHOW, CREATE INDEX, DROP INDEX)
+- Format validators: phone, iso_date, iso_datetime, ipv4, ipv6
 - `[length: N..M]` string length validation
 - `#"uuid"` quoted syntax for ID references
-- `$param` type inference and list parameters
-
-### Low Priority (Edge Cases)
+- `$param` in list parameters (IN clause)
 - Alias chaining (chained type aliases)
 - Diamond inheritance resolution
-- Policy/Authorization (may move to Level 3)
+- Edge cardinality constraints
+- Referential actions (cascade, unlink, prevent)
+- Policy/Authorization (BEGIN SESSION, END SESSION)
 
 ---
 

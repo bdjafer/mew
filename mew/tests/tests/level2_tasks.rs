@@ -477,3 +477,77 @@ mod referential_actions {
     }
 }
 
+mod admin {
+    use super::*;
+
+    /// Tests administration commands: SHOW and INDEX management
+    /// Note: These commands are not yet implemented in the parser.
+    /// Tests expect parse errors until the feature is added.
+    pub fn scenario() -> Scenario {
+        Scenario::new("admin")
+            .ontology("level-2/tasks/ontology.mew")
+            .operations("level-2/tasks/operations/admin.mew")
+            // SHOW TYPES - not yet parsed
+            .step("test_show_types", |a| a.error("parse"))
+            // SHOW TYPE - not yet parsed
+            .step("test_show_type_task", |a| a.error("parse"))
+            .step("test_show_type_subtask", |a| a.error("parse"))
+            .step("test_show_type_tag", |a| a.error("parse"))
+            // SHOW EDGES - not yet parsed
+            .step("test_show_edges", |a| a.error("parse"))
+            // SHOW EDGE - not yet parsed
+            .step("test_show_edge_subtask_of", |a| a.error("parse"))
+            .step("test_show_edge_tagged", |a| a.error("parse"))
+            .step("test_show_edge_blocks", |a| a.error("parse"))
+            // SHOW CONSTRAINTS - not yet parsed
+            .step("test_show_constraints", |a| a.error("parse"))
+            // SHOW INDEXES - not yet parsed
+            .step("test_show_indexes", |a| a.error("parse"))
+            // CREATE INDEX - not yet parsed
+            .step("test_create_index_priority", |a| a.error("parse"))
+            .step("test_create_index_status", |a| a.error("parse"))
+            .step("test_verify_indexes_created", |a| a.error("parse"))
+            // DROP INDEX - not yet parsed
+            .step("test_drop_index_priority", |a| a.error("parse"))
+            .step("test_drop_index_status", |a| a.error("parse"))
+            .step("test_verify_indexes_dropped", |a| a.error("parse"))
+    }
+
+    #[test]
+    fn test_admin_commands() {
+        scenario().run().unwrap();
+    }
+}
+
+mod policy {
+    use super::*;
+
+    /// Tests policy declarations and session management.
+    /// Note: Many features are not yet implemented in the parser.
+    /// Tests expect parse errors until the features are added.
+    pub fn scenario() -> Scenario {
+        Scenario::new("policy")
+            .ontology("level-2/tasks/ontology.mew")
+            .operations("level-2/tasks/operations/policy.mew")
+            // Setup actors
+            .step("test_policy_setup_person_alice", |a| a.created(1))
+            .step("test_policy_setup_person_bob", |a| a.created(1))
+            // BEGIN SESSION - not yet parsed
+            .step("test_begin_session_alice", |a| a.error("parse"))
+            .step("test_verify_session_active", |a| a.created(1))
+            .step("test_end_session_alice", |a| a.error("parse"))
+            // Another session
+            .step("test_begin_session_bob", |a| a.error("parse"))
+            .step("test_bob_create_task", |a| a.created(1))
+            .step("test_end_session_bob", |a| a.error("parse"))
+            // Cleanup
+            .step("test_policy_cleanup_tasks", |a| a.deleted(2))
+            .step("test_policy_cleanup_people", |a| a.deleted(2))
+    }
+
+    #[test]
+    fn test_policy_operations() {
+        scenario().run().unwrap();
+    }
+}
+

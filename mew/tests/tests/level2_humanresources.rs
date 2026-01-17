@@ -535,3 +535,40 @@ mod cardinality {
     }
 }
 
+mod diamond_inheritance {
+    use super::*;
+
+    /// Tests diamond inheritance resolution where an attribute is inherited
+    /// through multiple paths from a common ancestor.
+    /// Structure: Trackable -> Billable + Scheduled -> BillableEvent
+    /// The attribute 'tracked_by' comes from Trackable via both parents.
+    pub fn scenario() -> Scenario {
+        Scenario::new("diamond_inheritance")
+            .ontology("level-2/humanresources/ontology.mew")
+            .operations("level-2/humanresources/operations/diamond_inheritance.mew")
+            // Create BillableEvent - uses attributes from all ancestors
+            .step("test_diamond_spawn_billable_event", |a| a.created(1))
+            .step("test_diamond_verify_event_created", |a| a.rows(1))
+            // Verify Trackable attributes work (only one copy)
+            .step("test_diamond_set_tracked_by", |a| a.modified(1))
+            .step("test_diamond_verify_single_tracked_by", |a| a.rows(1))
+            // Query as each ancestor type (polymorphism)
+            .step("test_diamond_query_as_trackable", |a| a.rows(1))
+            .step("test_diamond_query_as_billable", |a| a.rows(1))
+            .step("test_diamond_query_as_scheduled", |a| a.rows(1))
+            // Spawn intermediate types
+            .step("test_diamond_spawn_billable_only", |a| a.created(1))
+            .step("test_diamond_spawn_scheduled_only", |a| a.created(1))
+            .step("test_diamond_verify_intermediate_types", |a| a.rows(2))
+            // Cleanup
+            .step("test_diamond_cleanup_event", |a| a.deleted(1))
+            .step("test_diamond_cleanup_billable", |a| a.deleted(1))
+            .step("test_diamond_cleanup_scheduled", |a| a.deleted(1))
+    }
+
+    #[test]
+    fn test_diamond_inheritance_resolution() {
+        scenario().run().unwrap();
+    }
+}
+

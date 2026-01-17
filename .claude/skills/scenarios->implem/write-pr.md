@@ -76,7 +76,7 @@ If the test passes the first assertion but fails on a DIFFERENT one → that's s
 
 ## FINALIZE (ALWAYS DO THIS)
 
-**CRITICAL: Always commit and push your work, even if incomplete.**
+**CRITICAL: Always commit, push, mark ready, and add label. Never leave a PR in limbo.**
 
 1. **Commit your changes**:
    ```bash
@@ -95,24 +95,30 @@ If the test passes the first assertion but fails on a DIFFERENT one → that's s
    git push
    ```
 
-3. **If the test passes completely**, mark ready for review:
+3. **Update PR body with progress summary**:
+   ```bash
+   gh pr edit --body "## Summary
+
+   <what you changed and why>
+
+   ## Progress
+
+   - [x] <assertion that now passes>
+   - [ ] <other assertions if any still fail>
+
+   ## Status
+
+   <COMPLETE if test fully passes, PARTIAL if only some assertions pass>"
+   ```
+
+4. **ALWAYS mark ready and add label** (even for partial progress):
    ```bash
    gh pr ready
    gh pr edit --add-label "agent/needs-review"
    ```
 
-4. **If partial progress** (some assertions pass, others fail):
-   - Keep PR as draft
-   - Update PR body with progress summary
-   - DO NOT close the PR — partial progress is valuable
-   ```bash
-   gh pr edit --body "## Progress
-
-   Fixed: <what now works>
-   Remaining: <what still fails>
-
-   This PR makes incremental progress. Another agent can continue."
-   ```
+The review step will determine if the PR is ready to merge or needs more work.
+**Never leave a PR as draft without a label — that breaks the workflow.**
 
 ## CONSTRAINTS
 

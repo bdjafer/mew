@@ -247,4 +247,35 @@ ontology HumanResources {
 
   edge approved_by(doc: ApprovalDocument, approver: Manager) [doc -> 1..3]
 
+  -- =========================================================================
+  -- DIAMOND INHERITANCE (Level 2)
+  -- Tests attribute resolution when inherited through multiple paths
+  -- =========================================================================
+
+  --- Common ancestor with a tracking field
+  node Trackable {
+    tracked_by: String?,
+    tracking_notes: String?
+  }
+
+  --- Billable extends Trackable (path 1)
+  node Billable : Trackable {
+    billing_rate: Float [>= 0] = 0.0,
+    billing_code: String?
+  }
+
+  --- Scheduled extends Trackable (path 2)
+  node Scheduled : Trackable {
+    scheduled_at: Timestamp?,
+    duration_minutes: Int [>= 0] = 60
+  }
+
+  --- Diamond: BillableEvent inherits Trackable attributes through BOTH paths
+  --- The attribute 'tracked_by' comes from Trackable via Billable AND Scheduled
+  --- Diamond resolution: appears only once with compatible type
+  node BillableEvent : Billable, Scheduled {
+    event_name: String [required],
+    event_type: String [in: ["meeting", "training", "consultation"]] = "meeting"
+  }
+
 }
