@@ -1,4 +1,4 @@
-# MEW Storage Specification
+# MEW Storage Pattern
 
 **Version:** 1.0
 **Status:** Draft
