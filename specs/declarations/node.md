@@ -31,7 +31,7 @@ AttributeDecl    = DocComment? Identifier ":" TypeExpr AttrModifiers? DefaultVal
 
 AttrModifiers    = "[" AttrModifier ("," AttrModifier)* "]"
 
-AttrModifier     = "required" | "unique"
+AttrModifier     = "required" | "unique" | "readonly"
                  | "indexed" (":" ("asc" | "desc"))?
                  | ">=" Literal | "<=" Literal | ">" Literal | "<" Literal
                  | IntLiteral ".." IntLiteral
@@ -60,6 +60,7 @@ DocComment       = "---" Text Newline
 | `sealed` | Modifier - node type cannot be inherited from |
 | `required` | Attribute modifier - value must be non-null |
 | `unique` | Attribute modifier - value must be unique across instances |
+| `readonly` | Attribute modifier - value cannot be modified after creation |
 | `indexed` | Attribute modifier - create index for efficient lookup |
 
 ### Examples
@@ -90,11 +91,17 @@ node Document : Named, Timestamped {
   content: String
 }
 
+-- Readonly attribute (cannot be modified after creation)
+node Bookmark {
+  url: String [required],
+  created_at: Timestamp [readonly] = now()
+}
+
 -- Abstract node type
 [abstract]
 node Entity {
   id: String [required, unique],
-  created_at: Timestamp = now()
+  created_at: Timestamp [readonly] = now()
 }
 
 -- Sealed node type
@@ -242,6 +249,7 @@ _AttributeDef:
   name: String          -- attribute name
   required: Bool        -- whether required
   unique: Bool          -- whether unique
+  readonly: Bool        -- whether readonly (immutable after creation)
   indexed: String       -- "none" | "asc" | "desc"
   default_value: Any?   -- serialized default or null
   doc: String?          -- documentation comment
@@ -417,3 +425,4 @@ node Person {
 | Invalid format name | Unknown format `<name>`, expected one of: email, url, uuid, slug, phone, iso_date, iso_datetime, ipv4, ipv6 |
 | Invalid range | Range minimum `<min>` is greater than maximum `<max>` |
 | Invalid default value type | Default value type `<actual>` does not match attribute type `<expected>` |
+| Modify readonly attribute | Cannot modify readonly attribute: `<attr>` on type `<type>` |

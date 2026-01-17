@@ -16,6 +16,8 @@ pub struct AttrDef {
     pub nullable: bool,
     /// Whether this attribute must be unique across instances.
     pub unique: bool,
+    /// Whether this attribute is readonly (cannot be modified after creation).
+    pub readonly: bool,
     /// Default value if not provided.
     pub default: Option<Value>,
     /// Minimum value constraint (for Int, Float).
@@ -42,6 +44,7 @@ impl AttrDef {
             required: false,
             nullable: false,
             unique: false,
+            readonly: false,
             default: None,
             min: None,
             max: None,
@@ -65,6 +68,11 @@ impl AttrDef {
 
     pub fn unique(mut self) -> Self {
         self.unique = true;
+        self
+    }
+
+    pub fn readonly(mut self) -> Self {
+        self.readonly = true;
         self
     }
 

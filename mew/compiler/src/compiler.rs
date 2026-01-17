@@ -245,6 +245,11 @@ impl Compiler {
                             ),
                         });
                     }
+                    AttrModifier::Readonly => {
+                        attr = attr.readonly();
+                        // Readonly is enforced at SET time by the mutation executor
+                        // No constraint needed - it's a mutation-time check
+                    }
                     AttrModifier::Default(expr) => {
                         // For now, only handle simple literals
                         if let Some(value) = expr_to_value(expr) {
@@ -399,6 +404,9 @@ impl Compiler {
                     }
                     AttrModifier::Unique => {
                         attr = attr.unique();
+                    }
+                    AttrModifier::Readonly => {
+                        attr = attr.readonly();
                     }
                     AttrModifier::Default(expr) => {
                         if let Some(value) = expr_to_value(expr) {

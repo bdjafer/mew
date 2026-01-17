@@ -620,6 +620,8 @@ pub struct AttrDef {
 pub enum AttrModifier {
     Required,
     Unique,
+    /// readonly - attribute cannot be modified after creation
+    Readonly,
     Default(Expr),
     Range {
         min: Option<Expr>,
