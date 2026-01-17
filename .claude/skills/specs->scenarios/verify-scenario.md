@@ -12,6 +12,21 @@ For every operation in the scenario:
 
 Not "does it look reasonable." Not "does it compile." **Is it correct per the spec?**
 
+## CRITICAL: Never Trust Existing Assertions
+
+**Both the `.mew` annotations AND the test file assertions can be wrong.** That's literally what you're checking.
+
+DO NOT:
+- Look at the test file's `.rows(N)` assertions first
+- Assume `.mew` annotations are correct
+- Use "matches the test" as verification
+- Trust comments like "Updated based on actual data"
+
+DO:
+- Derive every expected value independently from first principles
+- Only compare your derivation to assertions AFTER you've computed the answer
+- If your derivation disagrees with assertions, YOUR derivation wins (re-check it once)
+
 ## Verification Process
 
 1. **Read the ontology** (`ontology.mew`). Understand:
@@ -22,18 +37,39 @@ Not "does it look reasonable." Not "does it compile." **Is it correct per the sp
 
 2. **Read the seed data** (`seeds/*.mew`). Know exactly what exists before the operation runs.
 
-3. **For each operation**, trace through manually:
-   - What nodes/edges exist before?
-   - What does the operation do step by step?
-   - What should exist after?
-   - What should the RETURN clause produce?
+3. **For each non-trivial operation**, write a FULL DERIVATION:
 
-4. **Compare your trace to the expected output**. Check:
-   - Correct node/edge counts in mutation effects
-   - Correct attribute values in query results
-   - Correct error type and message for failure cases
-   - Correct ordering if ORDER BY is used
-   - Correct aggregation results (COUNT, SUM, etc.)
+```
+## test_name
+
+**Query:**
+[the query]
+
+**Before state:**
+- List relevant nodes/edges that exist
+
+**Step-by-step execution:**
+- Step 1: MATCH finds X
+- Step 2: WALK/FILTER does Y
+- Step 3: Each intermediate result
+
+**Final result:**
+| column | value |
+|--------|-------|
+| ...    | ...   |
+
+**Rows returned: N**
+```
+
+4. **AFTER deriving**, compare to both `.mew` annotation and test assertion:
+   - If both match your derivation: ✓ Verified
+   - If either differs: After triple checking your derivation, fix the wrong assertion(s).
+
+5. **For complex operations, spawn a subagent for independent verification:**
+   - Give the subagent ONLY: the query, ontology, and seed data
+   - Do NOT share your derivation or the existing assertions
+   - Ask: "What should this query return? Show full derivation."
+   - Compare their derivation to yours — if they differ, investigate before proceeding
 
 ## Common Mistakes to Catch
 
@@ -44,15 +80,32 @@ Not "does it look reasonable." Not "does it compile." **Is it correct per the sp
 - **Aggregation errors**: Wrong SUM/AVG math, COUNT including nulls incorrectly
 - **Ordering assumptions**: Expected order doesn't match ORDER BY clause
 - **ID assumptions**: Hardcoded IDs that depend on execution order
+- **UNTIL/termination logic**: Walk stops at FIRST match, not all matches
+- **TERMINAL vs NODES**: TERMINAL returns where walk stopped, NODES returns all visited
 
-## Output
+## Output Format
 
-For each operation in the scenario:
-- ✓ Verified correct — with brief reasoning
-- ✗ Incorrect — what's wrong, what it should be, fix applied
+For trivial operations (simple SPAWN, obvious KILL):
+- ✓ Verified — one-line reasoning
 
-If you find errors: fix them immediately. A scenario with wrong expectations must not be committed.
+For non-trivial operations (WALK, aggregations, filters, joins):
+- Show full derivation table
+- ✓ Verified OR ✗ Incorrect with fix
 
 ## The Standard
 
-You are the last line of defense before a bad test enters the suite. Be meticulous. Trace every value. Trust nothing—verify everything.
+You are the last line of defense before a bad test enters the suite.
+
+**Derive. Don't trust. Show your work.**
+
+If you catch yourself writing "matches the test assertion" without a derivation, STOP. You're not verifying—you're rubber-stamping.
+
+## ⚠️ Tests Must Reflect Correct Behavior — Even If Implementation Doesn't Exist
+
+A test expects what the system SHOULD return according to the spec, not what it currently returns.
+
+- If a feature isn't implemented → the test should expect correct behavior → test will FAIL → that's correct
+- If a feature is buggy → the test should expect correct behavior → test will FAIL → that's correct
+- NEVER set expectations based on "what the implementation currently does"
+
+The only valid source of truth for expected values is the SPEC, not the implementation.
