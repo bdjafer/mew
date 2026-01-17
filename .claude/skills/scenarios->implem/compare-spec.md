@@ -137,6 +137,7 @@ gh pr edit --remove-label "agent/needs-review"
 - Don't just analyze - execute the commands
 - The workflow depends on labels being set correctly
 - Every outcome (passed, failed, revision) MUST result in label updates
+- **STOP immediately after updating labels** - do not continue with other work
 
 ## CONSTRAINTS
 

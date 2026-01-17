@@ -58,3 +58,4 @@ gh pr edit --remove-label "agent/needs-review"
 - You MUST run the gh commands to post comments and update labels
 - Don't just analyze - execute the commands
 - The workflow depends on labels being set correctly
+- **STOP immediately after updating labels** - do not continue with other work
