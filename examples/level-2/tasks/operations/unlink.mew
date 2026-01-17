@@ -48,15 +48,16 @@ SPAWN unlink_st: SubTask {
 --@ expect:ok
 
 --# test_setup_create_links
-MATCH t1: Task, t2: Task, t3: Task, tag: Tag, st: SubTask
+-- Note: Using #unlink_st alias because inherited attribute lookup (st.title) not implemented
+MATCH t1: Task, t2: Task, t3: Task, tag: Tag
 WHERE t1.title = "Unlink Task 1" AND t2.title = "Unlink Task 2" AND t3.title = "Unlink Task 3"
-AND tag.name = "unlink_test" AND st.title = "Unlink SubTask"
+AND tag.name = "unlink_test"
 LINK tagged(t1, tag)
 LINK tagged(t2, tag)
 LINK tagged(t3, tag)
 LINK blocks(t1, t2)
 LINK blocks(t2, t3)
-LINK subtask_of(st, t1)
+LINK subtask_of(#unlink_st, t1)
 --@ expect:ok
 
 -- ---------------------------------------------------------------------------
