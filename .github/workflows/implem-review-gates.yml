@@ -45,6 +45,7 @@ jobs:
           claude_args: |
             --model claude-opus-4-5-20251101
             --max-turns 20
+            --allowedTools Bash,Read,Glob,Grep
 
   spec-compliance:
     if: |
@@ -76,6 +77,7 @@ jobs:
           claude_args: |
             --model claude-opus-4-5-20251101
             --max-turns 30
+            --allowedTools Bash,Read,Glob,Grep,Edit,Write
 
   # Check if both gates passed and mark ready to merge
   check-merge-ready:
