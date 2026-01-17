@@ -139,14 +139,61 @@ jobs:
             core.setOutput('pr_number', pr.number);
             console.log(`Created verification PR #${pr.number}`);
 
-  # Phase 2: On label, run verification agents
+  # Phase 2: Run verification agents
+  # Triggered either by create-verification-pr completing OR by label event
   verify:
+    needs: [create-verification-pr]
     if: |
-      github.event_name == 'pull_request_target' &&
-      contains(github.event.pull_request.labels.*.name, 'scenarios/needs-verify')
+      always() && (
+        (github.event_name == 'push' && needs.create-verification-pr.outputs.has_changes == 'true') ||
+        (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'scenarios/needs-verify'))
+      )
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Get PR info (from push)
+        if: github.event_name == 'push'
+        id: pr-from-push
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Wait for PR to be available
+            await new Promise(r => setTimeout(r, 5000));
+
+            const prNumber = ${{ needs.create-verification-pr.outputs.pr_number || 0 }};
+            if (!prNumber) {
+              core.setFailed('No PR number available');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber
+            });
+
+            core.setOutput('pr_number', prNumber);
+            core.setOutput('head_ref', pr.head.ref);
+
+      - name: Get PR info (from label)
+        if: github.event_name == 'pull_request_target'
+        id: pr-from-label
+        run: |
+          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "head_ref=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
+
+      - name: Set PR context
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "number=${{ steps.pr-from-push.outputs.pr_number }}" >> $GITHUB_OUTPUT
+            echo "head_ref=${{ steps.pr-from-push.outputs.head_ref }}" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ steps.pr-from-label.outputs.pr_number }}" >> $GITHUB_OUTPUT
+            echo "head_ref=${{ steps.pr-from-label.outputs.head_ref }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout main
         uses: actions/checkout@v6
         with:
           ref: main
@@ -215,7 +262,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const prNumber = context.payload.pull_request.number;
+            const prNumber = ${{ steps.pr.outputs.number }};
             const { execSync } = require('child_process');
 
             // Check if any files were modified
@@ -284,6 +331,8 @@ jobs:
             }
 
   # Phase 3: Confirm fixes independently
+  # Note: This only triggers via label event (confirm phase doesn't chain from verify
+  # because we want an independent agent for the double-check)
   confirm:
     if: |
       github.event_name == 'pull_request_target' &&
@@ -295,6 +344,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Load confirm skill
         id: skill
