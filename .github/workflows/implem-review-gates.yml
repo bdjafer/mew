@@ -41,6 +41,7 @@ jobs:
         with:
           prompt: ${{ steps.skill.outputs.prompt }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
             --model claude-opus-4-5-20251101
             --max-turns 20
@@ -71,8 +72,9 @@ jobs:
         with:
           prompt: ${{ steps.skill.outputs.prompt }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
-            --model claude-sonnet-4-5-20250929
+            --model claude-opus-4-5-20251101
             --max-turns 30
 
   # Check if both gates passed and mark ready to merge
