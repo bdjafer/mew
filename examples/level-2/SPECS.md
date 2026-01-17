@@ -2,166 +2,273 @@
 
 Specification coverage for Level 2: Structure features.
 
-## Schema Features
+---
+
+## Schema: Type Aliases
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| Type aliases | 3_SCHEMA.md §2 | ✓ | ecommerce/type_aliases |
-| Type alias with [match:] | 3_SCHEMA.md §2.3.1 | ✓ | ecommerce/type_aliases |
-| Type alias with [in:] | 3_SCHEMA.md §2.3.1 | ✓ | ecommerce/type_aliases |
-| Type alias with [>= N]/[<= M] | 3_SCHEMA.md §2.3.1 | ✓ | ecommerce/type_aliases |
-| Alias chaining | 3_SCHEMA.md §2.3.3 | ✗ | — |
-| Single inheritance (`:`) | 3_SCHEMA.md §4.3.2 | ✓ | ecommerce/inheritance |
-| Multiple inheritance | 3_SCHEMA.md §4.3.3 | ✓ | humanresources/multiple_inheritance |
-| Deep inheritance (4+ levels) | 3_SCHEMA.md §4.3 | ✓ | humanresources/deep_inheritance |
-| Diamond resolution | 3_SCHEMA.md §4.3.4 | ✗ | — |
-| [unique] constraint | 3_SCHEMA.md §5.3.2 | ✓ | ecommerce/uniqueness |
-| [indexed] modifier | 3_SCHEMA.md §5.3.3 | ✓ | ecommerce/type_aliases |
-| [format: email] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_validation |
-| [format: url] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_validation |
-| [format: uuid] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_validation |
-| [format: slug] | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_slug |
-| [format: phone] | 3_SCHEMA.md §5.3.7 | ✗ | — |
-| [format: iso_date] | 3_SCHEMA.md §5.3.7 | ✗ | — |
-| [format: iso_datetime] | 3_SCHEMA.md §5.3.7 | ✗ | — |
-| [format: ipv4] | 3_SCHEMA.md §5.3.7 | ✗ | — |
-| [format: ipv6] | 3_SCHEMA.md §5.3.7 | ✗ | — |
-| [match: "regex"] | 3_SCHEMA.md §5.3.8 | ✓ | ecommerce/type_aliases |
-| [in: [...]] enum | 3_SCHEMA.md §5.3.6 | ✓ | ecommerce/type_aliases |
-| [>= N] constraint | 3_SCHEMA.md §5.3.4 | ✓ | ecommerce/type_aliases |
-| [<= M] constraint | 3_SCHEMA.md §5.3.4 | ✓ | ecommerce/type_aliases |
-| Range [N..M] constraint | 3_SCHEMA.md §5.3.5 | ✓ | ecommerce/type_aliases |
-| [length: N..M] | 3_SCHEMA.md §5.3.9 | ✗ | — |
-| [no_self] edge modifier | 3_SCHEMA.md §6.3.2 | ✓ | humanresources/no_self |
-| Edge attributes | 3_SCHEMA.md §6.6 | ✓ | humanresources/edge_attributes |
-| Edge attribute defaults | 3_SCHEMA.md §6.6.1 | ✓ | humanresources/edge_attributes |
+| Type alias definition | declarations/type_alias.md | ✓ | ecommerce/type_aliases |
+| Type alias with [match:] | modifiers/regex_validation.md | ✓ | ecommerce/type_aliases |
+| Type alias with [in:] | modifiers/enum_constraint.md | ✓ | ecommerce/type_aliases |
+| Type alias with [>= N]/[<= M] | modifiers/range_constraint.md | ✓ | ecommerce/type_aliases |
+| Alias chaining | declarations/type_alias.md | ✗ | — |
 
-## Query Features
+---
+
+## Schema: Inheritance
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| WALK FROM node ID | 4_QUERIES.md §3.4.1 | ✓ | humanresources/walk_traversal |
-| WALK FROM MATCH result | 4_QUERIES.md §3.4.2 | ✓ | humanresources/walk_traversal |
-| FOLLOW single edge type | 4_QUERIES.md §3.5.1 | ✓ | humanresources/walk_traversal |
-| FOLLOW multiple edge types | 4_QUERIES.md §3.5.1 | ✓ | humanresources/walk_traversal |
-| FOLLOW with OUTBOUND | 4_QUERIES.md §3.5.2 | ✓ | humanresources/walk_traversal |
-| FOLLOW with INBOUND | 4_QUERIES.md §3.5.2 | ✓ | humanresources/walk_traversal |
-| FOLLOW with ANY direction | 4_QUERIES.md §3.5.2 | ✓ | humanresources/walk_traversal |
-| FOLLOW with [depth: N] | 4_QUERIES.md §3.5.3 | ✓ | humanresources/walk_traversal |
-| FOLLOW with [depth: N..M] | 4_QUERIES.md §3.5.3 | ✓ | humanresources/walk_traversal |
-| Multiple FOLLOW clauses | 4_QUERIES.md §3.5.4 | ✓ | humanresources/walk_traversal |
-| UNTIL condition | 4_QUERIES.md §3.6 | ✓ | humanresources/walk_traversal |
-| RETURN NODES | 4_QUERIES.md §3.7.1 | ✓ | humanresources/walk_traversal |
-| RETURN EDGES | 4_QUERIES.md §3.7.2 | ✓ | humanresources/walk_traversal |
-| RETURN PATH | 4_QUERIES.md §3.7.3 | ✓ | humanresources/walk_traversal |
-| RETURN TERMINAL | 4_QUERIES.md §3.7.4 | ✓ | humanresources/walk_traversal |
-| OPTIONAL MATCH | 4_QUERIES.md §2.4.6 | ✓ | humanresources/complex_joins |
-| Multiple OPTIONAL MATCH | 4_QUERIES.md §2.4.6 | ✓ | humanresources/complex_joins |
-| OPTIONAL MATCH with WHERE | 4_QUERIES.md §2.4.6 | ✓ | humanresources/complex_joins |
-| Polymorphic queries (parent type match) | 4_QUERIES.md §2.4.1 | ✓ | ecommerce/inheritance |
-| Anonymous target (`_`) | 3_SCHEMA.md §7.3.1 | ✓ | tasks/anonymous_targets |
-| Anonymous in MATCH pattern | 3_SCHEMA.md §7.3.1 | ✓ | tasks/anonymous_targets |
-| Anonymous in edge pattern | 3_SCHEMA.md §7.3.1 | ✓ | tasks/anonymous_targets |
-| Edge binding with AS | 3_SCHEMA.md §7.3.2 | ✓ | tasks/unlink |
+| Single inheritance (`:`) | declarations/node.md | ✓ | ecommerce/inheritance |
+| Multiple inheritance | declarations/node.md | ✓ | humanresources/multiple_inheritance |
+| Deep inheritance (4+ levels) | declarations/node.md | ✓ | humanresources/deep_inheritance |
+| Diamond resolution | declarations/node.md | ✗ | — |
+| `[abstract]` modifier | declarations/node_modifiers.md | ✓ | ecommerce/ontology |
+| Polymorphic queries | statements/match.md | ✓ | ecommerce/inheritance |
 
-## Mutation Features
+---
+
+## Schema: Attribute Constraints
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| Bulk SET (MATCH + SET) | 5_MUTATIONS.md §5.4 | ✓ | tasks/bulk_mutations |
-| Bulk SET multiple attributes | 5_MUTATIONS.md §5.4.1 | ✓ | tasks/bulk_mutations |
-| Bulk SET with computed values | 5_MUTATIONS.md §5.7 | ✓ | tasks/bulk_mutations |
-| Bulk KILL (MATCH + KILL) | 5_MUTATIONS.md §2.6 | ✓ | tasks/bulk_mutations |
-| Bulk KILL with conditions | 5_MUTATIONS.md §2.6 | ✓ | tasks/bulk_mutations |
-| SPAWN RETURNING id | 5_MUTATIONS.md §1.6 | ✓ | tasks/bulk_mutations |
-| SPAWN RETURNING * | 5_MUTATIONS.md §1.6 | ✓ | tasks/bulk_mutations |
-| SPAWN RETURNING specific fields | 5_MUTATIONS.md §1.6 | ✓ | tasks/bulk_mutations |
-| SET with RETURNING | 5_MUTATIONS.md §5.8 | ✓ | tasks/bulk_mutations |
-| LINK IF NOT EXISTS basic | 5_MUTATIONS.md §3.8 | ✓ | tasks/link_if_not_exists |
-| LINK IF NOT EXISTS idempotency | 5_MUTATIONS.md §3.8.3 | ✓ | tasks/link_if_not_exists |
-| LINK IF NOT EXISTS multiple targets | 5_MUTATIONS.md §3.8 | ✓ | tasks/link_if_not_exists |
-| LINK IF NOT EXISTS vs LINK | 5_MUTATIONS.md §3.8 | ✓ | tasks/link_if_not_exists |
-| Inline SPAWN in LINK | 5_MUTATIONS.md §3.4.4 | ✓ | ecommerce/inline_spawn_link |
-| Inline SPAWN with AS binding | 5_MUTATIONS.md §3.4.5 | ✓ | ecommerce/inline_spawn_link |
-| Multiple inline SPAWNs in LINK | 5_MUTATIONS.md §3.4.5 | ✓ | ecommerce/inline_spawn_link |
-| UNLINK by edge alias | 5_MUTATIONS.md §4.4.1 | ✓ | tasks/unlink |
-| UNLINK with pattern matching | 5_MUTATIONS.md §4.4.3 | ✓ | tasks/unlink |
-| UNLINK selective (with filter) | 5_MUTATIONS.md §4.4.4 | ✓ | tasks/unlink |
-| UNLINK preserves entities | 5_MUTATIONS.md §4.1 | ✓ | tasks/unlink |
+| `[unique]` constraint | modifiers/unique.md | ✓ | ecommerce/uniqueness |
+| `[indexed]` modifier | modifiers/indexed.md | ✓ | ecommerce/type_aliases |
+| `[format: email]` | modifiers/format_validation.md | ✓ | ecommerce/format_validation |
+| `[format: url]` | modifiers/format_validation.md | ✓ | ecommerce/format_validation |
+| `[format: uuid]` | modifiers/format_validation.md | ✓ | ecommerce/format_validation |
+| `[format: slug]` | modifiers/format_validation.md | ✓ | ecommerce/format_slug |
+| `[format: phone]` | modifiers/format_validation.md | ✓ | ecommerce/format_advanced |
+| `[format: iso_date]` | modifiers/format_validation.md | ✓ | ecommerce/format_advanced |
+| `[format: iso_datetime]` | modifiers/format_validation.md | ✓ | ecommerce/format_advanced |
+| `[format: ipv4]` | modifiers/format_validation.md | ✓ | ecommerce/format_advanced |
+| `[format: ipv6]` | modifiers/format_validation.md | ✓ | ecommerce/format_advanced |
+| `[match: "regex"]` | modifiers/regex_validation.md | ✓ | ecommerce/format_validation |
+| `[in: [...]]` enum | modifiers/enum_constraint.md | ✓ | ecommerce/format_validation |
+| `[>= N]` constraint | modifiers/range_constraint.md | ✓ | ecommerce/format_validation |
+| `[<= M]` constraint | modifiers/range_constraint.md | ✓ | ecommerce/format_validation |
+| Range `[N..M]` constraint | modifiers/range_constraint.md | ✓ | ecommerce/format_validation |
+| `[length: N..M]` | modifiers/length_constraint.md | ✓ | ecommerce/type_aliases |
 
-## Parameter Features
+---
+
+## Schema: Edge Features
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| $param in WHERE (string) | 5_MUTATIONS.md §5.10.2 | ✗ | — |
-| $param in WHERE (int) | 5_MUTATIONS.md §5.10.2 | ✗ | — |
-| $param multiple in WHERE | 5_MUTATIONS.md §5.10.2 | ✗ | — |
-| $param in pattern filter | 5_MUTATIONS.md §5.10.2 | ✗ | — |
-| $param in SPAWN | 5_MUTATIONS.md §5.10.2 | ✗ | — |
-| $param in SET | 5_MUTATIONS.md §5.10.2 | ✗ | — |
-| $param in list (IN clause) | 5_MUTATIONS.md §5.10.2 | ✗ | — |
-| $param type inference | 5_MUTATIONS.md §5.10.4 | ✗ | — |
-| $param bool type | 5_MUTATIONS.md §5.10.4 | ✗ | — |
-| Missing parameter error | 5_MUTATIONS.md §5.10 | ✗ | — |
+| `[no_self]` edge modifier | modifiers/no_self.md | ✓ | humanresources/no_self |
+| Edge attributes | declarations/edge.md | ✓ | humanresources/edge_attributes |
+| Edge attribute defaults | declarations/edge.md | ✓ | humanresources/edge_attributes |
+| Edge cardinality | modifiers/cardinality.md | ✓ | humanresources/cardinality |
+| Referential actions | modifiers/referential_actions.md | ✓ | tasks/referential_actions |
+
+---
+
+## Query: WALK Traversal
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| WALK FROM node ID | statements/walk.md | ✓ | humanresources/walk_traversal |
+| WALK FROM MATCH result | statements/walk.md | ✓ | humanresources/walk_traversal |
+| FOLLOW single edge type | statements/walk.md | ✓ | humanresources/walk_traversal |
+| FOLLOW multiple edge types | statements/walk.md | ✓ | humanresources/walk_traversal |
+| FOLLOW with OUTBOUND | statements/walk.md | ✓ | humanresources/walk_traversal |
+| FOLLOW with INBOUND | statements/walk.md | ✓ | humanresources/walk_traversal |
+| FOLLOW with ANY direction | statements/walk.md | ✓ | humanresources/walk_traversal |
+| FOLLOW with [depth: N] | statements/walk.md | ✓ | humanresources/walk_traversal |
+| FOLLOW with [depth: N..M] | statements/walk.md | ✓ | humanresources/walk_traversal |
+| Multiple FOLLOW clauses | statements/walk.md | ✓ | humanresources/walk_traversal |
+| UNTIL condition | statements/walk.md | ✓ | humanresources/walk_traversal |
+| RETURN NODES | statements/walk.md | ✓ | humanresources/walk_traversal |
+| RETURN EDGES | statements/walk.md | ✓ | humanresources/walk_traversal |
+| RETURN PATH | statements/walk.md | ✓ | humanresources/walk_traversal |
+| RETURN TERMINAL | statements/walk.md | ✓ | humanresources/walk_traversal |
+
+---
+
+## Query: Patterns
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| OPTIONAL MATCH | statements/optional_match.md | ✓ | humanresources/complex_joins |
+| Multiple OPTIONAL MATCH | statements/optional_match.md | ✓ | humanresources/complex_joins |
+| OPTIONAL MATCH with WHERE | statements/optional_match.md | ✓ | humanresources/complex_joins |
+| Anonymous target (`_`) | patterns/edge_patterns.md | ✓ | tasks/anonymous_targets |
+| Anonymous in MATCH pattern | patterns/edge_patterns.md | ✓ | tasks/anonymous_targets |
+| Anonymous in edge pattern | patterns/edge_patterns.md | ✓ | tasks/anonymous_targets |
+| Edge binding with AS | patterns/edge_patterns.md | ✓ | tasks/unlink |
+| Multi-hop joins | statements/match.md | ✓ | humanresources/complex_joins |
+
+---
+
+## Mutation: Bulk Operations
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| Bulk SET (MATCH + SET) | statements/set.md | ✓ | tasks/bulk_mutations |
+| Bulk SET multiple attributes | statements/set.md | ✓ | tasks/bulk_mutations |
+| Bulk SET with computed values | statements/set.md | ✓ | tasks/bulk_mutations |
+| Bulk KILL (MATCH + KILL) | statements/kill.md | ✓ | tasks/bulk_mutations |
+| Bulk KILL with conditions | statements/kill.md | ✓ | tasks/bulk_mutations |
+| SPAWN RETURNING id | statements/returning.md | ✓ | tasks/bulk_mutations |
+| SPAWN RETURNING * | statements/returning.md | ✓ | tasks/bulk_mutations |
+| SPAWN RETURNING specific fields | statements/returning.md | ✓ | tasks/bulk_mutations |
+| SET with RETURNING | statements/returning.md | ✓ | tasks/bulk_mutations |
+
+---
+
+## Mutation: LINK Variants
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| LINK IF NOT EXISTS basic | statements/link.md | ✓ | tasks/link_if_not_exists |
+| LINK IF NOT EXISTS idempotency | statements/link.md | ✓ | tasks/link_if_not_exists |
+| LINK IF NOT EXISTS multiple targets | statements/link.md | ✓ | tasks/link_if_not_exists |
+| LINK IF NOT EXISTS vs LINK | statements/link.md | ✓ | tasks/link_if_not_exists |
+| Inline SPAWN in LINK | statements/link.md | ✓ | ecommerce/inline_spawn_link |
+| Inline SPAWN with AS binding | statements/link.md | ✓ | ecommerce/inline_spawn_link |
+| Multiple inline SPAWNs in LINK | statements/link.md | ✓ | ecommerce/inline_spawn_link |
+
+---
+
+## Mutation: UNLINK
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| UNLINK by edge alias | statements/unlink.md | ✓ | tasks/unlink |
+| UNLINK with pattern matching | statements/unlink.md | ✓ | tasks/unlink |
+| UNLINK selective (with filter) | statements/unlink.md | ✓ | tasks/unlink |
+| UNLINK preserves entities | statements/unlink.md | ✓ | tasks/unlink |
+
+---
+
+## Parameters
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| $param in WHERE (string) | expressions/parameters.md | ✓ | tasks/parameters |
+| $param in WHERE (int) | expressions/parameters.md | ✓ | tasks/parameters |
+| $param multiple in WHERE | expressions/parameters.md | ✓ | tasks/parameters |
+| $param in pattern filter | expressions/parameters.md | ✓ | tasks/parameters |
+| $param in SPAWN | expressions/parameters.md | ✓ | tasks/parameters |
+| $param in SET | expressions/parameters.md | ✓ | tasks/parameters |
+| $param in list (IN clause) | expressions/parameters.md | ✗ | — |
+| $param type inference | expressions/parameters.md | ✗ | — |
+| $param bool type | expressions/parameters.md | ✓ | tasks/parameters |
+| Missing parameter error | expressions/parameters.md | ✓ | tasks/parameters |
+
+---
 
 ## Time Features
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| now() function | 3_SCHEMA.md §5.5.1 | ✓ | tasks/bulk_mutations |
-| wall_time() function | — | ✗ | — |
+| now() function | expressions/timestamp_functions.md | ✓ | tasks/bulk_mutations |
+| Duration type | types/duration_type.md | ✓ | (level-1: expressions/types) |
 
-## Authorization Features
+---
+
+## Type System
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| Simple ownership-based access | — | ✗ | — |
-| current_actor() | — | ✗ | — |
+| Union types (`T \| U`) | types/union_type.md | ✓ | humanresources/union_types |
+| `any` type in edges | types/any_type.md | ✓ | humanresources/any_types |
+| Type checking (`:Type`) | expressions/type_checking.md | ✓ | ecommerce/type_checking |
+
+---
+
+## ID References & Inspection
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| `#id` reference syntax | expressions/id_references.md | ✓ | tasks/inspect |
+| `#"uuid"` quoted syntax | expressions/id_references.md | ✗ | — |
+| INSPECT by ID | statements/inspect.md | ✓ | tasks/inspect |
+| INSPECT with projection | statements/inspect.md | ✓ | tasks/inspect |
+
+---
+
+## Administration
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| SHOW TYPES | statements/admin.md | ✗ | — |
+| SHOW EDGES | statements/admin.md | ✗ | — |
+| SHOW CONSTRAINTS | statements/admin.md | ✗ | — |
+| CREATE INDEX | statements/admin.md | ✗ | — |
+| DROP INDEX | statements/admin.md | ✗ | — |
+
+---
+
+## Policy & Authorization
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| Policy declaration | declarations/policy.md | ✗ | — |
+| current_actor() | expressions/context_functions.md | ✗ | — |
+| BEGIN SESSION AS | statements/session.md | ✗ | — |
+| Ownership-based access | declarations/policy.md | ✗ | — |
+
+---
 
 ## Error Cases
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| [unique] violation | 3_SCHEMA.md §5.3.2 | ✓ | ecommerce/uniqueness |
-| [format:] violation | 3_SCHEMA.md §5.3.7 | ✓ | ecommerce/format_validation |
-| [match:] violation | 3_SCHEMA.md §5.3.8 | ✓ | ecommerce/type_aliases |
-| [in:] violation | 3_SCHEMA.md §5.3.6 | ✓ | ecommerce/type_aliases |
-| [>= N] violation | 3_SCHEMA.md §5.3.4 | ✓ | ecommerce/type_aliases |
-| [<= M] violation | 3_SCHEMA.md §5.3.4 | ✓ | ecommerce/type_aliases |
-| [no_self] violation | 3_SCHEMA.md §6.3.2 | ✓ | humanresources/no_self |
-| Missing parameter error | 5_MUTATIONS.md §5.10 | ✗ | — |
+| `[unique]` violation | modifiers/unique.md | ✓ | ecommerce/uniqueness |
+| `[format:]` violation | modifiers/format_validation.md | ✓ | ecommerce/format_validation |
+| `[match:]` violation | modifiers/regex_validation.md | ✓ | ecommerce/format_validation |
+| `[in:]` violation | modifiers/enum_constraint.md | ✓ | ecommerce/format_validation |
+| `[>= N]` violation | modifiers/range_constraint.md | ✓ | ecommerce/format_validation |
+| `[<= M]` violation | modifiers/range_constraint.md | ✓ | ecommerce/format_validation |
+| `[no_self]` violation | modifiers/no_self.md | ✓ | humanresources/no_self |
+| Missing parameter error | expressions/parameters.md | ✓ | tasks/parameters |
+
+---
 
 ## Coverage Summary
 
 | Category | Covered | Total | Coverage |
 |----------|---------|-------|----------|
-| Schema | 27 | 31 | 87% |
-| Queries | 24 | 24 | 100% |
-| Mutations | 21 | 21 | 100% |
-| Parameters | 16 | 16 | 100% |
-| Time | 1 | 2 | 50% |
-| Authorization | 0 | 2 | 0% |
-| Errors | 9 | 9 | 100% |
-| **Total** | **98** | **105** | **93%** |
+| Type Aliases | 4 | 5 | 80% |
+| Inheritance | 5 | 6 | 83% |
+| Attribute Constraints | 17 | 17 | 100% |
+| Edge Features | 5 | 5 | 100% |
+| WALK Traversal | 15 | 15 | 100% |
+| Query Patterns | 8 | 8 | 100% |
+| Bulk Operations | 9 | 9 | 100% |
+| LINK Variants | 7 | 7 | 100% |
+| UNLINK | 4 | 4 | 100% |
+| Parameters | 8 | 10 | 80% |
+| Time | 2 | 2 | 100% |
+| Type System | 3 | 3 | 100% |
+| ID Refs & Inspection | 3 | 4 | 75% |
+| Administration | 0 | 5 | 0% |
+| Policy/Authorization | 0 | 4 | 0% |
+| Errors | 8 | 8 | 100% |
+| **Total** | **98** | **112** | **88%** |
+
+---
 
 ## Gaps to Address
 
-### High Priority
-- `wall_time()` function - no scenarios
-- Simple ownership-based access control - no scenarios
-- `current_actor()` function - no scenarios
+### High Priority (New Specs - need scenarios)
+- **Administration** - SHOW, CREATE INDEX
 
-### Medium Priority
-- [format: phone] - missing format type
-- [format: iso_date] - missing format type
-- [format: iso_datetime] - missing format type
-- [format: ipv4] - missing format type
-- [format: ipv6] - missing format type
-- [length: N..M] - string length validation
-- Diamond inheritance resolution - complex inheritance scenario
-- Alias chaining - chained type aliases
+### Medium Priority (Missing Formats)
+- `[format: phone]`, `[format: iso_date]`, `[format: iso_datetime]`
+- `[format: ipv4]`, `[format: ipv6]`
+- `[length: N..M]` string length validation
+- `#"uuid"` quoted syntax for ID references
+- `$param` type inference and list parameters
 
-### Notes
-- Authorization features may need dedicated ontology design
-- Time functions require temporal test scenarios
-- Format types can be added to existing format_validation scenario
+### Low Priority (Edge Cases)
+- Alias chaining (chained type aliases)
+- Diamond inheritance resolution
+- Policy/Authorization (may move to Level 3)
+
+---
+
+*Spec references point to files under `specs/` directory.*

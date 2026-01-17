@@ -279,6 +279,86 @@ mod anonymous_targets {
     }
 }
 
+mod parameters {
+    use super::*;
+
+    /// Parameter tests verify that $param syntax is parsed and that missing
+    /// parameters produce proper errors at runtime.
+    pub fn scenario() -> Scenario {
+        Scenario::new("parameters")
+            .ontology("level-2/tasks/ontology.mew")
+            .operations("level-2/tasks/operations/parameters.mew")
+            // Setup entities
+            .step("test_setup_param_task_1", |a| a.created(1))
+            .step("test_setup_param_task_2", |a| a.created(1))
+            .step("test_setup_param_task_3", |a| a.created(1))
+            .step("test_setup_param_tag", |a| a.created(1))
+            .step("test_setup_param_links", |a| a.linked(2))
+            // Missing parameters should produce errors
+            .step("test_param_in_where_missing_string", |a| a.error("missing_parameter"))
+            .step("test_param_in_where_missing_int", |a| a.error("missing_parameter"))
+            .step("test_param_in_where_missing_multiple", |a| a.error("missing_parameter"))
+            .step("test_param_in_pattern_filter_missing", |a| a.error("missing_parameter"))
+            // SPAWN with missing params should error
+            .step("test_param_in_spawn_missing", |a| a.error("missing_parameter"))
+            // SET with missing param should error
+            .step("test_param_in_set_missing", |a| a.error("missing_parameter"))
+            // Boolean parameter - no SubTasks exist, so MATCH finds nothing and WHERE isn't evaluated
+            .step("test_param_bool_type_missing", |a| a.rows(0))
+            // Cleanup (only the 3 setup tasks remain since spawn failed)
+            .step("test_cleanup_param_links", |a| a.unlinked(2))
+            .step("test_cleanup_param_tasks", |a| a.deleted(3))
+            .step("test_cleanup_param_tag", |a| a.deleted(1))
+    }
+
+    #[test]
+    fn test_parameter_syntax() {
+        scenario().run().unwrap();
+    }
+}
+
+mod inspect {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("inspect")
+            .ontology("level-2/tasks/ontology.mew")
+            .operations("level-2/tasks/operations/inspect.mew")
+            // Setup entities to inspect
+            .step("test_setup_inspect_task", |a| a.created(1))
+            .step("test_setup_inspect_subtask", |a| a.created(1))
+            .step("test_setup_inspect_tag", |a| a.created(1))
+            .step("test_setup_inspect_links", |a| a.linked(2))
+            // Basic INSPECT: Full entity retrieval (returns 1 row with all fields)
+            .step("test_inspect_task_full", |a| a.rows(1))
+            .step("test_inspect_subtask_full", |a| a.rows(1))
+            .step("test_inspect_tag_full", |a| a.rows(1))
+            // INSPECT with projection
+            .step("test_inspect_task_projection", |a| a.rows(1))
+            .step("test_inspect_subtask_projection", |a| a.rows(1))
+            .step("test_inspect_tag_projection", |a| a.rows(1))
+            // INSPECT with system fields
+            .step("test_inspect_with_type", |a| a.rows(1))
+            .step("test_inspect_with_id", |a| a.rows(1))
+            .step("test_inspect_with_all_system_fields", |a| a.rows(1))
+            // INSPECT non-existent returns found: false (1 row with found=false)
+            .step("test_inspect_nonexistent", |a| a.rows(1))
+            // Edge inspection
+            .step("test_get_edge_for_inspection", |a| a.rows(1))
+            // Cleanup
+            .step("test_cleanup_inspect_links", |a| a.unlinked(1))
+            .step("test_cleanup_inspect_tagged", |a| a.unlinked(1))
+            .step("test_cleanup_inspect_task", |a| a.deleted(1))
+            .step("test_cleanup_inspect_subtask", |a| a.deleted(1))
+            .step("test_cleanup_inspect_tag", |a| a.deleted(1))
+    }
+
+    #[test]
+    fn test_inspect_operations() {
+        scenario().run().unwrap();
+    }
+}
+
 mod link_if_not_exists {
     use super::*;
 
@@ -334,6 +414,58 @@ mod link_if_not_exists {
 
     #[test]
     fn test_link_if_not_exists_operations() {
+        scenario().run().unwrap();
+    }
+}
+
+mod referential_actions {
+    use super::*;
+
+    /// Tests referential action semantics:
+    /// - cascade: killing target node also kills connected source nodes
+    /// - unlink: killing target node just removes the edge
+    /// - prevent: cannot kill target node if edges exist
+    pub fn scenario() -> Scenario {
+        Scenario::new("referential_actions")
+            .ontology("level-2/tasks/ontology.mew")
+            .operations("level-2/tasks/operations/referential_actions.mew")
+            // CASCADE: Killing project should cascade to kill tasks
+            .step("test_cascade_setup_project", |a| a.created(1))
+            .step("test_cascade_setup_task_1", |a| a.created(1))
+            .step("test_cascade_setup_task_2", |a| a.created(1))
+            .step("test_cascade_link_tasks_to_project", |a| a.linked(2))
+            .step("test_cascade_verify_tasks_linked", |a| a.rows(2))
+            // Kill project should cascade delete tasks (1 project + 2 tasks = 3)
+            .step("test_cascade_kill_project", |a| a.deleted(3))
+            // Tasks should also be deleted by cascade
+            .step("test_cascade_verify_tasks_deleted", |a| a.rows(0))
+            // UNLINK: Killing person should just unlink, preserving task
+            .step("test_unlink_setup_person", |a| a.created(1))
+            .step("test_unlink_setup_task", |a| a.created(1))
+            .step("test_unlink_assign_person", |a| a.linked(1))
+            .step("test_unlink_verify_assignment", |a| a.rows(1))
+            // Kill person - task should remain
+            .step("test_unlink_kill_person", |a| a.deleted(1))
+            .step("test_unlink_verify_task_remains", |a| a.rows(1))
+            .step("test_unlink_verify_no_assignment", |a| a.rows(0))
+            .step("test_unlink_cleanup_task", |a| a.deleted(1))
+            // PREVENT: Cannot kill team with members
+            .step("test_prevent_setup_team", |a| a.created(1))
+            .step("test_prevent_setup_member", |a| a.created(1))
+            .step("test_prevent_add_member", |a| a.linked(1))
+            .step("test_prevent_verify_membership", |a| a.rows(1))
+            // Kill should fail due to prevent (error says "restricted")
+            .step("test_prevent_kill_team_fails", |a| a.error("restricted"))
+            .step("test_prevent_verify_team_still_exists", |a| a.rows(1))
+            // Remove member then kill should succeed
+            .step("test_prevent_remove_member", |a| a.unlinked(1))
+            .step("test_prevent_kill_team_succeeds", |a| a.deleted(1))
+            .step("test_prevent_verify_team_deleted", |a| a.rows(0))
+            .step("test_prevent_cleanup_member", |a| a.deleted(1))
+    }
+
+    #[test]
+    fn test_referential_action_operations() {
         scenario().run().unwrap();
     }
 }

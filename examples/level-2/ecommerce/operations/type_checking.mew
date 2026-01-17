@@ -1,0 +1,121 @@
+-- ===========================================================================
+-- OPERATIONS: Type Checking
+-- DESCRIPTION: Tests the :Type type checking operator with inheritance
+-- FEATURES: expressions/type_checking.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Basic type checking
+-- ---------------------------------------------------------------------------
+
+--# test_query_physical_products_with_type_check
+-- Filter products using :PhysicalProduct type check
+-- Seed has: laptop, phone, headphones = 3 PhysicalProducts
+MATCH p: Product
+WHERE p:PhysicalProduct
+RETURN p.name, p.sku
+
+--# test_query_digital_products_with_type_check
+-- Filter products using :DigitalProduct type check
+-- Seed has: ebook = 1 DigitalProduct
+MATCH p: Product
+WHERE p:DigitalProduct
+RETURN p.name, p.sku
+
+--# test_query_all_with_base_type_check
+-- All subtypes match base type check
+-- All products should match :Product (5 total)
+MATCH p: Product
+WHERE p:Product
+RETURN p.name
+
+-- ---------------------------------------------------------------------------
+-- Type checking with inheritance
+-- ---------------------------------------------------------------------------
+
+--# test_physical_product_is_also_product
+-- PhysicalProduct should also be a Product (inheritance)
+-- laptop, phone, headphones all match both
+MATCH p: PhysicalProduct
+WHERE p:Product
+RETURN p.name
+
+--# test_digital_product_is_also_product
+-- DigitalProduct should also be a Product (inheritance)
+-- ebook matches both
+MATCH p: DigitalProduct
+WHERE p:Product
+RETURN p.name
+
+-- ---------------------------------------------------------------------------
+-- Negative type checks
+-- ---------------------------------------------------------------------------
+
+--# test_physical_not_digital
+-- PhysicalProduct is not DigitalProduct
+-- Should return 0 rows
+MATCH p: PhysicalProduct
+WHERE p:DigitalProduct
+RETURN p.name
+
+--# test_digital_not_physical
+-- DigitalProduct is not PhysicalProduct
+-- Should return 0 rows
+MATCH p: DigitalProduct
+WHERE p:PhysicalProduct
+RETURN p.name
+
+-- ---------------------------------------------------------------------------
+-- Combined type checking with other filters
+-- ---------------------------------------------------------------------------
+
+--# test_type_check_with_attribute_filter
+-- Combine type check with attribute filter
+-- PhysicalProducts with price > 500: laptop (1299.99), phone (799.99) = 2
+MATCH p: Product
+WHERE p:PhysicalProduct AND p.price > 500
+RETURN p.name, p.price
+
+--# test_type_check_with_or
+-- Use OR with type checks
+-- Physical OR Digital = all specialized products (not base Product)
+-- laptop, phone, headphones, ebook = 4
+MATCH p: Product
+WHERE p:PhysicalProduct OR p:DigitalProduct
+RETURN p.name
+
+--# test_base_only_not_subtype
+-- Find base Product instances that are not subtypes
+-- old_product is just Product, not Physical or Digital = 1
+MATCH p: Product
+WHERE NOT p:PhysicalProduct AND NOT p:DigitalProduct
+RETURN p.name
+
+-- ---------------------------------------------------------------------------
+-- Type checking in RETURN expressions
+-- ---------------------------------------------------------------------------
+
+--# test_type_check_in_return
+-- Use type check expression in RETURN
+-- Returns 5 products with their type check results
+MATCH p: Product
+RETURN p.name, p:PhysicalProduct AS is_physical, p:DigitalProduct AS is_digital
+
+-- ---------------------------------------------------------------------------
+-- Type checking with edge patterns
+-- ---------------------------------------------------------------------------
+
+--# test_type_check_with_edge_pattern
+-- Combine type check with edge traversal
+-- PhysicalProducts that have reviews
+-- laptop, phone have reviews and are PhysicalProducts = 2
+MATCH p: Product, r: Review, review_of(r, p)
+WHERE p:PhysicalProduct
+RETURN p.name, r.title
+
+--# test_type_check_in_exists
+-- Use type check inside EXISTS
+-- Products that have at least one review, filtered by type
+MATCH p: Product
+WHERE p:PhysicalProduct AND EXISTS(r: Review, review_of(r, p))
+RETURN p.name

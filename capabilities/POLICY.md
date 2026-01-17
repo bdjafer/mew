@@ -1,8 +1,9 @@
 # MEW Policy System
 
 **Version:** 1.0
-**Status:** Specification
+**Status:** Capability
 **Scope:** Actor-based access control for graph operations
+**Deferred to:** v2
 
 ---
 
@@ -267,6 +268,38 @@ Policy conditions have access to context beyond the graph:
 
 These functions are **only valid in policy conditions** — they require execution context that doesn't exist in normal constraints or rules.
 
+## 3.5 Default Behavior
+
+When no policy matches an operation, the system uses **default-deny**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      DEFAULT BEHAVIOR                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   No matching policies → DENY                                       │
+│                                                                      │
+│   This is the secure default. To allow operations, you must have   │
+│   at least one ALLOW policy that matches and evaluates to true.    │
+│                                                                      │
+│   Typical configuration:                                            │
+│                                                                      │
+│   1. High-priority bypass for superadmins [priority: 1000]         │
+│   2. Domain-specific ALLOW policies [priority: 0-100]              │
+│   3. Optional explicit default-deny [priority: -1000]              │
+│                                                                      │
+│   policy default_deny [priority: -1000]:                            │
+│     ON *                                                            │
+│     DENY IF true                                                    │
+│     MESSAGE "Permission denied"                                     │
+│                                                                      │
+│   The explicit default-deny is optional (implicit behavior is      │
+│   already deny) but provides a clear audit trail and custom        │
+│   message for denied operations.                                    │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 # Part IV: Policy DSL
@@ -508,7 +541,7 @@ policy default_deny [priority: -1000]:
 │   rule auto_ownership:                                              │
 │     n: any WHERE NOT EXISTS(owned_by(n, _))                         │
 │     =>                                                              │
-│     LINK owned_by(n, session_actor())                               │
+│     LINK owned_by(n, current_actor())                               │
 │                                                                      │
 │   Delegated ownership:                                              │
 │   ────────────────────                                              │
@@ -749,11 +782,312 @@ COMMIT
 
 Each operation independently checked. Transaction commits only if all pass.
 
+## 9.4 Invocations
+
+Invocations (external code execution, see COMPUTE.md) have configurable authority:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    INVOCATION AUTHORITY                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Default: Invocation creator's authority                           │
+│   ──────────────────────────────────────                            │
+│   When code mutates the graph, policy checks use the actor          │
+│   who created the Invocation node (typically the session actor).    │
+│                                                                      │
+│   Restricted grants:                                                │
+│   ──────────────────                                                │
+│   CodeModules can declare maximum capabilities:                     │
+│                                                                      │
+│   node CodeModule {                                                 │
+│     max_operations: String[]    -- ["SPAWN", "SET"]                 │
+│     max_types: String[]         -- ["Task", "Notification"]         │
+│   }                                                                 │
+│                                                                      │
+│   Effective authority = intersection(creator_authority, code_grants)│
+│                                                                      │
+│   System invocations:                                               │
+│   ───────────────────                                               │
+│   Invocations without a creator (spawned by reactors/schedulers)   │
+│   execute with system authority unless explicitly scoped.          │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+This ensures code cannot exceed the permissions of whoever invoked it, while CodeModule grants can further restrict capabilities.
+
+## 9.5 Manual Rule Invocation
+
+The `INVOKE` statement triggers manual rules. Policy applies to INVOKE itself:
+
+```
+policy invoke_permission:
+  ON INVOKE(r: _RuleDef)
+  ALLOW IF has_capability(current_actor(), "invoke_" ++ r.name)
+```
+
+Once allowed, the rule's own authority semantics apply (system or inherited).
+
 ---
 
-# Part X: Versioning Considerations
+# Part X: Observation Policy
 
-## 10.1 v1 Anticipation
+## 10.1 The Core Intuition
+
+In the physical world:
+- I can only see what I have access to
+- I don't get an "access denied" error when looking at a locked room — I simply don't see inside
+- My view of the world is naturally filtered by my access
+- Counting things means counting what I can perceive
+
+This suggests: **Observation policy is filtering, not gating.**
+
+The query runs. Results are filtered to what the actor can see. No errors for "unauthorized" rows — they simply don't appear in results.
+
+## 10.2 Filtering Semantics
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                  OBSERVATION POLICY MODEL                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Observation policy is FILTERING, not GATING.                      │
+│                                                                      │
+│   User query:                                                       │
+│     MATCH t: Task WHERE t.priority > 5 RETURN t                     │
+│                                                                      │
+│   Policy:                                                           │
+│     ON MATCH(t: Task)                                               │
+│     ALLOW IF EXISTS(p: Project, belongs_to(t, p),                   │
+│                     member_of(current_actor(), p))                  │
+│                                                                      │
+│   Effective execution:                                              │
+│     MATCH t: Task, p: Project,                                      │
+│           belongs_to(t, p),                                         │
+│           member_of(current_actor(), p)   ← injected                │
+│     WHERE t.priority > 5                                            │
+│     RETURN t                                                        │
+│                                                                      │
+│   Result: Only tasks the actor can see, filtered by priority > 5   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Policy predicates **compose into the query**, not wrap it.
+
+## 10.3 Three Levels of Observation Policy
+
+| Level | Question | Enforcement | Example |
+|-------|----------|-------------|---------|
+| **Type-level** | Can actor query this type at all? | Pre-query gate | "Guests cannot query AuditLogs" |
+| **Instance-level** | Which instances can actor see? | Query predicate injection | "Users see tasks in their projects" |
+| **Attribute-level** | Which attributes are visible? | Result projection | "Users see task.title but not task.internal_score" |
+
+## 10.4 Syntax Distinction
+
+```
+-- Type-level: condition does NOT reference the bound variable
+policy no_audit_for_guests:
+  ON MATCH(_: AuditLog)
+  ALLOW IF has_role(current_actor(), r) WHERE r.name != "guest"
+
+-- Instance-level: condition REFERENCES the bound variable
+policy project_member_sees_tasks:
+  ON MATCH(t: Task)
+  ALLOW IF EXISTS(p: Project, belongs_to(t, p), member_of(current_actor(), p))
+
+-- Attribute-level: new syntax for attribute projection
+policy hide_internal_score:
+  ON MATCH(t: Task).internal_score
+  DENY IF NOT has_role(current_actor(), "analyst")
+```
+
+Type-level policies gate. Instance-level policies filter. Attribute-level policies project.
+
+## 10.5 Policy Composition for Filtering
+
+When multiple instance-level policies apply:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    POLICY COMPOSITION                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ALLOW policies: OR composition (any match permits visibility)     │
+│   DENY policies: Override (explicit exclusion, checked after ALLOW) │
+│                                                                      │
+│   Resolution for instance X:                                        │
+│     1. Evaluate all ALLOW policies for X                            │
+│     2. If any ALLOW matches → candidate visible                     │
+│     3. Evaluate all DENY policies for X                             │
+│     4. If any DENY matches → exclude                                │
+│     5. Otherwise → visible                                          │
+│                                                                      │
+│   Example:                                                          │
+│     ALLOW IF owns(current_actor(), t)           -- own tasks        │
+│     ALLOW IF assigned_to(t, current_actor())    -- assigned tasks   │
+│     DENY IF t.confidential = true               -- but not if confidential │
+│              AND NOT has_clearance(current_actor())                 │
+│                                                                      │
+│   Actor sees tasks they own OR are assigned to,                     │
+│   EXCEPT confidential tasks without clearance.                      │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## 10.6 Edge Visibility
+
+Edges require their own policy, not derivation from nodes:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      EDGE VISIBILITY                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Question: If I can see node A but not node B, can I see edge(A,B)?│
+│                                                                      │
+│   Default: Edge visible only if ALL targets visible                 │
+│            (prevents information leakage about hidden nodes)        │
+│                                                                      │
+│   Override: Explicit edge policy can relax this                     │
+│                                                                      │
+│   policy see_public_connections:                                    │
+│     ON MATCH(e: follows)                                            │
+│     ALLOW IF follows(current_actor(), source(e))                    │
+│     -- Can see who your followees follow, even if you can't see     │
+│     -- those people's profiles directly                             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## 10.7 Aggregate Semantics
+
+Aggregates operate on the **filtered** result set:
+
+```
+User query:
+  MATCH t: Task RETURN COUNT(t)
+
+With policy filtering to 3 of 10 total tasks:
+  Result: 3
+
+NOT 10. NOT "access denied". The actor's world contains 3 tasks.
+```
+
+This is the only coherent semantics — aggregates reflect what you can see.
+
+## 10.8 Query Planning Integration
+
+Policy predicates inject at planning time, not as post-filters:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                  QUERY PLANNING WITH POLICY                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   User query:  MATCH t: Task WHERE t.priority > 5                   │
+│                                                                      │
+│   Policy:      ALLOW IF EXISTS(belongs_to(t, p),                    │
+│                               member_of(current_actor(), p))        │
+│                                                                      │
+│   Naive (post-filter):                                              │
+│     1. Fetch all Tasks where priority > 5                           │
+│     2. For each, check policy                                       │
+│     3. Filter out hidden                                            │
+│     → Wasteful: fetches rows just to discard them                   │
+│                                                                      │
+│   Optimized (predicate injection):                                  │
+│     1. Rewrite query to include policy joins                        │
+│     2. Plan combined query with indexes                             │
+│     3. Execute once, results are already filtered                   │
+│                                                                      │
+│   Effective plan:                                                   │
+│     IndexScan(member_of, actor=current_actor) → project_ids        │
+│     IndexScan(belongs_to, project IN project_ids) → task_ids       │
+│     IndexScan(Task, id IN task_ids, priority > 5)                   │
+│                                                                      │
+│   Policy becomes part of the access path, not a filter.             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## 10.9 The Existence Problem
+
+Subtle case: Can the actor know something exists even if they can't see its content?
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                  EXISTENCE VS CONTENT VISIBILITY                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Scenario: Private tasks exist. User queries COUNT(Task).          │
+│                                                                      │
+│   Option A: COUNT returns only visible tasks                        │
+│             User doesn't know private tasks exist                   │
+│             → Information hiding (default)                          │
+│                                                                      │
+│   Option B: COUNT returns total, content hidden                     │
+│             User knows "there are 10 tasks, I can see 3"            │
+│             → Existence exposed, content protected                  │
+│                                                                      │
+│   MEW default: Option A (full filtering)                            │
+│                                                                      │
+│   Explicit override possible:                                       │
+│     policy existence_visible:                                       │
+│       ON MATCH(t: Task).existence    ← special attribute            │
+│       ALLOW IF true                                                 │
+│                                                                      │
+│     MATCH t: Task RETURN COUNT(t)         → 3 (only visible)       │
+│     MATCH t: Task RETURN COUNT_EXISTS(t)  → 10 (existence-visible) │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## 10.10 WALK and Transitive Policy
+
+Path traversal has policy at each hop:
+
+```
+WALK FROM #start FOLLOW follows [depth: 3] RETURN PATH
+
+At each hop:
+  1. Can actor see the edge being traversed?
+  2. Can actor see the target node?
+
+If either fails, that branch terminates (not error — just no further traversal).
+
+Result: The subgraph reachable within actor's visibility.
+```
+
+## 10.11 Visibility Metadata
+
+MEW defaults to silent filtering — actors see only what they can access, with no indication of hidden content. This mirrors physical reality: you don't see a sign saying "7 rooms hidden from you."
+
+For debugging and UX purposes, an optional query modifier can expose visibility metadata:
+
+```
+MATCH t: Task RETURN t WITH VISIBILITY_INFO
+-- Returns results + { visible_count: 3 }
+```
+
+Note: Exposing `total_count` would leak information about hidden resources and is intentionally not provided by default. Type-level existence indicators may be added in future versions with appropriate policy controls.
+
+## 10.12 Implementation Phases
+
+| Phase | Scope | Complexity |
+|-------|-------|------------|
+| **v2.0** | Type-level gating | Low — pre-query check |
+| **v2.0** | Instance-level filtering (simple) | Medium — predicate injection |
+| **v2.1** | Edge visibility rules | Medium — default + override |
+| **v2.1** | Attribute-level projection | Medium — result transformation |
+| **v2.2** | Optimized query planning | High — planner integration |
+
+---
+
+# Part XI: Versioning Considerations
+
+## 11.1 v1 Anticipation
 
 Policy is deferred to v2, but v1 must anticipate:
 
@@ -764,7 +1098,7 @@ Policy is deferred to v2, but v1 must anticipate:
 | EvalContext | Struct exists with optional fields |
 | Registry | Extensible for future policy rules |
 
-## 10.2 v2 Implementation
+## 11.2 v2 Implementation
 
 Full policy system:
 
@@ -777,7 +1111,7 @@ Full policy system:
 | Caching | Multi-level cache system |
 | META integration | Policy for schema operations |
 
-## 10.3 Future Extensions
+## 11.3 Future Extensions
 
 | Extension | Description |
 |-----------|-------------|
@@ -793,9 +1127,9 @@ Full policy system:
 
 ```ebnf
 (* Policy Declarations *)
-PolicyDecl       = "policy" Identifier PolicyMods? ":" 
-                   "ON" OpPattern 
-                   Decision "IF" Expr 
+PolicyDecl       = "policy" Identifier PolicyMods? ":"
+                   "ON" OpPattern
+                   Decision "IF" Expr
                    Message?
 
 PolicyMods       = "[" "priority:" IntLiteral "]"
@@ -845,17 +1179,17 @@ node _OperationPattern {
 }
 
 edge _policy_has_pattern(
-  rule: _PolicyRule, 
+  rule: _PolicyRule,
   pattern: _OperationPattern
 )
 
 edge _policy_has_condition(
-  rule: _PolicyRule, 
+  rule: _PolicyRule,
   condition: _Expr
 )
 
 edge _ontology_declares_policy(
-  ontology: _Ontology, 
+  ontology: _Ontology,
   rule: _PolicyRule
 )
 ```
@@ -867,283 +1201,20 @@ edge _ontology_declares_policy(
 | Term | Definition |
 |------|------------|
 | **Actor** | Entity performing operations; bound to session |
-| **Policy** | Rule defining when operations are allowed or denied |
-| **Grant** | Edge conferring capability; runtime data |
+| **ABAC** | Attribute-Based Access Control; decisions based on entity attributes |
 | **Decision** | ALLOW or DENY outcome |
+| **Default-deny** | Security model where no matching policy means denied |
 | **Execution context** | Actor + operation + target; available in policy conditions |
+| **Filtering** | Observation policy that removes invisible results without error |
+| **Gating** | Mutation policy that rejects operations before execution |
+| **Grant** | Edge conferring capability; runtime data |
+| **Policy** | Rule defining when operations are allowed or denied |
 | **Pre-check** | Policy evaluation before mutation |
-| **System authority** | Operations not attributed to any actor |
+| **RBAC** | Role-Based Access Control; permissions derived from roles |
+| **ReBAC** | Relationship-Based Access Control; permissions derived from graph relationships |
+| **System authority** | Operations not attributed to any actor; bypasses policy |
 
 ---
 
-# Part XI: Observation Policy
+*End of MEW Policy System Capability*
 
-## 11.1 The Core Intuition
-
-In the physical world:
-- I can only see what I have access to
-- I don't get an "access denied" error when looking at a locked room — I simply don't see inside
-- My view of the world is naturally filtered by my access
-- Counting things means counting what I can perceive
-
-This suggests: **Observation policy is filtering, not gating.**
-
-The query runs. Results are filtered to what the actor can see. No errors for "unauthorized" rows — they simply don't appear in results.
-
-## 11.2 Filtering Semantics
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                  OBSERVATION POLICY MODEL                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│   Observation policy is FILTERING, not GATING.                      │
-│                                                                      │
-│   User query:                                                       │
-│     MATCH t: Task WHERE t.priority > 5 RETURN t                     │
-│                                                                      │
-│   Policy:                                                           │
-│     ON MATCH(t: Task)                                               │
-│     ALLOW IF EXISTS(p: Project, belongs_to(t, p),                   │
-│                     member_of(current_actor(), p))                  │
-│                                                                      │
-│   Effective execution:                                              │
-│     MATCH t: Task, p: Project,                                      │
-│           belongs_to(t, p),                                         │
-│           member_of(current_actor(), p)   ← injected                │
-│     WHERE t.priority > 5                                            │
-│     RETURN t                                                        │
-│                                                                      │
-│   Result: Only tasks the actor can see, filtered by priority > 5   │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-Policy predicates **compose into the query**, not wrap it.
-
-## 11.3 Three Levels of Observation Policy
-
-| Level | Question | Enforcement | Example |
-|-------|----------|-------------|---------|
-| **Type-level** | Can actor query this type at all? | Pre-query gate | "Guests cannot query AuditLogs" |
-| **Instance-level** | Which instances can actor see? | Query predicate injection | "Users see tasks in their projects" |
-| **Attribute-level** | Which attributes are visible? | Result projection | "Users see task.title but not task.internal_score" |
-
-## 11.4 Syntax Distinction
-
-```
--- Type-level: condition does NOT reference the bound variable
-policy no_audit_for_guests:
-  ON MATCH(_: AuditLog)
-  ALLOW IF has_role(current_actor(), r) WHERE r.name != "guest"
-
--- Instance-level: condition REFERENCES the bound variable  
-policy project_member_sees_tasks:
-  ON MATCH(t: Task)
-  ALLOW IF EXISTS(p: Project, belongs_to(t, p), member_of(current_actor(), p))
-
--- Attribute-level: new syntax for attribute projection
-policy hide_internal_score:
-  ON MATCH(t: Task).internal_score
-  DENY IF NOT has_role(current_actor(), "analyst")
-```
-
-Type-level policies gate. Instance-level policies filter. Attribute-level policies project.
-
-## 11.5 Policy Composition for Filtering
-
-When multiple instance-level policies apply:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    POLICY COMPOSITION                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│   ALLOW policies: OR composition (any match permits visibility)     │
-│   DENY policies: Override (explicit exclusion, checked after ALLOW) │
-│                                                                      │
-│   Resolution for instance X:                                        │
-│     1. Evaluate all ALLOW policies for X                            │
-│     2. If any ALLOW matches → candidate visible                     │
-│     3. Evaluate all DENY policies for X                             │
-│     4. If any DENY matches → exclude                                │
-│     5. Otherwise → visible                                          │
-│                                                                      │
-│   Example:                                                          │
-│     ALLOW IF owns(current_actor(), t)           -- own tasks        │
-│     ALLOW IF assigned_to(t, current_actor())    -- assigned tasks   │
-│     DENY IF t.confidential = true               -- but not if confidential │
-│              AND NOT has_clearance(current_actor())                 │
-│                                                                      │
-│   Actor sees tasks they own OR are assigned to,                     │
-│   EXCEPT confidential tasks without clearance.                      │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## 11.6 Edge Visibility
-
-Edges require their own policy, not derivation from nodes:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      EDGE VISIBILITY                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│   Question: If I can see node A but not node B, can I see edge(A,B)?│
-│                                                                      │
-│   Default: Edge visible only if ALL targets visible                 │
-│            (prevents information leakage about hidden nodes)        │
-│                                                                      │
-│   Override: Explicit edge policy can relax this                     │
-│                                                                      │
-│   policy see_public_connections:                                    │
-│     ON MATCH(e: follows)                                            │
-│     ALLOW IF follows(current_actor(), source(e))                    │
-│     -- Can see who your followees follow, even if you can't see     │
-│     -- those people's profiles directly                             │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## 11.7 Aggregate Semantics
-
-Aggregates operate on the **filtered** result set:
-
-```
-User query:
-  MATCH t: Task RETURN COUNT(t)
-
-With policy filtering to 3 of 10 total tasks:
-  Result: 3
-
-NOT 10. NOT "access denied". The actor's world contains 3 tasks.
-```
-
-This is the only coherent semantics — aggregates reflect what you can see.
-
-## 11.8 Query Planning Integration
-
-Policy predicates inject at planning time, not as post-filters:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                  QUERY PLANNING WITH POLICY                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│   User query:  MATCH t: Task WHERE t.priority > 5                   │
-│                                                                      │
-│   Policy:      ALLOW IF EXISTS(belongs_to(t, p),                    │
-│                               member_of(current_actor(), p))        │
-│                                                                      │
-│   Naive (post-filter):                                              │
-│     1. Fetch all Tasks where priority > 5                           │
-│     2. For each, check policy                                       │
-│     3. Filter out hidden                                            │
-│     → Wasteful: fetches rows just to discard them                   │
-│                                                                      │
-│   Optimized (predicate injection):                                  │
-│     1. Rewrite query to include policy joins                        │
-│     2. Plan combined query with indexes                             │
-│     3. Execute once, results are already filtered                   │
-│                                                                      │
-│   Effective plan:                                                   │
-│     IndexScan(member_of, actor=current_actor) → project_ids        │
-│     IndexScan(belongs_to, project IN project_ids) → task_ids       │
-│     IndexScan(Task, id IN task_ids, priority > 5)                   │
-│                                                                      │
-│   Policy becomes part of the access path, not a filter.             │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## 11.9 The Existence Problem
-
-Subtle case: Can the actor know something exists even if they can't see its content?
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                  EXISTENCE VS CONTENT VISIBILITY                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│   Scenario: Private tasks exist. User queries COUNT(Task).          │
-│                                                                      │
-│   Option A: COUNT returns only visible tasks                        │
-│             User doesn't know private tasks exist                   │
-│             → Information hiding (default)                          │
-│                                                                      │
-│   Option B: COUNT returns total, content hidden                     │
-│             User knows "there are 10 tasks, I can see 3"            │
-│             → Existence exposed, content protected                  │
-│                                                                      │
-│   MEW default: Option A (full filtering)                            │
-│                                                                      │
-│   Explicit override possible:                                       │
-│     policy existence_visible:                                       │
-│       ON MATCH(t: Task).existence    ← special attribute            │
-│       ALLOW IF true                                                 │
-│                                                                      │
-│     MATCH t: Task RETURN COUNT(t)         → 3 (only visible)       │
-│     MATCH t: Task RETURN COUNT_EXISTS(t)  → 10 (existence-visible) │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## 11.10 WALK and Transitive Policy
-
-Path traversal has policy at each hop:
-
-```
-WALK FROM #start FOLLOW follows [depth: 3] RETURN PATH
-
-At each hop:
-  1. Can actor see the edge being traversed?
-  2. Can actor see the target node?
-  
-If either fails, that branch terminates (not error — just no further traversal).
-
-Result: The subgraph reachable within actor's visibility.
-```
-
-## 11.11 Implementation Phases
-
-| Phase | Scope | Complexity |
-|-------|-------|------------|
-| **v2.0** | Type-level gating | Low — pre-query check |
-| **v2.0** | Instance-level filtering (simple) | Medium — predicate injection |
-| **v2.1** | Edge visibility rules | Medium — default + override |
-| **v2.1** | Attribute-level projection | Medium — result transformation |
-| **v2.2** | Optimized query planning | High — planner integration |
-| **v2.x** | Existence vs content distinction | Low — new aggregate variant |
-
----
-
-## Open Question
-
-One thing uncertain: **silent filtering vs. explicit indication**.
-
-Should the actor know their view is filtered?
-
-```
-Option A: Silent filtering
-  Query returns 3 tasks. Actor doesn't know there are 7 more.
-  
-Option B: Filtered indication  
-  Query returns 3 tasks + metadata: { filtered: true, visible_count: 3 }
-  Actor knows their view is partial.
-
-Option C: Count indication
-  Query returns 3 tasks + metadata: { total_count: 10, visible_count: 3 }
-  Actor knows exactly how much is hidden.
-```
-
-Reality analogy: When I look at a building, I don't see a sign saying "7 rooms hidden from you." I just see what I see.
-
-But for debugging/UX, some indication might be valuable. Perhaps a session mode or query modifier?
-
-```
-MATCH t: Task RETURN t WITH VISIBILITY_INFO
--- Returns results + { total: 10, visible: 3, filtered: true }
-```
-
-*End of MEW Policy System Specification*

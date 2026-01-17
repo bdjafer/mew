@@ -204,4 +204,47 @@ ontology HumanResources {
     focus_area: String?
   }
 
+  -- =========================================================================
+  -- EDGE CARDINALITY FEATURES (Level 2)
+  -- =========================================================================
+
+  --- Assignment to a team: employee can be on at most one team
+  node Team {
+    name: String [required],
+    code: String [required, unique],
+    max_size: Int = 10
+  }
+
+  --- Team membership with cardinality: each employee on at most one team
+  edge member_of(employee: Employee, team: Team) [employee -> 0..1] {
+    joined_date: Timestamp = now(),
+    role: String?
+  }
+
+  --- Team has a leader: each team has exactly one leader
+  edge team_leader(team: Team, leader: Employee) [team -> 1] {
+    appointed_date: Timestamp = now()
+  }
+
+  --- A project for cardinality testing
+  node Project {
+    name: String [required],
+    code: String [required, unique],
+    status: String [in: ["planning", "active", "completed", "cancelled"]] = "planning"
+  }
+
+  --- Project assignment with min cardinality: project needs at least 2 members
+  edge project_member(project: Project, employee: Employee) [project -> 2..*]
+
+  --- Buddy system: each new hire has exactly one buddy (1:1)
+  edge has_buddy(new_hire: Employee, buddy: Employee) [new_hire -> 0..1, buddy -> 0..1, no_self]
+
+  --- Approval chain: each document needs 1-3 approvers
+  node ApprovalDocument {
+    title: String [required],
+    status: String [in: ["draft", "pending", "approved", "rejected"]] = "draft"
+  }
+
+  edge approved_by(doc: ApprovalDocument, approver: Manager) [doc -> 1..3]
+
 }

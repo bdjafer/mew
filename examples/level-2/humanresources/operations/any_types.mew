@@ -1,0 +1,203 @@
+-- ===========================================================================
+-- OPERATIONS: Any Types
+-- DESCRIPTION: Tests 'any' type for universal polymorphic edges
+-- FEATURES: types/any_type.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create various entity types to attach notes/tags to
+-- ---------------------------------------------------------------------------
+
+--# test_setup_any_employee
+SPAWN anytest_employee: Employee {
+  name = "AnyTest Employee",
+  email = "anytest.employee@example.com",
+  hire_date = now(),
+  salary = 80000.00,
+  department_code = "ENG"
+}
+
+--# test_setup_any_department
+SPAWN anytest_department: Department {
+  name = "ANYTEST Department",
+  code = "ANYTEST",
+  budget = 1000000.00
+}
+
+--# test_setup_any_skill
+SPAWN anytest_skill: Skill {
+  name = "AnyTest Skill",
+  category = "Technical"
+}
+
+--# test_setup_any_office
+SPAWN anytest_office: Office {
+  name = "AnyTest Office",
+  city = "Test City",
+  capacity = 100
+}
+
+-- ---------------------------------------------------------------------------
+-- has_note edge: any entity can have notes
+-- ---------------------------------------------------------------------------
+
+--# test_note_on_employee
+SPAWN note_emp: Note {
+  content = "Note about the employee",
+  author = "Admin"
+}
+LINK has_note(#anytest_employee, #note_emp)
+
+--# test_note_on_department
+SPAWN note_dept: Note {
+  content = "Note about the department",
+  author = "Manager"
+}
+LINK has_note(#anytest_department, #note_dept)
+
+--# test_note_on_skill
+SPAWN note_skill: Note {
+  content = "Note about the skill",
+  author = "HR"
+}
+LINK has_note(#anytest_skill, #note_skill)
+
+--# test_note_on_office
+SPAWN note_office: Note {
+  content = "Note about the office",
+  author = "Facilities"
+}
+LINK has_note(#anytest_office, #note_office)
+
+-- ---------------------------------------------------------------------------
+-- Query notes across all entity types
+-- ---------------------------------------------------------------------------
+
+--# test_query_all_notes
+MATCH target: any, n: Note, has_note(target, n)
+RETURN n.content, n.author
+
+--# test_count_notes
+MATCH target: any, n: Note, has_note(target, n)
+RETURN COUNT(n) AS total_notes
+
+-- ---------------------------------------------------------------------------
+-- Filter notes by target type
+-- ---------------------------------------------------------------------------
+
+--# test_notes_on_employees_only
+MATCH target: any, n: Note, has_note(target, n)
+WHERE target:Employee
+RETURN n.content, n.author
+
+--# test_notes_on_departments_only
+MATCH target: any, n: Note, has_note(target, n)
+WHERE target:Department
+RETURN n.content, n.author
+
+--# test_notes_on_non_person_entities
+MATCH target: any, n: Note, has_note(target, n)
+WHERE NOT target:Person
+RETURN n.content
+
+-- ---------------------------------------------------------------------------
+-- tagged_with edge: any entity can be tagged
+-- ---------------------------------------------------------------------------
+
+--# test_create_generic_tags
+SPAWN tag_important: GenericTag {
+  name = "important",
+  color = "#FF0000"
+}
+SPAWN tag_review: GenericTag {
+  name = "needs-review",
+  color = "#FFFF00"
+}
+
+--# test_tag_employee
+LINK tagged_with(#anytest_employee, #tag_important)
+
+--# test_tag_department
+LINK tagged_with(#anytest_department, #tag_important)
+LINK tagged_with(#anytest_department, #tag_review)
+
+--# test_tag_skill
+LINK tagged_with(#anytest_skill, #tag_review)
+
+-- ---------------------------------------------------------------------------
+-- Query tagged entities
+-- ---------------------------------------------------------------------------
+
+--# test_query_all_tagged_entities
+MATCH e: any, t: GenericTag, tagged_with(e, t)
+RETURN t.name
+
+--# test_count_entities_per_tag
+MATCH e: any, t: GenericTag, tagged_with(e, t)
+RETURN t.name, COUNT(e) AS entity_count
+
+--# test_find_important_items
+MATCH e: any, t: GenericTag, tagged_with(e, t)
+WHERE t.name = "important"
+RETURN e
+
+--# test_find_entities_needing_review
+MATCH e: any, t: GenericTag, tagged_with(e, t)
+WHERE t.name = "needs-review"
+RETURN e
+
+-- ---------------------------------------------------------------------------
+-- Multiple notes on same entity
+-- ---------------------------------------------------------------------------
+
+--# test_multiple_notes_on_entity
+SPAWN note_dept_2: Note {
+  content = "Second note about the department",
+  author = "Director",
+  priority = "high"
+}
+LINK has_note(#anytest_department, #note_dept_2)
+
+--# test_query_notes_on_single_entity
+MATCH d: Department, n: Note, has_note(d, n)
+WHERE d.code = "ANYTEST"
+RETURN n.content, n.author
+
+--# test_count_notes_on_single_entity
+MATCH d: Department, n: Note, has_note(d, n)
+WHERE d.code = "ANYTEST"
+RETURN COUNT(n) AS note_count
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_has_note_edges
+MATCH target: any, n: Note, has_note(target, n)
+WHERE n.content STARTS WITH "Note about" OR n.content STARTS WITH "Second note"
+UNLINK has_note(target, n)
+
+--# test_cleanup_tagged_with_edges
+MATCH e: any, t: GenericTag, tagged_with(e, t)
+WHERE t.name IN ["important", "needs-review"]
+UNLINK tagged_with(e, t)
+
+--# test_cleanup_notes
+MATCH n: Note
+WHERE n.content STARTS WITH "Note about" OR n.content STARTS WITH "Second note"
+KILL n
+
+--# test_cleanup_generic_tags
+MATCH t: GenericTag WHERE t.name IN ["important", "needs-review"] KILL t
+
+--# test_cleanup_any_employee
+MATCH e: Employee WHERE e.name = "AnyTest Employee" KILL e
+
+--# test_cleanup_any_department
+MATCH d: Department WHERE d.code = "ANYTEST" KILL d
+
+--# test_cleanup_any_skill
+MATCH s: Skill WHERE s.name = "AnyTest Skill" KILL s
+
+--# test_cleanup_any_office
+MATCH o: Office WHERE o.name = "AnyTest Office" KILL o

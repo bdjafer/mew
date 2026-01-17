@@ -1,0 +1,258 @@
+-- ===========================================================================
+-- OPERATIONS: Edge Cardinality
+-- DESCRIPTION: Tests edge cardinality constraints [param -> N], [param -> N..M]
+-- FEATURES: modifiers/cardinality.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create entities for cardinality testing
+-- ---------------------------------------------------------------------------
+
+--# test_setup_team_alpha
+SPAWN team_alpha: Team {
+  name = "Team Alpha",
+  code = "ALPHA"
+}
+
+--# test_setup_team_beta
+SPAWN team_beta: Team {
+  name = "Team Beta",
+  code = "BETA"
+}
+
+--# test_setup_cardinality_emp_1
+SPAWN card_emp1: Employee {
+  first_name = "Card",
+  last_name = "Employee1",
+  email = "card1@example.com",
+  employee_id = "EMP000001",
+  hire_date = now(),
+  salary = 60000.00
+}
+
+--# test_setup_cardinality_emp_2
+SPAWN card_emp2: Employee {
+  first_name = "Card",
+  last_name = "Employee2",
+  email = "card2@example.com",
+  employee_id = "EMP000002",
+  hire_date = now(),
+  salary = 65000.00
+}
+
+--# test_setup_cardinality_emp_3
+SPAWN card_emp3: Employee {
+  first_name = "Card",
+  last_name = "Employee3",
+  email = "card3@example.com",
+  employee_id = "EMP000003",
+  hire_date = now(),
+  salary = 70000.00
+}
+
+--# test_setup_cardinality_manager_1
+SPAWN card_mgr1: Manager {
+  first_name = "Card",
+  last_name = "Manager1",
+  email = "cardmgr1@example.com",
+  employee_id = "EMP000011",
+  hire_date = now(),
+  salary = 100000.00,
+  management_level = 3,
+  budget_authority = 200000.00
+}
+
+--# test_setup_cardinality_manager_2
+SPAWN card_mgr2: Manager {
+  first_name = "Card",
+  last_name = "Manager2",
+  email = "cardmgr2@example.com",
+  employee_id = "EMP000012",
+  hire_date = now(),
+  salary = 110000.00,
+  management_level = 4,
+  budget_authority = 250000.00
+}
+
+-- ---------------------------------------------------------------------------
+-- Maximum cardinality [0..1]: Employee can be on at most one team
+-- ---------------------------------------------------------------------------
+
+--# test_member_of_first_team
+LINK member_of(#card_emp1, #team_alpha)
+
+--# test_member_of_second_team_fails
+LINK member_of(#card_emp1, #team_beta)
+
+--# test_verify_employee_on_one_team
+MATCH e: Employee, t: Team, member_of(e, t)
+WHERE e.last_name = "Employee1"
+RETURN e.last_name, t.name
+
+--# test_member_of_different_employee_succeeds
+LINK member_of(#card_emp2, #team_beta)
+
+--# test_verify_both_employees_on_teams
+MATCH e: Employee, t: Team, member_of(e, t)
+WHERE e.first_name = "Card"
+RETURN e.last_name, t.name
+
+-- ---------------------------------------------------------------------------
+-- Exact cardinality [1]: Team has exactly one leader
+-- ---------------------------------------------------------------------------
+
+--# test_team_leader_assigned
+LINK team_leader(#team_alpha, #card_emp1)
+
+--# test_team_leader_second_fails
+LINK team_leader(#team_alpha, #card_emp2)
+
+--# test_verify_team_has_one_leader
+MATCH t: Team, l: Employee, team_leader(t, l)
+WHERE t.code = "ALPHA"
+RETURN t.name, l.last_name
+
+--# test_team_beta_needs_leader_at_commit
+LINK team_leader(#team_beta, #card_emp3)
+
+-- ---------------------------------------------------------------------------
+-- Minimum cardinality [2..*]: Project needs at least 2 members
+-- ---------------------------------------------------------------------------
+
+--# test_setup_cardinality_project
+SPAWN card_project: Project {
+  name = "Cardinality Test Project",
+  code = "CARDPROJ",
+  status = "planning"
+}
+
+--# test_project_first_member
+LINK project_member(#card_project, #card_emp1)
+
+--# test_project_second_member
+LINK project_member(#card_project, #card_emp2)
+
+--# test_verify_project_has_min_members
+MATCH p: Project, e: Employee, project_member(p, e)
+WHERE p.code = "CARDPROJ"
+RETURN p.name, COUNT(e) AS member_count
+
+-- ---------------------------------------------------------------------------
+-- Bidirectional cardinality [0..1, 0..1]: Buddy system
+-- ---------------------------------------------------------------------------
+
+--# test_buddy_assignment
+LINK has_buddy(#card_emp1, #card_emp2)
+
+--# test_buddy_reverse_check
+MATCH e1: Employee, e2: Employee, has_buddy(e1, e2)
+WHERE e1.last_name = "Employee1"
+RETURN e1.last_name, e2.last_name
+
+--# test_buddy_second_fails
+LINK has_buddy(#card_emp1, #card_emp3)
+
+--# test_buddy_as_target_fails
+LINK has_buddy(#card_emp3, #card_emp2)
+
+-- ---------------------------------------------------------------------------
+-- Range cardinality [1..3]: Document needs 1-3 approvers
+-- ---------------------------------------------------------------------------
+
+--# test_setup_approval_doc
+SPAWN card_doc: ApprovalDocument {
+  title = "Cardinality Test Document",
+  status = "pending"
+}
+
+--# test_first_approver
+LINK approved_by(#card_doc, #card_mgr1)
+
+--# test_verify_one_approver
+MATCH d: ApprovalDocument, m: Manager, approved_by(d, m)
+WHERE d.title = "Cardinality Test Document"
+RETURN d.title, COUNT(m) AS approver_count
+
+--# test_second_approver
+LINK approved_by(#card_doc, #card_mgr2)
+
+--# test_verify_two_approvers
+MATCH d: ApprovalDocument, m: Manager, approved_by(d, m)
+WHERE d.title = "Cardinality Test Document"
+RETURN d.title, COUNT(m) AS approver_count
+
+--# test_setup_third_manager
+SPAWN card_mgr3: Manager {
+  first_name = "Card",
+  last_name = "Manager3",
+  email = "cardmgr3@example.com",
+  employee_id = "EMP000013",
+  hire_date = now(),
+  salary = 120000.00,
+  management_level = 4,
+  budget_authority = 300000.00
+}
+
+--# test_third_approver
+LINK approved_by(#card_doc, #card_mgr3)
+
+--# test_verify_three_approvers
+MATCH d: ApprovalDocument, m: Manager, approved_by(d, m)
+WHERE d.title = "Cardinality Test Document"
+RETURN d.title, COUNT(m) AS approver_count
+
+--# test_setup_fourth_manager
+SPAWN card_mgr4: Manager {
+  first_name = "Card",
+  last_name = "Manager4",
+  email = "cardmgr4@example.com",
+  employee_id = "EMP000014",
+  hire_date = now(),
+  salary = 130000.00,
+  management_level = 5,
+  budget_authority = 350000.00
+}
+
+--# test_fourth_approver_fails
+LINK approved_by(#card_doc, #card_mgr4)
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_member_of_edges
+MATCH e: Employee, t: Team, member_of(e, t)
+WHERE e.first_name = "Card"
+UNLINK member_of(e, t)
+
+--# test_cleanup_team_leader_edges
+MATCH t: Team, l: Employee, team_leader(t, l)
+WHERE t.code IN ["ALPHA", "BETA"]
+UNLINK team_leader(t, l)
+
+--# test_cleanup_project_member_edges
+MATCH p: Project, e: Employee, project_member(p, e)
+WHERE p.code = "CARDPROJ"
+UNLINK project_member(p, e)
+
+--# test_cleanup_buddy_edges
+MATCH e1: Employee, e2: Employee, has_buddy(e1, e2)
+WHERE e1.first_name = "Card"
+UNLINK has_buddy(e1, e2)
+
+--# test_cleanup_approved_by_edges
+MATCH d: ApprovalDocument, m: Manager, approved_by(d, m)
+WHERE d.title = "Cardinality Test Document"
+UNLINK approved_by(d, m)
+
+--# test_cleanup_teams
+MATCH t: Team WHERE t.code IN ["ALPHA", "BETA"] KILL t
+
+--# test_cleanup_employees
+MATCH e: Employee WHERE e.first_name = "Card" KILL e
+
+--# test_cleanup_project
+MATCH p: Project WHERE p.code = "CARDPROJ" KILL p
+
+--# test_cleanup_approval_doc
+MATCH d: ApprovalDocument WHERE d.title = "Cardinality Test Document" KILL d

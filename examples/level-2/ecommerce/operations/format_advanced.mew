@@ -1,0 +1,315 @@
+-- ===========================================================================
+-- OPERATIONS: Advanced Format Validation
+-- DESCRIPTION: Tests [format: phone], [format: ipv4], [format: ipv6],
+--              [format: iso_date], [format: iso_datetime], [format: uuid]
+-- FEATURES: modifiers/format_validation.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- PHONE FORMAT: [format: phone] - E.164 format (+14155551234)
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_phone_us
+SPAWN contact_us: Contact {
+  name = "US Contact",
+  email = "us@example.com",
+  phone = "+14155551234"
+}
+
+--# test_spawn_valid_phone_uk
+SPAWN contact_uk: Contact {
+  name = "UK Contact",
+  email = "uk@example.com",
+  phone = "+442071234567"
+}
+
+--# test_spawn_valid_phone_intl
+SPAWN contact_intl: Contact {
+  name = "International Contact",
+  email = "intl@example.com",
+  phone = "+81312345678"
+}
+
+--# test_spawn_invalid_phone_no_plus
+SPAWN contact_bad1: Contact {
+  name = "Bad Phone 1",
+  email = "bad1@example.com",
+  phone = "14155551234"
+}
+
+--# test_spawn_invalid_phone_with_dashes
+SPAWN contact_bad2: Contact {
+  name = "Bad Phone 2",
+  email = "bad2@example.com",
+  phone = "+1-415-555-1234"
+}
+
+--# test_spawn_invalid_phone_with_spaces
+SPAWN contact_bad3: Contact {
+  name = "Bad Phone 3",
+  email = "bad3@example.com",
+  phone = "+1 415 555 1234"
+}
+
+--# test_spawn_invalid_phone_letters
+SPAWN contact_bad4: Contact {
+  name = "Bad Phone 4",
+  email = "bad4@example.com",
+  phone = "+1415CALLME"
+}
+
+-- ---------------------------------------------------------------------------
+-- IPV4 FORMAT: [format: ipv4] - e.g., 192.168.1.1
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_ipv4_localhost
+SPAWN server_local: Server {
+  hostname = "localhost",
+  ipv4_address = "127.0.0.1"
+}
+
+--# test_spawn_valid_ipv4_private
+SPAWN server_private: Server {
+  hostname = "private-server",
+  ipv4_address = "192.168.1.100"
+}
+
+--# test_spawn_valid_ipv4_public
+SPAWN server_public: Server {
+  hostname = "public-server",
+  ipv4_address = "8.8.8.8"
+}
+
+--# test_spawn_valid_ipv4_max
+SPAWN server_max: Server {
+  hostname = "max-ip-server",
+  ipv4_address = "255.255.255.255"
+}
+
+--# test_spawn_invalid_ipv4_out_of_range
+SPAWN server_bad1: Server {
+  hostname = "bad-server-1",
+  ipv4_address = "256.1.1.1"
+}
+
+--# test_spawn_invalid_ipv4_too_few_octets
+SPAWN server_bad2: Server {
+  hostname = "bad-server-2",
+  ipv4_address = "192.168.1"
+}
+
+--# test_spawn_invalid_ipv4_too_many_octets
+SPAWN server_bad3: Server {
+  hostname = "bad-server-3",
+  ipv4_address = "192.168.1.1.1"
+}
+
+--# test_spawn_invalid_ipv4_letters
+SPAWN server_bad4: Server {
+  hostname = "bad-server-4",
+  ipv4_address = "192.168.one.1"
+}
+
+-- ---------------------------------------------------------------------------
+-- IPV6 FORMAT: [format: ipv6] - e.g., 2001:0db8::1
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_ipv6_full
+SPAWN server_ipv6_full: Server {
+  hostname = "ipv6-full",
+  ipv6_address = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+}
+
+--# test_spawn_valid_ipv6_compressed
+SPAWN server_ipv6_short: Server {
+  hostname = "ipv6-short",
+  ipv6_address = "2001:db8::1"
+}
+
+--# test_spawn_valid_ipv6_loopback
+SPAWN server_ipv6_loop: Server {
+  hostname = "ipv6-loopback",
+  ipv6_address = "::1"
+}
+
+--# test_spawn_valid_ipv6_mapped_ipv4
+SPAWN server_ipv6_mapped: Server {
+  hostname = "ipv6-mapped",
+  ipv6_address = "::ffff:192.168.1.1"
+}
+
+--# test_spawn_invalid_ipv6_too_many_groups
+SPAWN server_ipv6_bad1: Server {
+  hostname = "ipv6-bad-1",
+  ipv6_address = "2001:0db8:85a3:0000:0000:8a2e:0370:7334:extra"
+}
+
+--# test_spawn_invalid_ipv6_invalid_chars
+SPAWN server_ipv6_bad2: Server {
+  hostname = "ipv6-bad-2",
+  ipv6_address = "2001:0db8:85a3:zzzz:0000:8a2e:0370:7334"
+}
+
+-- ---------------------------------------------------------------------------
+-- ISO_DATE FORMAT: [format: iso_date] - e.g., 2024-01-15
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_iso_date_standard
+SPAWN event_standard: ScheduledEvent {
+  name = "Standard Date Event",
+  event_date = "2024-01-15"
+}
+
+--# test_spawn_valid_iso_date_year_end
+SPAWN event_year_end: ScheduledEvent {
+  name = "Year End Event",
+  event_date = "2024-12-31"
+}
+
+--# test_spawn_valid_iso_date_leap_year
+SPAWN event_leap: ScheduledEvent {
+  name = "Leap Year Event",
+  event_date = "2024-02-29"
+}
+
+--# test_spawn_invalid_iso_date_wrong_format
+SPAWN event_bad1: ScheduledEvent {
+  name = "Bad Date 1",
+  event_date = "01/15/2024"
+}
+
+--# test_spawn_invalid_iso_date_invalid_month
+SPAWN event_bad2: ScheduledEvent {
+  name = "Bad Date 2",
+  event_date = "2024-13-01"
+}
+
+--# test_spawn_invalid_iso_date_invalid_day
+SPAWN event_bad3: ScheduledEvent {
+  name = "Bad Date 3",
+  event_date = "2024-01-32"
+}
+
+--# test_spawn_invalid_iso_date_no_dashes
+SPAWN event_bad4: ScheduledEvent {
+  name = "Bad Date 4",
+  event_date = "20240115"
+}
+
+-- ---------------------------------------------------------------------------
+-- ISO_DATETIME FORMAT: [format: iso_datetime] - e.g., 2024-01-15T10:30:00Z
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_iso_datetime_utc
+SPAWN event_dt_utc: ScheduledEvent {
+  name = "UTC Datetime Event",
+  event_date = "2024-01-15",
+  event_datetime = "2024-01-15T10:30:00Z"
+}
+
+--# test_spawn_valid_iso_datetime_offset
+SPAWN event_dt_offset: ScheduledEvent {
+  name = "Offset Datetime Event",
+  event_date = "2024-01-15",
+  event_datetime = "2024-01-15T10:30:00+05:30"
+}
+
+--# test_spawn_valid_iso_datetime_negative_offset
+SPAWN event_dt_neg: ScheduledEvent {
+  name = "Negative Offset Event",
+  event_date = "2024-01-15",
+  event_datetime = "2024-01-15T10:30:00-08:00"
+}
+
+--# test_spawn_valid_iso_datetime_with_ms
+SPAWN event_dt_ms: ScheduledEvent {
+  name = "Milliseconds Event",
+  event_date = "2024-01-15",
+  event_datetime = "2024-01-15T10:30:00.123Z"
+}
+
+--# test_spawn_invalid_iso_datetime_no_timezone
+SPAWN event_dt_bad1: ScheduledEvent {
+  name = "Bad Datetime 1",
+  event_date = "2024-01-15",
+  event_datetime = "2024-01-15T10:30:00"
+}
+
+--# test_spawn_invalid_iso_datetime_no_t
+SPAWN event_dt_bad2: ScheduledEvent {
+  name = "Bad Datetime 2",
+  event_date = "2024-01-15",
+  event_datetime = "2024-01-15 10:30:00Z"
+}
+
+--# test_spawn_invalid_iso_datetime_invalid_time
+SPAWN event_dt_bad3: ScheduledEvent {
+  name = "Bad Datetime 3",
+  event_date = "2024-01-15",
+  event_datetime = "2024-01-15T25:00:00Z"
+}
+
+-- ---------------------------------------------------------------------------
+-- UUID FORMAT: [format: uuid] - e.g., 550e8400-e29b-41d4-a716-446655440000
+-- ---------------------------------------------------------------------------
+
+--# test_spawn_valid_uuid_v4
+SPAWN event_uuid_v4: ScheduledEvent {
+  name = "UUID v4 Event",
+  event_date = "2024-01-15",
+  external_id = "550e8400-e29b-41d4-a716-446655440000"
+}
+
+--# test_spawn_valid_uuid_lowercase
+SPAWN event_uuid_lower: ScheduledEvent {
+  name = "UUID Lowercase Event",
+  event_date = "2024-01-15",
+  external_id = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+}
+
+--# test_spawn_valid_uuid_uppercase
+SPAWN event_uuid_upper: ScheduledEvent {
+  name = "UUID Uppercase Event",
+  event_date = "2024-01-15",
+  external_id = "6BA7B810-9DAD-11D1-80B4-00C04FD430C8"
+}
+
+--# test_spawn_invalid_uuid_too_short
+SPAWN event_uuid_bad1: ScheduledEvent {
+  name = "Bad UUID 1",
+  event_date = "2024-01-15",
+  external_id = "550e8400-e29b-41d4-a716"
+}
+
+--# test_spawn_invalid_uuid_no_dashes
+SPAWN event_uuid_bad2: ScheduledEvent {
+  name = "Bad UUID 2",
+  event_date = "2024-01-15",
+  external_id = "550e8400e29b41d4a716446655440000"
+}
+
+--# test_spawn_invalid_uuid_invalid_chars
+SPAWN event_uuid_bad3: ScheduledEvent {
+  name = "Bad UUID 3",
+  event_date = "2024-01-15",
+  external_id = "550e8400-e29b-41d4-a716-44665544zzzz"
+}
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_contacts
+MATCH c: Contact
+WHERE c.name ENDS WITH "Contact"
+KILL c
+
+--# test_cleanup_servers
+MATCH s: Server
+WHERE s.hostname STARTS WITH "localhost" OR s.hostname CONTAINS "server" OR s.hostname STARTS WITH "ipv6"
+KILL s
+
+--# test_cleanup_events
+MATCH e: ScheduledEvent
+WHERE e.name ENDS WITH "Event"
+KILL e

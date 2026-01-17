@@ -1,0 +1,131 @@
+-- ===========================================================================
+-- OPERATIONS: Referential Actions
+-- DESCRIPTION: Tests on_kill_source/on_kill_target with cascade/unlink/prevent
+-- FEATURES: modifiers/referential_actions.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- CASCADE: Killing project cascades to kill tasks
+-- ---------------------------------------------------------------------------
+
+--# test_cascade_setup_project
+SPAWN cascade_project: Project {
+  name = "Cascade Test Project",
+  code = "CASC"
+}
+
+--# test_cascade_setup_task_1
+SPAWN cascade_task1: Task {
+  title = "Cascade Task 1",
+  status = "todo",
+  priority = 3
+}
+
+--# test_cascade_setup_task_2
+SPAWN cascade_task2: Task {
+  title = "Cascade Task 2",
+  status = "in_progress",
+  priority = 2
+}
+
+--# test_cascade_link_tasks_to_project
+LINK belongs_to(#cascade_task1, #cascade_project)
+LINK belongs_to(#cascade_task2, #cascade_project)
+
+--# test_cascade_verify_tasks_linked
+MATCH t: Task, p: Project, belongs_to(t, p)
+WHERE p.code = "CASC"
+RETURN t.title
+
+--# test_cascade_kill_project
+KILL #cascade_project
+
+--# test_cascade_verify_tasks_deleted
+MATCH t: Task WHERE t.title STARTS WITH "Cascade Task"
+RETURN t.title
+
+-- ---------------------------------------------------------------------------
+-- UNLINK: Killing person just removes assignment edge
+-- ---------------------------------------------------------------------------
+
+--# test_unlink_setup_person
+SPAWN unlink_person: Person {
+  name = "Unlink Test Person",
+  email = "unlink@example.com"
+}
+
+--# test_unlink_setup_task
+SPAWN unlink_task: Task {
+  title = "Unlink Test Task",
+  status = "todo",
+  priority = 3
+}
+
+--# test_unlink_assign_person
+LINK assigned(#unlink_task, #unlink_person)
+
+--# test_unlink_verify_assignment
+MATCH t: Task, p: Person, assigned(t, p)
+WHERE t.title = "Unlink Test Task"
+RETURN t.title, p.name
+
+--# test_unlink_kill_person
+KILL #unlink_person
+
+--# test_unlink_verify_task_remains
+MATCH t: Task WHERE t.title = "Unlink Test Task"
+RETURN t.title
+
+--# test_unlink_verify_no_assignment
+MATCH t: Task, p: Person, assigned(t, p)
+WHERE t.title = "Unlink Test Task"
+RETURN t.title, p.name
+
+--# test_unlink_cleanup_task
+KILL #unlink_task
+
+-- ---------------------------------------------------------------------------
+-- PREVENT: Cannot kill team with members
+-- ---------------------------------------------------------------------------
+
+--# test_prevent_setup_team
+SPAWN prevent_team: Team {
+  name = "Prevent Test Team",
+  code = "PREV"
+}
+
+--# test_prevent_setup_member
+SPAWN prevent_member: Person {
+  name = "Prevent Test Member",
+  email = "prevent@example.com"
+}
+
+--# test_prevent_add_member
+LINK team_member(#prevent_member, #prevent_team)
+
+--# test_prevent_verify_membership
+MATCH p: Person, t: Team, team_member(p, t)
+WHERE t.code = "PREV"
+RETURN p.name, t.name
+
+--# test_prevent_kill_team_fails
+KILL #prevent_team
+
+--# test_prevent_verify_team_still_exists
+MATCH t: Team WHERE t.code = "PREV"
+RETURN t.name
+
+--# test_prevent_remove_member
+MATCH p: Person, t: Team, team_member(p, t)
+WHERE t.code = "PREV"
+UNLINK team_member(p, t)
+
+--# test_prevent_kill_team_succeeds
+KILL #prevent_team
+
+--# test_prevent_verify_team_deleted
+MATCH t: Team WHERE t.code = "PREV"
+RETURN t.name
+
+--# test_prevent_cleanup_member
+KILL #prevent_member

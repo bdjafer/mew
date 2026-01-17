@@ -1,8 +1,9 @@
-# MEW Interiority Specification
+# MEW Interiority
 
 **Version:** 1.0
-**Status:** Draft
-**Scope:** Nested scopes, world boundaries, projections, and cross-scope semantics
+**Status:** Capability
+**Deferred to:** v2
+**Scope:** Nested scopes, world boundaries, projections, cross-scope semantics, scoped timing
 
 ---
 
@@ -963,28 +964,35 @@ node Navigator [has_interior] {
 
 # Part VIII: Time in Worlds
 
-## 8.1 Time Domain Relationship
+## 8.1 Interiors as Time Scopes
 
-Each world interior is a **time domain** (as defined in TIME_CLOCK.md):
+Each world interior has its own **logical time** that can be configured relative to its parent. See [TIME_CLOCK.md](./TIME_CLOCK.md) for time concepts (wall_time, logical_time, now, presets).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                  WORLDS AS TIME DOMAINS                              │
+│                  INTERIOR TIME CONFIGURATION                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│   DOMAIN (existing concept)          WORLD INTERIOR                 │
-│   ─────────────────────────          ──────────────                 │
+│   TIME MODE              BEHAVIOR                                   │
+│   ─────────              ────────                                   │
 │                                                                      │
-│   DOMAIN physics [tick_interval: 8ms]                               │
-│                                       ≈                             │
-│   node Physics [has_interior] {                                     │
-│     interior: ontology [time: ratio(2)] { ... }  -- every 2nd tick │
-│   }                                                                  │
+│   [time: shared]         Ticks when parent ticks (default)          │
 │                                                                      │
-│   The concepts MERGE:                                               │
-│   • Every interior IS a time domain                                │
-│   • Time configuration is part of interior declaration             │
-│   • DOMAIN becomes sugar for world without custom types            │
+│   [time: ratio(N)]       Ticks every Nth parent tick (slower)       │
+│                          e.g., ratio(10) = 1/10th the rate          │
+│                                                                      │
+│   [time: independent]    Only ticks when explicitly advanced        │
+│                          via TICK IN #interior                       │
+│                                                                      │
+│   KEY PRINCIPLE                                                     │
+│   ─────────────                                                     │
+│   Parent is the clock source. Children can be:                      │
+│   • Same rate (shared)                                              │
+│   • Slower (ratio)                                                  │
+│   • Decoupled (independent)                                         │
+│                                                                      │
+│   Children cannot tick faster than parent — that would violate      │
+│   causality (child seeing stale parent state across ticks).         │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -2042,9 +2050,110 @@ SPAWN x: SomeRootType IN ROOT  -- from sandbox context: DENIED
 
 ---
 
-# Part XVIII: Summary
+# Part XVIII: Error Model
 
-## 18.1 Key Concepts
+## 18.1 Error Categories
+
+Interior and scope errors are grouped into categories:
+
+| Category | Code Range | Description |
+|----------|------------|-------------|
+| Scope | E7001-E7010 | Scope resolution and access errors |
+| Interior | E7011-E7020 | Interior declaration and configuration errors |
+| Time | E7021-E7030 | Scoped timing errors |
+| Policy | E7031-E7040 | Cross-scope access policy errors |
+
+## 18.2 Scope Errors
+
+| Code | Name | Condition | Message |
+|------|------|-----------|---------|
+| E7001 | SCOPE_NOT_FOUND | Referenced scope doesn't exist | `SCOPE_NOT_FOUND: Scope '{ref}' does not exist` |
+| E7002 | INVALID_SCOPE_REF | Malformed scope reference | `INVALID_SCOPE_REF: '{ref}' is not a valid scope reference` |
+| E7003 | NOT_AN_INTERIOR | Node doesn't have an interior | `NOT_AN_INTERIOR: Node '{ref}' does not have an interior` |
+| E7004 | TYPE_NOT_IN_SCOPE | Type not declared in target scope | `TYPE_NOT_IN_SCOPE: Type '{type}' is not declared in scope '{scope}'` |
+
+## 18.3 Interior Errors
+
+| Code | Name | Condition | Message |
+|------|------|-----------|---------|
+| E7011 | INVALID_TIME_CONFIG | Invalid time configuration | `INVALID_TIME_CONFIG: '{value}' is not a valid time configuration` |
+| E7012 | INVALID_RATIO | Ratio must be positive integer | `INVALID_RATIO: Time ratio must be positive integer, got {value}` |
+| E7013 | NESTING_DEPTH_EXCEEDED | Too many nested interiors | `NESTING_DEPTH_EXCEEDED: Maximum nesting depth {limit} exceeded` |
+| E7014 | INTERIOR_ALREADY_EXISTS | Node already has an interior | `INTERIOR_ALREADY_EXISTS: Node '{ref}' already has an interior` |
+
+## 18.4 Scoped Time Errors
+
+| Code | Name | Condition | Message |
+|------|------|-----------|---------|
+| E7021 | TICK_SCOPE_NOT_FOUND | TICK target scope doesn't exist | `TICK_SCOPE_NOT_FOUND: Cannot tick scope '{ref}' - not found` |
+| E7022 | TICK_NOT_INTERIOR | TICK target is not an interior | `TICK_NOT_INTERIOR: Cannot tick '{ref}' - not an interior` |
+| E7023 | TICK_INDEPENDENT_ONLY | Can only manually tick independent interiors | `TICK_INDEPENDENT_ONLY: Cannot manually tick '{ref}' - not configured as independent` |
+| E7024 | LOGICAL_TIME_SCOPE_ERROR | Invalid scope for logical_time() | `LOGICAL_TIME_SCOPE_ERROR: Cannot query logical_time for '{ref}'` |
+
+## 18.5 Cross-Scope Policy Errors
+
+| Code | Name | Condition | Message |
+|------|------|-----------|---------|
+| E7031 | CROSS_SCOPE_ACCESS_DENIED | No permission for cross-scope access | `CROSS_SCOPE_ACCESS_DENIED: Access to scope '{target}' denied for '{actor}'` |
+| E7032 | INTERIOR_READ_DENIED | No read access to interior | `INTERIOR_READ_DENIED: Read access to '{interior}' denied` |
+| E7033 | INTERIOR_WRITE_DENIED | No write access to interior | `INTERIOR_WRITE_DENIED: Write access to '{interior}' denied` |
+| E7034 | INTERIOR_META_DENIED | No META access to interior | `INTERIOR_META_DENIED: META access to '{interior}' denied` |
+
+---
+
+# Part XIX: Versioning Considerations
+
+## 19.1 v1 Anticipation
+
+v1 implementations can prepare for interiority by:
+
+**Schema design:**
+- Design node types that might need interiors (agents, tenants, sandboxes)
+- Use ID attributes for cross-entity references (projection pattern)
+- Avoid edges that would need to cross future scope boundaries
+
+**Query patterns:**
+- Structure queries to be scope-local where possible
+- Parameterize scope-dependent logic
+
+## 19.2 v2 Implementation
+
+v2 introduces the full interiority system:
+
+**Core features:**
+- `[has_interior]` node modifier
+- `interior: ontology { ... }` declaration
+- `IN` keyword for scope targeting
+- Time configuration: `shared`, `ratio(N)`, `independent`
+- Access policies for cross-scope operations
+
+**Syntax additions:**
+- `MATCH ... IN #scope`
+- `SPAWN ... IN #scope`
+- `TICK IN #scope`
+- `logical_time(SCOPE)`
+
+## 19.3 v2+ Extensions
+
+Future versions may extend with:
+
+**Advanced nesting:**
+- Deeper nesting limits
+- Cross-branch interior references
+
+**Performance optimizations:**
+- Interior-level caching
+- Lazy interior loading
+
+**Federation (v3+):**
+- Cross-kernel interior references
+- Remote interior watches
+
+---
+
+# Part XX: Summary
+
+## 20.1 Key Concepts
 
 | Concept | Definition |
 |---------|------------|
@@ -2057,7 +2166,7 @@ SPAWN x: SomeRootType IN ROOT  -- from sandbox context: DENIED
 | **Sensor** | Watch on external scope for perception |
 | **Actuator** | Mutation to external scope for action |
 
-## 18.2 Design Principles
+## 20.2 Design Principles
 
 | Principle | Implementation |
 |-----------|----------------|
@@ -2069,7 +2178,7 @@ SPAWN x: SomeRootType IN ROOT  -- from sandbox context: DENIED
 | **Self-access always allowed** | Worlds can always access own interior |
 | **Parent has authority** | Parents can access children's interiors |
 
-## 18.3 Integration Points
+## 20.3 Integration Points
 
 | MEW Feature | Integration |
 |-------------|-------------|
@@ -2084,7 +2193,7 @@ SPAWN x: SomeRootType IN ROOT  -- from sandbox context: DENIED
 | **Higher-Order** | Works within scope; no cross-scope edges |
 | **Federation** | Kernels as roots; cross-kernel projections |
 
-## 18.4 Remaining Open Questions
+## 20.4 Remaining Open Questions
 
 | Question | Status |
 |----------|--------|
@@ -2096,4 +2205,4 @@ SPAWN x: SomeRootType IN ROOT  -- from sandbox context: DENIED
 
 ---
 
-*End of MEW Interiority Specification*
+*End of MEW Interiority Capability*

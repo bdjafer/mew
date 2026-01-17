@@ -2,187 +2,234 @@
 
 Specification coverage for Level 3: Dynamics features.
 
-## Schema Features: Constraints
+---
+
+## Constraints
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| Hard constraint | 3_SCHEMA.md §8.2 | ✓ | eventchain/ontology, projectmanagement/ontology |
-| Soft constraint | 3_SCHEMA.md §8.3 | ✓ | projectmanagement/ontology |
-| Constraint with [message:] | 3_SCHEMA.md §8.1 | ✓ | eventchain/ontology |
-| Constraint pattern matching | 3_SCHEMA.md §8.4 | ✓ | eventchain/ontology |
-| Constraint with WHERE | 3_SCHEMA.md §8.4 | ✓ | eventchain/ontology |
-| Constraint with => false | 3_SCHEMA.md §8.5 | ✓ | eventchain/ontology |
-| Constraint with => condition | 3_SCHEMA.md §8.5 | ✓ | eventchain/ontology |
-| Constraint with transitive edge | 3_SCHEMA.md §8.4 | ✓ | eventchain/ontology |
-| Constraint violation (tested) | 3_SCHEMA.md §8 | ✗ | — |
-| Soft constraint warning | 3_SCHEMA.md §8.3 | ✗ | — |
+| Hard constraint declaration | declarations/constraint.md | ✓ | eventchain/ontology |
+| Soft constraint `[soft]` | modifiers/soft_constraints.md | ✓ | projectmanagement/ontology |
+| Constraint with `[message:]` | declarations/constraint.md | ✓ | eventchain/ontology |
+| Constraint pattern matching | declarations/constraint.md | ✓ | eventchain/ontology |
+| Constraint with WHERE | declarations/constraint.md | ✓ | eventchain/ontology |
+| Constraint `=> false` (prohibition) | declarations/constraint.md | ✓ | eventchain/ontology |
+| Constraint `=> condition` | declarations/constraint.md | ✓ | eventchain/ontology |
+| Constraint violation error | declarations/constraint.md | ✗ | — |
+| Soft constraint warning | modifiers/soft_constraints.md | ✗ | — |
 
-## Schema Features: Rules
+---
 
-| Feature | Spec | Covered | Scenario |
-|---------|------|:-------:|----------|
-| Rule definition | 3_SCHEMA.md §9.1 | ✓ | eventchain/ontology |
-| Rule [priority: N] | 3_SCHEMA.md §9.2 | ✓ | projectmanagement/ontology |
-| Rule [auto] (implicit) | 3_SCHEMA.md §9.3 | ✓ | eventchain/ontology |
-| Rule [manual] | 3_SCHEMA.md §9.3 | ✓ | workflow/ontology |
-| Rule pattern matching | 3_SCHEMA.md §9.4 | ✓ | projectmanagement/ontology |
-| Rule with WHERE | 3_SCHEMA.md §9.4 | ✓ | eventchain/ontology |
-| Rule => SET | 3_SCHEMA.md §9.5 | ✓ | eventchain/ontology |
-| Rule => SPAWN | 3_SCHEMA.md §9.5 | ✓ | projectmanagement/ontology |
-| Rule => LINK | 3_SCHEMA.md §9.5 | ✓ | workflow/ontology |
-| Rule with EXISTS | 3_SCHEMA.md §9.4 | ✓ | projectmanagement/ontology |
-| Rule with NOT EXISTS | 3_SCHEMA.md §9.4 | ✓ | projectmanagement/ontology |
-| Rule execution (tested) | 3_SCHEMA.md §9 | ✗ | — |
-| Manual rule invocation | 3_SCHEMA.md §9.3 | ✗ | — |
-| Rule priority ordering | 3_SCHEMA.md §9.2 | ✗ | — |
-
-## Schema Features: Edge Modifiers
+## Rules
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| [acyclic] | 3_SCHEMA.md §6.3.3 | ✓ | projectmanagement/ontology |
-| [symmetric] | 3_SCHEMA.md §6.3.4 | ✗ | — |
-| Cardinality [a -> N] | 3_SCHEMA.md §6.4.1 | ✓ | projectmanagement/ontology |
-| Cardinality [a -> N..M] | 3_SCHEMA.md §6.4.2 | ✓ | projectmanagement/ontology |
-| [on_kill_target: cascade] | 3_SCHEMA.md §6.5.1 | ✓ | projectmanagement/ontology |
-| [on_kill_target: unlink] | 3_SCHEMA.md §6.5.2 | ✓ | (default behavior) |
-| [on_kill_target: prevent] | 3_SCHEMA.md §6.5.3 | ✓ | workflow/ontology |
-| [on_kill_source: cascade] | 3_SCHEMA.md §6.5.1 | ✓ | workflow/ontology |
-| [on_kill_source: unlink] | 3_SCHEMA.md §6.5.2 | ✓ | (default behavior) |
-| [on_kill_source: prevent] | 3_SCHEMA.md §6.5.3 | ✗ | — |
-| Cascade behavior (tested) | 5_MUTATIONS.md §2.4 | ✗ | — |
-| Prevent behavior (tested) | 5_MUTATIONS.md §2.4.3 | ✗ | — |
-| Cardinality violation (tested) | 3_SCHEMA.md §6.4 | ✗ | — |
-| Acyclic violation (tested) | 3_SCHEMA.md §6.3.3 | ✗ | — |
+| Rule declaration | declarations/rule.md | ✓ | eventchain/ontology |
+| Rule `[priority: N]` | declarations/rule.md | ✓ | projectmanagement/ontology |
+| Rule `[auto]` (implicit default) | declarations/rule.md | ✓ | eventchain/ontology |
+| Rule `[manual]` | declarations/rule.md | ✓ | workflow/ontology |
+| Rule pattern matching | declarations/rule.md | ✓ | projectmanagement/ontology |
+| Rule with WHERE | declarations/rule.md | ✓ | eventchain/ontology |
+| Rule `=> SET` action | declarations/rule.md | ✓ | eventchain/ontology |
+| Rule `=> SPAWN` action | declarations/rule.md | ✓ | projectmanagement/ontology |
+| Rule `=> LINK` action | declarations/rule.md | ✓ | workflow/ontology |
+| Rule `=> KILL` action | declarations/rule.md | ✗ | — |
+| Rule `=> UNLINK` action | declarations/rule.md | ✗ | — |
+| Rule with EXISTS | declarations/rule.md | ✓ | projectmanagement/ontology |
+| Rule with NOT EXISTS | declarations/rule.md | ✓ | projectmanagement/ontology |
+| Rule auto-execution (tested) | declarations/rule.md | ✗ | — |
+| TRIGGER manual rule | statements/trigger.md | ✗ | — |
+| Rule priority ordering (tested) | declarations/rule.md | ✗ | — |
 
-## Query Features
+---
 
-| Feature | Spec | Covered | Scenario |
-|---------|------|:-------:|----------|
-| Transitive edge+ (one or more) | 4_QUERIES.md §2.4.4 | ✓ | eventchain/ontology (constraint) |
-| Transitive edge* (zero or more) | 4_QUERIES.md §2.4.4 | ✗ | — |
-| Transitive with [depth: N] | 4_QUERIES.md §2.4.4 | ✗ | — |
-| Transitive with [depth: N..M] | 4_QUERIES.md §2.4.4 | ✗ | — |
-| Transitive query (tested) | 4_QUERIES.md §2.4.4 | ✗ | — |
-| EXISTS in WHERE | 4_QUERIES.md §2.5.3 | ✓ | projectmanagement/ontology, workflow/ontology |
-| NOT EXISTS in WHERE | 4_QUERIES.md §2.5.3 | ✓ | projectmanagement/ontology |
-| EXISTS with nested pattern | 4_QUERIES.md §2.5.3 | ✓ | projectmanagement/ontology |
-| EXISTS with WHERE inside | 4_QUERIES.md §2.5.3 | ✓ | projectmanagement/ontology |
-| EXISTS query (tested) | 4_QUERIES.md §2.5.3 | ✗ | — |
-| Aggregate COUNT in WHERE | 4_QUERIES.md §2.5.4 | ✗ | — |
-| Aggregate SUM in WHERE | 4_QUERIES.md §2.5.4 | ✗ | — |
-| Aggregate AVG in WHERE | 4_QUERIES.md §2.5.4 | ✗ | — |
-
-## Higher-Order Features
+## Edge Modifiers (Advanced)
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| edge<T> type reference | 4_QUERIES.md §2.4.3 | ✗ | — |
-| Edge targeting edge | 3_SCHEMA.md §6.7 | ✗ | — |
-| Edge binding with AS | 4_QUERIES.md §2.4.2 | ✗ | — |
-| Query edges about edges | 4_QUERIES.md §2.4.3 | ✗ | — |
-| Higher-order in LINK | 5_MUTATIONS.md §3.3 | ✗ | — |
-| Confidence edge pattern | — | ✗ | — |
+| `[acyclic]` modifier | modifiers/acyclic_edges.md | ✓ | projectmanagement/ontology |
+| `[symmetric]` modifier | modifiers/edge_symmetry.md | ✗ | — |
+| Cardinality `[a -> N]` | modifiers/cardinality.md | ✓ | projectmanagement/ontology |
+| Cardinality `[a -> N..M]` | modifiers/cardinality.md | ✓ | projectmanagement/ontology |
+| `[on_kill_target: cascade]` | modifiers/referential_actions.md | ✓ | projectmanagement/ontology |
+| `[on_kill_target: unlink]` | modifiers/referential_actions.md | ✓ | (default behavior) |
+| `[on_kill_target: prevent]` | modifiers/referential_actions.md | ✓ | workflow/ontology |
+| `[on_kill_source: cascade]` | modifiers/referential_actions.md | ✓ | workflow/ontology |
+| `[on_kill_source: unlink]` | modifiers/referential_actions.md | ✓ | (default behavior) |
+| `[on_kill_source: prevent]` | modifiers/referential_actions.md | ✗ | — |
+| Cascade behavior (tested) | modifiers/referential_actions.md | ✗ | — |
+| Prevent behavior (tested) | modifiers/referential_actions.md | ✗ | — |
+| Cardinality violation (tested) | modifiers/cardinality.md | ✗ | — |
+| Acyclic violation (tested) | modifiers/acyclic_edges.md | ✗ | — |
 
-## Subscription Features
+---
 
-| Feature | Spec | Covered | Scenario |
-|---------|------|:-------:|----------|
-| SUBSCRIBE basic | 6_SYSTEM.md §X | ✗ | — |
-| SUBSCRIBE watch mode | 6_SYSTEM.md §X | ✗ | — |
-| SUBSCRIBE consume mode | 6_SYSTEM.md §X | ✗ | — |
-| Competing consumers (group) | 6_SYSTEM.md §X | ✗ | — |
-| Windowing | 6_SYSTEM.md §X | ✗ | — |
-| Buffering | 6_SYSTEM.md §X | ✗ | — |
-| ACK/NACK delivery | 6_SYSTEM.md §X | ✗ | — |
-
-## Time Features
+## Transitive Patterns
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| logical_time() | 6_SYSTEM.md §X | ✗ | — |
-| TICK advancement | 6_SYSTEM.md §X | ✗ | — |
-| Tick-based rule execution | 6_SYSTEM.md §X | ✗ | — |
-| Tick trigger: manual | 6_SYSTEM.md §X | ✗ | — |
-| Tick trigger: per-transaction | 6_SYSTEM.md §X | ✗ | — |
-| Tick trigger: periodic | 6_SYSTEM.md §X | ✗ | — |
+| `edge+` (one or more hops) | patterns/transitive_patterns.md | ✓ | eventchain/ontology (constraint) |
+| `edge*` (zero or more hops) | patterns/transitive_patterns.md | ✗ | — |
+| Transitive with `[depth: N]` | patterns/transitive_patterns.md | ✗ | — |
+| Transitive with `[depth: N..M]` | patterns/transitive_patterns.md | ✗ | — |
+| Transitive query (tested) | patterns/transitive_patterns.md | ✗ | — |
+| Cycle detection via transitive | patterns/transitive_patterns.md | ✓ | eventchain/ontology |
 
-## Authorization Features
+---
 
-| Feature | Spec | Covered | Scenario |
-|---------|------|:-------:|----------|
-| Role-based (RBAC) | — | ✓ | workflow/ontology (Role, has_role, can_perform) |
-| Relationship-based auth | — | ✗ | — |
-| Attribute-based (ABAC) | — | ✗ | — |
-| operation() function | — | ✗ | — |
-| target() function | — | ✗ | — |
-| target_type() function | — | ✗ | — |
-| target_attr() function | — | ✗ | — |
-| RBAC enforcement (tested) | — | ✗ | — |
-
-## Transaction Features
+## Negative Patterns
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| SAVEPOINT | 5_MUTATIONS.md §6.10 | ✗ | — |
-| ROLLBACK TO savepoint | 5_MUTATIONS.md §6.10 | ✗ | — |
-| READ COMMITTED isolation | 5_MUTATIONS.md §6.7.1 | ✗ | — |
-| SERIALIZABLE isolation | 5_MUTATIONS.md §6.7.2 | ✗ | — |
+| NOT EXISTS in constraint | patterns/negative_patterns.md | ✓ | projectmanagement/ontology |
+| NOT EXISTS in rule | patterns/negative_patterns.md | ✓ | projectmanagement/ontology |
+| NOT EXISTS with WHERE | patterns/negative_patterns.md | ✓ | projectmanagement/ontology |
+| Nested NOT EXISTS | patterns/negative_patterns.md | ✗ | — |
+
+---
+
+## Higher-Order Edges
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| `edge<T>` type reference | types/edge_references.md | ✗ | — |
+| Edge targeting edge | types/edge_references.md | ✗ | — |
+| Higher-order in LINK | types/edge_references.md | ✗ | — |
+| Query edges about edges | types/edge_references.md | ✗ | — |
+| Confidence/meta edge pattern | types/edge_references.md | ✗ | — |
+
+---
+
+## Watch & Subscriptions
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| WATCH basic | statements/watch.md | ✗ | — |
+| WATCH watch mode | statements/watch.md | ✗ | — |
+| WATCH consume mode | statements/watch.md | ✗ | — |
+| Competing consumers (group) | statements/watch.md | ✗ | — |
+| Windowing | statements/watch.md | ✗ | — |
+| Buffering | statements/watch.md | ✗ | — |
+| PAUSE watch | statements/watch_management.md | ✗ | — |
+| RESUME watch | statements/watch_management.md | ✗ | — |
+| CANCEL watch | statements/watch_management.md | ✗ | — |
+| ALTER watch | statements/watch_management.md | ✗ | — |
+| ACK delivery | statements/ack.md | ✗ | — |
+| NACK delivery | statements/ack.md | ✗ | — |
+
+---
+
+## Versioning & Time-Travel
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| CREATE SNAPSHOT | statements/versioning.md | ✗ | — |
+| CHECKOUT version | statements/versioning.md | ✗ | — |
+| DIFF between versions | statements/versioning.md | ✗ | — |
+| CREATE BRANCH | statements/versioning.md | ✗ | — |
+| MERGE branch | statements/versioning.md | ✗ | — |
+| Version references (HEAD, HEAD~N) | statements/versioning.md | ✗ | — |
+| VERSIONS list | statements/versioning.md | ✗ | — |
+
+---
+
+## Policy & Authorization
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| Policy declaration | declarations/policy.md | ✗ | — |
+| ALLOW rule | declarations/policy.md | ✗ | — |
+| DENY rule | declarations/policy.md | ✗ | — |
+| `current_actor()` | expressions/context_functions.md | ✗ | — |
+| `operation()` | expressions/context_functions.md | ✗ | — |
+| `target()` | expressions/context_functions.md | ✗ | — |
+| `target_type()` | expressions/context_functions.md | ✗ | — |
+| `target_attr()` | expressions/context_functions.md | ✗ | — |
+| BEGIN SESSION AS | statements/session.md | ✗ | — |
+| END SESSION | statements/session.md | ✗ | — |
+| RBAC pattern | declarations/policy.md | ✓ | workflow/ontology (schema only) |
+
+---
+
+## Transactions (Advanced)
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| SAVEPOINT | statements/transactions.md | ✗ | — |
+| ROLLBACK TO savepoint | statements/transactions.md | ✗ | — |
+| Nested savepoints | statements/transactions.md | ✗ | — |
+
+---
 
 ## Coverage Summary
 
 | Category | Covered | Total | Coverage |
 |----------|---------|-------|----------|
-| Constraints | 8 | 10 | 80% |
-| Rules | 11 | 14 | 79% |
-| Edge Modifiers | 9 | 14 | 64% |
-| Queries | 6 | 13 | 46% |
-| Higher-Order | 0 | 6 | 0% |
-| Subscriptions | 0 | 7 | 0% |
-| Time | 0 | 6 | 0% |
-| Authorization | 1 | 8 | 13% |
-| Transactions | 0 | 4 | 0% |
-| **Total** | **35** | **82** | **43%** |
+| Constraints | 7 | 9 | 78% |
+| Rules | 12 | 16 | 75% |
+| Edge Modifiers | 8 | 14 | 57% |
+| Transitive Patterns | 2 | 6 | 33% |
+| Negative Patterns | 3 | 4 | 75% |
+| Higher-Order Edges | 0 | 5 | 0% |
+| Watch & Subscriptions | 0 | 12 | 0% |
+| Versioning | 0 | 7 | 0% |
+| Policy & Authorization | 1 | 11 | 9% |
+| Transactions (Advanced) | 0 | 3 | 0% |
+| **Total** | **33** | **87** | **38%** |
+
+---
 
 ## Gaps to Address
 
-### Critical Gaps (0% coverage)
-- **Higher-Order Edges** — No scenarios test edge<T>, edges about edges, or higher-order patterns. Need to add confidence/meta edges to EventChain or create dedicated scenario.
-- **Subscriptions** — No SUBSCRIBE scenarios exist. Need dedicated pub/sub testing file.
-- **Time Features** — No logical_time() or TICK scenarios. Need temporal test suite.
-- **Transactions** — No SAVEPOINT or isolation level scenarios. Need transaction testing file.
+### Critical Gaps (0% coverage - need new ontologies/scenarios)
+
+**Higher-Order Edges** - Need ontology with `edge<T>` patterns:
+- Add confidence edges to EventChain (edge targeting causes edge)
+- Scenario: `eventchain/edge_references.mew`
+
+**Watch & Subscriptions** - Need dedicated ontology:
+- New ontology: `notifications/` with message queue patterns
+- Scenarios: `notifications/watch.mew`, `notifications/consume.mew`
+
+**Versioning** - Add to existing ontology:
+- Scenario: `projectmanagement/versioning.mew`
 
 ### High Priority Gaps
-- **Transitive Query Tests** — Ontologies define transitive patterns (causes+) but no operation files test them. Need:
-  - `eventchain/operations/transitive.mew` for causes+ queries
-  - `projectmanagement/operations/dependencies.mew` for depends_on chain queries
-- **Constraint Violation Tests** — Constraints are defined but not tested for violation behavior
-- **Rule Execution Tests** — Rules are defined but auto-execution not tested
-- **Edge Modifier Tests** — [acyclic], cascade, prevent defined but behavior not tested
+
+**Transitive Query Tests** - Ontologies define transitive patterns but no query tests:
+- Scenario: `eventchain/transitive.mew` - test causes+, causes* queries
+
+**Constraint Violation Tests** - Constraints defined but not tested:
+- Scenario: `eventchain/constraint_violations.mew`
+
+**Rule Execution Tests** - Rules defined but auto-execution not tested:
+- Scenario: `eventchain/rule_execution.mew`
+
+**TRIGGER Statement** - Manual rules defined but not triggered:
+- Scenario: `workflow/trigger.mew`
+
+**[symmetric] Edge Modifier** - Not used in any ontology:
+- Need new ontology with mutual relationships (social graph or argumentation)
 
 ### Medium Priority Gaps
-- [symmetric] edge modifier — Not used in any ontology
-- [on_kill_source: prevent] — Not demonstrated
-- Aggregates in WHERE — Not tested
-- Manual rule trigger — Rule [manual] defined but not triggered
 
-### Ontology Improvements
-- **EventChain** — Add edge<causes> confidence pattern for higher-order demo
-- **ProjectManagement** — Add transitive dependency queries, cardinality violation tests
-- **Workflow** — Add RBAC enforcement tests, transition authorization scenarios
+- `[on_kill_source: prevent]` - Not demonstrated
+- Aggregates in WHERE for constraints
+- Cardinality/acyclic violation testing
+- Nested savepoints
 
-### Missing Ontology (from LEVELS.md)
-- **Argumentation** — Listed in LEVELS.md but not present in level-3. Should include:
-  - attack/support edges between arguments
-  - symmetric "related_to" edges
-  - transitive rebuttal chains
+---
 
-### Recommended New Scenario Files
-1. `eventchain/operations/transitive.mew` — Test causes+, causes* queries
-2. `eventchain/operations/constraints.mew` — Test temporal_order violation, no_causal_loop violation
-3. `projectmanagement/operations/rules.mew` — Test auto-timestamp rules, milestone completion
-4. `projectmanagement/operations/cascade.mew` — Test on_kill_target: cascade behavior
-5. `workflow/operations/authorization.mew` — Test RBAC with can_perform edge
-6. `workflow/operations/transitions.mew` — Test manual rule invocation
-7. `level-3/subscriptions/basic.mew` — SUBSCRIBE scenarios (may need dedicated ontology)
-8. `level-3/transactions/savepoints.mew` — SAVEPOINT and isolation scenarios
+## Ontology Focus
+
+| Ontology | Primary Focus | Unique Features |
+|----------|---------------|-----------------|
+| eventchain | Causation, temporal constraints | transitive patterns, auto rules |
+| projectmanagement | Dependencies, cardinality | cascade behavior, soft constraints |
+| workflow | State machines, RBAC | manual rules, prevent actions |
+| (needed) notifications | Real-time subscriptions | WATCH, ACK/NACK |
+| (needed) social | Symmetric relationships | [symmetric] edges |
+
+---
+
+*Spec references point to files under `specs/` directory.*

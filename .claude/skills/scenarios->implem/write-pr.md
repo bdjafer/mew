@@ -1,6 +1,13 @@
 # WRITE PR
 
-You are an implementation agent. Your job: pick ONE failing test and fix it.
+You are an implementation agent. Your job: make ONE failing assertion pass.
+
+## GOAL
+
+Your goal is **incremental progress**: make at least ONE more assertion pass in a failing test.
+- If you can make the whole test pass easily, great
+- If the test has multiple independent assertions (compound test), fix ONE and stop
+- Partial progress is valuable — don't try to boil the ocean
 
 ## COORDINATION (Critical)
 
@@ -11,74 +18,74 @@ Before doing anything:
    cargo test --workspace 2>&1 | tee /tmp/test-output.txt
    ```
 
-2. **List existing draft PRs** in this repo:
+2. **List existing branches and draft PRs** in this repo:
    ```bash
+   git fetch origin
+   git branch -r | grep "origin/fix/" || true
    gh pr list --state open --draft --json title,body,headRefName
    ```
 
-3. **Extract claimed tests** from draft PR titles (format: `fix: <test-name>`)
+3. **Extract claimed tests** from branch names and PR titles (format: `fix/<test-name>`)
 
-4. **Pick an UNCLAIMED failing test** — never work on something another agent claimed
+4. **Pick an UNCLAIMED failing test** — never work on something another agent is working on
 
 If all failing tests are claimed → exit with message "All failing tests are claimed by other agents."
 If all tests pass → exit with message "All tests passing. Nothing to fix."
 
 ## CLAIM YOUR TEST
 
-Once you pick a test, IMMEDIATELY create a draft PR to claim it:
+Once you pick a test, create a draft PR to claim it. Handle conflicts gracefully:
 
 ```bash
-git checkout -b fix/<test-name>
+BRANCH_NAME="fix/<test-name>-$(date +%s)"  # Add timestamp to avoid conflicts
+git checkout -b "$BRANCH_NAME"
 git commit --allow-empty -m "claim: <test-name>"
-git push -u origin fix/<test-name>
+git push -u origin "$BRANCH_NAME"
 gh pr create --draft --title "fix: <test-name>" --body "Claiming test: <test-name>"
 ```
 
-This prevents other parallel agents from picking the same test.
+If push fails due to existing branch, use a unique suffix and retry.
 
-## CATEGORIZE FAILURES
+## ANALYZE THE FAILURE
 
-Group errors by type and attack in order:
-1. Parse errors → Parser
-2. Compile errors → Compiler/schema
-3. Assertion failures → Semantic/logic
-4. Step execution errors → Runtime
-
-Pick the simplest failing test in the highest-priority category.
-
-## IMPLEMENTATION
-
-1. **Run the specific test** with `--nocapture` to get full error output:
+1. **Run the specific test** with `--nocapture`:
    ```bash
    cargo test -p <crate> <test-name> -- --nocapture
    ```
 
-2. **Read the spec** in `specs/specification/*.md` that defines expected behavior
+2. **Identify the FIRST failing assertion**. For compound tests with multiple steps:
+   - Find which step/assertion fails FIRST
+   - Focus ONLY on that one
+   - Ignore later failures — they may be cascading or unrelated
 
-3. **Read the code** that implements it
+3. **Read the spec** in `specs/specification/*.md` that defines expected behavior
 
-4. **Identify the gap** between spec and implementation — don't guess, find the actual lines
+4. **Read the code** that implements it
 
-5. **Implement the minimal fix**:
-   - Follow existing code patterns
-   - Update all places that match on enums/types (exhaustive matches)
+5. **Identify the gap** — don't guess, find the actual lines causing the issue
 
-6. **Verify**:
-   - Compile first: `cargo check --workspace`
-   - Run specific test: confirm it passes
-   - Run full suite: check for regressions
+## IMPLEMENT
 
-## FINALIZE
+1. **Make the minimal change** to fix the FIRST failing assertion
+2. **Follow existing code patterns**
+3. **Compile**: `cargo check --workspace`
+4. **Test the specific test**: see if that assertion now passes
 
-When implementation is complete:
+If the test now passes completely → great!
+If the test passes the first assertion but fails on a DIFFERENT one → that's still success! You made progress.
 
-1. **Commit with clear message**:
+## FINALIZE (ALWAYS DO THIS)
+
+**CRITICAL: Always commit and push your work, even if incomplete.**
+
+1. **Commit your changes**:
    ```bash
    git add -A
-   git commit -m "fix: <test-name>
+   git commit -m "fix: <test-name> - <what you fixed>
 
-   - What changed
-   - Why it fixes the test
+   Progress:
+   - [x] <assertion that now passes>
+   - [ ] <other assertions if any still fail>
 
    Co-Authored-By: Claude <noreply@anthropic.com>"
    ```
@@ -88,38 +95,45 @@ When implementation is complete:
    git push
    ```
 
-3. **Convert draft to ready**:
+3. **If the test passes completely**, mark ready for review:
    ```bash
    gh pr ready
+   gh pr edit --add-label "agent/needs-review"
    ```
 
-4. **Add label to trigger review**:
+4. **If partial progress** (some assertions pass, others fail):
+   - Keep PR as draft
+   - Update PR body with progress summary
+   - DO NOT close the PR — partial progress is valuable
    ```bash
-   gh pr edit --add-label "agent/needs-review"
+   gh pr edit --body "## Progress
+
+   Fixed: <what now works>
+   Remaining: <what still fails>
+
+   This PR makes incremental progress. Another agent can continue."
    ```
 
 ## CONSTRAINTS
 
 ### ⛔ NEVER CHEAT TO MAKE TESTS PASS
 
-FORBIDDEN shortcuts:
-- Commenting out or `#[ignore]`/`skip` failing tests
+FORBIDDEN:
+- Commenting out or `#[ignore]`/`skip` tests
 - Simplifying assertions or weakening expected values
-- Breaking multi-step tests into single steps (e.g., splitting `SPAWN; SPAWN; SPAWN` into 3 separate tests)
 - Changing test expectations to match buggy implementation
 
-**Make code match the test, not the other way around.**
+### ⛔ NEVER CLOSE A PR WITH PROGRESS
 
-### ⛔ NEVER CLAIM A TEST YOU CAN'T FIX
+If you made ANY code changes that improve the situation:
+- DO NOT close the PR
+- Keep it as draft with a progress summary
+- Another agent or human can continue the work
 
-If after investigation you realize:
-- The test requires changes beyond your scope
-- The test is genuinely wrong (not just inconvenient)
-
-Then: close the draft PR with explanation, exit.
+Only close a PR if you made ZERO progress and the claim was a mistake.
 
 ### ⛔ NEVER INTRODUCE REGRESSIONS
 
-If your fix breaks other tests, you must either:
-- Fix those too (if they're related)
+If your fix breaks other tests:
 - Revert and try a different approach
+- Or fix the related breakage if it's small

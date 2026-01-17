@@ -43,5 +43,5 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model claude-opus-4-5-20251101
-            --max-turns 150
+            --max-turns 300
             --allowedTools Read,Edit,Write,Bash,Grep,Glob

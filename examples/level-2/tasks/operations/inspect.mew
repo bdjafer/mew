@@ -1,0 +1,120 @@
+-- ===========================================================================
+-- OPERATIONS: INSPECT
+-- DESCRIPTION: Tests INSPECT statement for direct entity retrieval by ID
+-- FEATURES: statements/inspect.md, expressions/id_references.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create entities to inspect
+-- ---------------------------------------------------------------------------
+
+--# test_setup_inspect_task
+SPAWN inspect_task: Task {
+  title = "Task for inspection",
+  description = "This task will be inspected",
+  status = "in_progress",
+  priority = 4
+}
+
+--# test_setup_inspect_subtask
+SPAWN inspect_subtask: SubTask {
+  title = "SubTask for inspection",
+  priority = 3,
+  is_blocking = true
+}
+
+--# test_setup_inspect_tag
+SPAWN inspect_tag: Tag {
+  name = "inspect-test",
+  color = "#FF0000"
+}
+
+-- Link the entities
+--# test_setup_inspect_links
+LINK subtask_of(inspect_subtask, inspect_task)
+LINK tagged(inspect_task, inspect_tag)
+
+-- ---------------------------------------------------------------------------
+-- Basic INSPECT: Full entity retrieval
+-- ---------------------------------------------------------------------------
+
+--# test_inspect_task_full
+INSPECT #inspect_task
+
+--# test_inspect_subtask_full
+INSPECT #inspect_subtask
+
+--# test_inspect_tag_full
+INSPECT #inspect_tag
+
+-- ---------------------------------------------------------------------------
+-- INSPECT with projection
+-- ---------------------------------------------------------------------------
+
+--# test_inspect_task_projection
+INSPECT #inspect_task
+RETURN title, status, priority
+
+--# test_inspect_subtask_projection
+INSPECT #inspect_subtask
+RETURN title, is_blocking
+
+--# test_inspect_tag_projection
+INSPECT #inspect_tag
+RETURN name, color
+
+-- ---------------------------------------------------------------------------
+-- INSPECT with system fields
+-- ---------------------------------------------------------------------------
+
+--# test_inspect_with_type
+INSPECT #inspect_task
+RETURN title, _type
+
+--# test_inspect_with_id
+INSPECT #inspect_task
+RETURN title, _id
+
+--# test_inspect_with_all_system_fields
+INSPECT #inspect_task
+RETURN *, _type, _id
+
+-- ---------------------------------------------------------------------------
+-- INSPECT non-existent entity
+-- ---------------------------------------------------------------------------
+
+--# test_inspect_nonexistent
+INSPECT #nonexistent_entity_xyz
+
+-- ---------------------------------------------------------------------------
+-- Edge inspection
+-- ---------------------------------------------------------------------------
+
+-- First get an edge ID via MATCH to verify edge inspection
+--# test_get_edge_for_inspection
+MATCH s: SubTask, t: Task, subtask_of(s, t) AS e
+WHERE s.title = "SubTask for inspection"
+RETURN e
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_inspect_links
+MATCH s: SubTask, t: Task, subtask_of(s, t)
+WHERE t.title = "Task for inspection"
+UNLINK subtask_of(s, t)
+
+--# test_cleanup_inspect_tagged
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE t.title = "Task for inspection"
+UNLINK tagged(t, tag)
+
+--# test_cleanup_inspect_task
+MATCH t: Task WHERE t.title = "Task for inspection" KILL t
+
+--# test_cleanup_inspect_subtask
+MATCH s: SubTask WHERE s.title = "SubTask for inspection" KILL s
+
+--# test_cleanup_inspect_tag
+MATCH t: Tag WHERE t.name = "inspect-test" KILL t

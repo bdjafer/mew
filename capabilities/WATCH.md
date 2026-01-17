@@ -1,8 +1,9 @@
 # MEW Watch System
 
 **Version:** 1.0
-**Status:** Specification
+**Status:** Capability
 **Scope:** Reactive queries, push notifications, message consumption
+**Deferred to:** v2
 
 ---
 
@@ -534,7 +535,7 @@ node Message { content: String, sent_at: Timestamp }
 edge inbox(recipient: Actor, message: Message)
 
 -- Send
-SPAWN m: Message { content = "hello", sent_at = wall_time() }
+SPAWN m: Message { content = "hello", sent_at = now() }
 LINK inbox(#bob, m)
 
 -- Receive (Bob's watch)
@@ -553,7 +554,7 @@ edge published(topic: Topic, pub: Publication)
 edge subscribed(actor: Actor, topic: Topic)
 
 -- Publish
-SPAWN p: Publication { content = "news!", published_at = wall_time() }
+SPAWN p: Publication { content = "news!", published_at = now() }
 LINK published(#news_topic, p)
 
 -- Watch topic (watch mode - all see all)
@@ -572,7 +573,7 @@ node Job { payload: String, priority: Int, created_at: Timestamp }
 edge pending_job(job: Job)
 
 -- Enqueue
-SPAWN j: Job { payload = "...", priority = 5, created_at = wall_time() }
+SPAWN j: Job { payload = "...", priority = 5, created_at = now() }
 LINK pending_job(j)
 
 -- Workers (competing)
@@ -822,27 +823,122 @@ WATCH t: Task
 
 ## 9.1 Policy
 
-Watches are subject to policy:
+Watches are subject to policy (see POLICY.md for full details):
 
 ```
--- Watch pattern must pass policy check
-WATCH t: Task WHERE t.secret = true
+┌─────────────────────────────────────────────────────────────────────┐
+│                    WATCH AND POLICY                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Watch Creation                                                     │
+│  ──────────────                                                     │
+│  1. Can current_actor() create watches? (META operation)           │
+│  2. Can current_actor() MATCH the pattern types? (data access)     │
+│  3. Can current_actor() see the filtered attributes?               │
+│                                                                      │
+│  If any check fails → E8001 WATCH_PATTERN_DENIED                   │
+│                                                                      │
+│  Observation Policy (POLICY.md Part X)                             │
+│  ─────────────────────────────────────                              │
+│  Watch patterns are subject to observation policy filtering:       │
+│                                                                      │
+│  • Type-level: actor may be denied watching certain types          │
+│  • Instance-level: actor sees only instances matching policy       │
+│  • Attribute-level: some attributes may be hidden                  │
+│                                                                      │
+│  Watch events only include data the actor can see.                 │
+│                                                                      │
+│  Consume Mode                                                       │
+│  ────────────                                                       │
+│  Additional check: can current_actor() delete matched items?       │
+│  Consume requires both MATCH and DELETE permission.                │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Example: policy-filtered watch
+
+```
+-- Policy: users see only their own tasks
+policy user_sees_own_tasks:
+  ON MATCH(t: Task)
+  ALLOW IF EXISTS(assigned_to(t, current_actor()))
+
+-- Alice's watch:
+WATCH t: Task WHERE t.priority > 5
   RETURN t
 
--- Policy checks:
--- 1. Can current_actor() create watches? (META READ-like)
--- 2. Can current_actor() MATCH Task? (data access)
--- 3. Can current_actor() see secret tasks? (field-level)
-
--- If any check fails, watch rejected
-
--- For consume mode:
--- Also checks: can current_actor() delete matched items?
+-- Alice only receives events for tasks assigned to her
+-- Bob's tasks with priority > 5 are invisible to Alice's watch
 ```
 
-## 9.2 Branching
+## 9.2 Rules
 
-In branching execution:
+Watches see the effects of rules (see RULES.md for full details):
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    WATCH AND RULES                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Transaction Execution Order (from RULES.md Part III):              │
+│                                                                      │
+│    1. User mutation                                                 │
+│    2. Rules fire (may cascade)                                      │
+│    3. Constraints checked                                           │
+│    4. COMMIT                                                        │
+│    5. Watch events delivered ← watches see final state              │
+│                                                                      │
+│  Key Points:                                                        │
+│  ───────────                                                        │
+│  • Watches with [visibility: committed] see rule effects           │
+│  • Watches with [visibility: immediate] may see intermediate states│
+│  • Rule-produced mutations trigger watch events                    │
+│                                                                      │
+│  Watch Triggers vs Rules:                                           │
+│  ────────────────────────                                           │
+│  • Rules: Always active, fire on any matching change               │
+│  • Watch triggers: Active while watch exists, client-controlled    │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## 9.3 Compute Plane
+
+Watches integrate with the compute plane (see COMPUTE.md for full details):
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    WATCH AND COMPUTE                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Reactors (COMPUTE.md Part V)                                       │
+│  ────────────────────────────                                       │
+│  Reactors internally use WATCH to monitor their trigger patterns:  │
+│                                                                      │
+│    reactor EmailNotifier {                                          │
+│      trigger: Task WHERE status = "done"                            │
+│      action: send_email(...)                                        │
+│    }                                                                │
+│                                                                      │
+│  The runtime creates a WATCH on the trigger pattern, invoking      │
+│  the action when matches appear.                                   │
+│                                                                      │
+│  Observing Invocations                                              │
+│  ─────────────────────                                              │
+│  Watch can monitor compute plane activity:                         │
+│                                                                      │
+│    WATCH i: Invocation WHERE i.status = "failed"                   │
+│      RETURN i.code_module, i.error, i.started_at                   │
+│                                                                      │
+│  This enables monitoring dashboards for external code execution.   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## 9.4 Branching (v3+)
+
+In branching execution (see future BRANCHING capability):
 
 ```
 -- Default: watch sees current branch only
@@ -860,7 +956,7 @@ WATCH t: Task
   RETURN t, branch.id, branch.weight
 ```
 
-## 9.3 Timing
+## 9.5 Timing
 
 When are watch events delivered?
 
@@ -890,7 +986,7 @@ With streaming execution (best_effort quiescence):
   No batching
 ```
 
-## 9.4 Transactions
+## 9.6 Transactions
 
 ```
 Watcher sees consistent snapshots:
@@ -906,68 +1002,134 @@ Unless [visibility: immediate] specified.
 
 ---
 
-# Part X: Grammar
+# Part X: Error Model
+
+## 10.1 Watch Errors
 
 ```
-WatchStmt =
-    "WATCH" MatchPattern WatchOptions? ReturnClause
+┌─────────────────────────────────────────────────────────────────────┐
+│                        WATCH ERRORS                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  E8001 - WATCH_PATTERN_DENIED                                       │
+│  ─────────────────────────────                                      │
+│  Watch pattern rejected by policy.                                  │
+│                                                                      │
+│  Fields:                                                            │
+│    actor:      The requesting actor                                 │
+│    pattern:    The watch pattern                                    │
+│    reason:     Policy denial reason                                 │
+│                                                                      │
+│  E8002 - WATCH_NOT_FOUND                                            │
+│  ───────────────────────                                            │
+│  Handle references non-existent or cancelled watch.                 │
+│                                                                      │
+│  Fields:                                                            │
+│    handle:     The invalid watch handle                             │
+│                                                                      │
+│  E8003 - ACK_TIMEOUT                                                │
+│  ───────────────────                                                │
+│  Consume acknowledgment timed out.                                  │
+│  Message will be redelivered.                                       │
+│                                                                      │
+│  Fields:                                                            │
+│    delivery_id:  The unacknowledged delivery                        │
+│    timeout:      Configured timeout duration                        │
+│                                                                      │
+│  E8004 - INVALID_DELIVERY_ID                                        │
+│  ───────────────────────────                                        │
+│  ACK/NACK for unknown or already-processed delivery.                │
+│                                                                      │
+│  Fields:                                                            │
+│    delivery_id:  The invalid delivery ID                            │
+│                                                                      │
+│  E8005 - WATCH_BUFFER_OVERFLOW                                      │
+│  ─────────────────────────────                                      │
+│  Buffer full and on_full: error configured.                         │
+│  Watch cancelled.                                                   │
+│                                                                      │
+│  Fields:                                                            │
+│    handle:       The overflowed watch                               │
+│    buffer_size:  Configured buffer limit                            │
+│    dropped:      Number of events dropped                           │
+│                                                                      │
+│  E8006 - WATCH_LIMIT_EXCEEDED                                       │
+│  ────────────────────────────                                       │
+│  Too many active watches per session or globally.                   │
+│                                                                      │
+│  Fields:                                                            │
+│    current:     Current watch count                                 │
+│    limit:       Configured limit                                    │
+│                                                                      │
+│  E8007 - DEAD_LETTER_FAILED                                         │
+│  ────────────────────────────                                       │
+│  Message could not be moved to dead letter destination.             │
+│                                                                      │
+│  Fields:                                                            │
+│    delivery_id:    The failed delivery                              │
+│    dead_letter:    Configured dead letter target                    │
+│    reason:         Why dead letter failed                           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-WatchOptions = "[" WatchOption ("," WatchOption)* "]"
+## 10.2 Error Information Disclosure
 
-WatchOption =
-    "mode" ":" ("watch" | "consume")
-  | "group" ":" StringLiteral
-  | "ordering" ":" OrderingSpec
-  | "delivery" ":" ("best_effort" | "reliable")
-  | "visibility" ":" ("committed" | "immediate")
-  | "window" ":" WindowSpec
-  | "buffer" ":" IntLiteral
-  | "on_full" ":" ("drop" | "block" | "error")
-  | "ack_timeout" ":" Duration
-  | "max_redeliveries" ":" IntLiteral
-  | "dead_letter" ":" NodeRef
-  | "initial" ":" InitialSpec
-  | "filter" ":" Expr
-  | "branch" ":" BranchRef
-  | "branches" ":" "all"
-  | "deliver_on" ":" ("tick" | "commit")
+Security consideration: error messages may leak information.
 
-OrderingSpec =
-    "arrival"
-  | "causal"
-  | "attribute" "(" OrderExpr ("," OrderExpr)* ")"
+```
+-- To unauthorized user:
+Error: Watch pattern denied
 
-OrderExpr = Expr ("ASC" | "DESC")?
-
-WindowSpec =
-    "none"
-  | "tumbling" "(" Duration ")"
-  | "sliding" "(" Duration "," Duration ")"
-
-InitialSpec =
-    "full"
-  | "none"
-  | "since" "(" IntLiteral ")"
-
-AckStmt =
-    "ACK" DeliveryId
-  | "NACK" DeliveryId NoRetryClause?
-
-NoRetryClause = "[" "no_retry" "]"
-
-PauseStmt = "PAUSE" "WATCH" NodeRef
-ResumeStmt = "RESUME" "WATCH" NodeRef
-CancelStmt = "CANCEL" "WATCH" NodeRef
-AlterWatchStmt = "ALTER" "WATCH" NodeRef "SET" WatchOptions
-
-WatchTrigger = "ON" "MATCH" "DO" Action+
+-- To admin/debugging:
+Error: Watch pattern denied
+  Actor: #alice
+  Pattern: WATCH t: Task WHERE t.confidential = true
+  Reason: Policy 'no_confidential_watch' denied MATCH on confidential Tasks
 ```
 
 ---
 
-# Part XI: Summary
+# Part XI: Versioning Considerations
 
-## 11.1 Key Concepts
+## 11.1 v1 Anticipation
+
+Watch is deferred to v2, but v1 must anticipate:
+
+| Element | v1 Requirement |
+|---------|----------------|
+| Watch handle type | Type exists, unused |
+| Event stream interface | Interface defined, not implemented |
+| Session watch tracking | Data structure exists, empty |
+
+## 11.2 v2 Implementation
+
+Full watch system:
+
+| Element | v2 Delivery |
+|---------|-------------|
+| Watch mode | Non-destructive observation |
+| Consume mode | Destructive consumption with ACK |
+| Ordering options | arrival, causal, attribute |
+| Delivery guarantees | best_effort, reliable |
+| Windowing | tumbling, sliding |
+| Groups | Competing consumers |
+
+## 11.3 v2+ Extensions
+
+| Extension | Description |
+|-----------|-------------|
+| Watch triggers | Server-side actions on match |
+| Multi-branch watches | Observing across branches |
+| Global ordering | Total order across all events |
+| Durable watches | Watches survive session disconnect |
+| Watch federation | Cross-instance watch synchronization |
+
+---
+
+# Part XII: Summary
+
+## 12.1 Key Concepts
 
 | Concept | Definition |
 |---------|------------|
@@ -978,7 +1140,7 @@ WatchTrigger = "ON" "MATCH" "DO" Action+
 | **Acknowledgment** | Confirmation of successful consumption |
 | **Window** | Time-based batching of events |
 
-## 11.2 Mode Comparison
+## 12.2 Mode Comparison
 
 | Aspect | Watch | Consume |
 |--------|-------|---------|
@@ -988,7 +1150,7 @@ WatchTrigger = "ON" "MATCH" "DO" Action+
 | Use case | Dashboards, monitoring | Queues, messaging |
 | Delivery | Best-effort or reliable | Exactly-once |
 
-## 11.3 Option Defaults
+## 12.3 Option Defaults
 
 | Option | Default | Alternatives |
 |--------|---------|--------------|
@@ -1001,7 +1163,7 @@ WatchTrigger = "ON" "MATCH" "DO" Action+
 | buffer | 1000 | N |
 | initial | full | none, since(...) |
 
-## 11.4 The Unified Model
+## 12.4 The Unified Model
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1026,4 +1188,145 @@ WatchTrigger = "ON" "MATCH" "DO" Action+
 
 ---
 
-*End of MEW Watch System Specification*
+# Appendix A: Complete Grammar
+
+```ebnf
+(* Watch Statement *)
+WatchStmt        = "WATCH" MatchPattern WatchOptions? ReturnClause
+
+WatchOptions     = "[" WatchOption ("," WatchOption)* "]"
+
+WatchOption      = "mode" ":" ("watch" | "consume")
+                 | "group" ":" StringLiteral
+                 | "ordering" ":" OrderingSpec
+                 | "delivery" ":" ("best_effort" | "reliable")
+                 | "visibility" ":" ("committed" | "immediate")
+                 | "window" ":" WindowSpec
+                 | "buffer" ":" IntLiteral
+                 | "on_full" ":" ("drop" | "block" | "error")
+                 | "ack_timeout" ":" Duration
+                 | "max_redeliveries" ":" IntLiteral
+                 | "dead_letter" ":" NodeRef
+                 | "initial" ":" InitialSpec
+                 | "filter" ":" Expr
+                 | "branch" ":" BranchRef
+                 | "branches" ":" "all"
+                 | "deliver_on" ":" ("tick" | "commit")
+
+OrderingSpec     = "arrival"
+                 | "causal"
+                 | "attribute" "(" OrderExpr ("," OrderExpr)* ")"
+
+OrderExpr        = Expr ("ASC" | "DESC")?
+
+WindowSpec       = "none"
+                 | "tumbling" "(" Duration ")"
+                 | "sliding" "(" Duration "," Duration ")"
+
+InitialSpec      = "full"
+                 | "none"
+                 | "since" "(" IntLiteral ")"
+
+(* Acknowledgment Statements *)
+AckStmt          = "ACK" DeliveryId
+                 | "NACK" DeliveryId NoRetryClause?
+
+NoRetryClause    = "[" "no_retry" "]"
+
+(* Watch Management Statements *)
+PauseStmt        = "PAUSE" "WATCH" NodeRef
+ResumeStmt       = "RESUME" "WATCH" NodeRef
+CancelStmt       = "CANCEL" "WATCH" NodeRef
+AlterWatchStmt   = "ALTER" "WATCH" NodeRef "SET" WatchOptions
+
+(* Watch Triggers *)
+WatchTrigger     = "ON" "MATCH" "DO" Action+
+
+(* Context Functions - valid in watch filters *)
+WatchContextFunc = "current_actor" "(" ")"
+                 | "current_session" "(" ")"
+```
+
+---
+
+# Appendix B: Layer 0 Extensions
+
+```
+node _Watch [sealed] {
+  pattern: String [required],        -- serialized pattern
+  mode: String [required],           -- "watch" | "consume"
+  group: String?,                    -- group name for competing consumers
+  status: String [required],         -- "active" | "paused" | "cancelled"
+  ordering: String = "arrival",      -- ordering mode
+  delivery: String = "best_effort",  -- delivery guarantee
+  visibility: String = "committed",  -- visibility mode
+  buffer_size: Int = 1000,           -- max buffered events
+  created_at: Timestamp [required],
+  events_delivered: Int = 0,         -- counter
+  events_pending: Int = 0,           -- current buffer size
+  last_event_at: Timestamp?,
+  doc: String?
+}
+
+node _WatchEvent [sealed] {
+  event_type: String [required],     -- "initial" | "added" | "removed" | "changed" | "consumed"
+  tick: Int [required],
+  delivery_id: String?,              -- for consume mode
+  created_at: Timestamp [required]
+}
+
+node _DeadLetter [sealed] {
+  original_match: String [required], -- serialized match data
+  failure_reason: String [required],
+  delivery_attempts: Int [required],
+  created_at: Timestamp [required]
+}
+
+edge _session_has_watch(session: _Session, watch: _Watch) {}
+
+edge _watch_event(watch: _Watch, event: _WatchEvent) {
+  position: Int [required]           -- ordering within watch
+}
+
+edge _watch_dead_letter(watch: _Watch, letter: _DeadLetter) {}
+
+edge _ontology_declares_watch(ontology: _Ontology, watch: _Watch) {}
+```
+
+### Constraints
+
+```
+constraint _watch_has_pattern:
+  w: _Watch => w.pattern != null AND length(w.pattern) > 0
+
+constraint _watch_valid_mode:
+  w: _Watch => w.mode = "watch" OR w.mode = "consume"
+
+constraint _watch_valid_status:
+  w: _Watch => w.status = "active" OR w.status = "paused" OR w.status = "cancelled"
+```
+
+---
+
+# Appendix C: Glossary
+
+| Term | Definition |
+|------|------------|
+| **Watch** | Persistent query that pushes matching changes to clients |
+| **Watch mode** | Non-destructive observation; all watchers see all matches |
+| **Consume mode** | Destructive consumption; each match delivered once then removed |
+| **Group** | Named set of competing consumers; matches distributed among members |
+| **Acknowledgment** | Confirmation of successful message processing (ACK/NACK) |
+| **Dead letter** | Destination for messages that fail processing after max retries |
+| **Window** | Time-based batching of events (tumbling or sliding) |
+| **Delivery guarantee** | Reliability level: at-most-once, at-least-once, exactly-once |
+| **Causal ordering** | Events delivered in happened-before order |
+| **Visibility** | When watch sees changes: committed (after txn) or immediate (during txn) |
+| **Initial results** | Snapshot of current matches sent when watch is created |
+| **Watch handle** | Reference to manage an active watch (pause, resume, cancel) |
+| **current_session()** | Context function returning the current session reference |
+| **current_actor()** | Context function returning the session's bound actor (see POLICY.md) |
+
+---
+
+*End of MEW Watch System Capability*

@@ -373,6 +373,53 @@ mod type_aliases {
     }
 }
 
+mod type_checking {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("type_checking")
+            .ontology("level-2/ecommerce/ontology.mew")
+            .seed("level-2/ecommerce/seeds/populated.mew")
+            .operations("level-2/ecommerce/operations/type_checking.mew")
+            // Basic type checking
+            // PhysicalProducts: laptop, phone, headphones = 3
+            .step("test_query_physical_products_with_type_check", |a| a.rows(3))
+            // DigitalProducts: ebook = 1
+            .step("test_query_digital_products_with_type_check", |a| a.rows(1))
+            // All match base type: 5
+            .step("test_query_all_with_base_type_check", |a| a.rows(5))
+            // Type checking with inheritance
+            // PhysicalProduct is also Product: 3
+            .step("test_physical_product_is_also_product", |a| a.rows(3))
+            // DigitalProduct is also Product: 1
+            .step("test_digital_product_is_also_product", |a| a.rows(1))
+            // Negative type checks
+            // PhysicalProduct is not DigitalProduct: 0
+            .step("test_physical_not_digital", |a| a.rows(0))
+            // DigitalProduct is not PhysicalProduct: 0
+            .step("test_digital_not_physical", |a| a.rows(0))
+            // Combined type checking with other filters
+            // PhysicalProducts with price > 500: laptop, phone = 2
+            .step("test_type_check_with_attribute_filter", |a| a.rows(2))
+            // Physical OR Digital: laptop, phone, headphones, ebook = 4
+            .step("test_type_check_with_or", |a| a.rows(4))
+            // Base only (not subtype): old_product = 1
+            .step("test_base_only_not_subtype", |a| a.rows(1))
+            // Type check in RETURN: 5 products with type check results
+            .step("test_type_check_in_return", |a| a.rows(5))
+            // Type checking with edge patterns
+            // PhysicalProducts with reviews: laptop, phone = 2
+            .step("test_type_check_with_edge_pattern", |a| a.rows(2))
+            // Type check in EXISTS: PhysicalProducts with reviews = 2
+            .step("test_type_check_in_exists", |a| a.rows(2))
+    }
+
+    #[test]
+    fn test_type_checking_operator() {
+        scenario().run().unwrap();
+    }
+}
+
 mod format_slug {
     use super::*;
 
@@ -411,6 +458,72 @@ mod format_slug {
 
     #[test]
     fn test_format_slug_validation() {
+        scenario().run().unwrap();
+    }
+}
+
+mod format_advanced {
+    use super::*;
+
+    pub fn scenario() -> Scenario {
+        Scenario::new("format_advanced")
+            .ontology("level-2/ecommerce/ontology.mew")
+            .operations("level-2/ecommerce/operations/format_advanced.mew")
+            // Phone format: E.164 (+14155551234)
+            .step("test_spawn_valid_phone_us", |a| a.created(1))
+            .step("test_spawn_valid_phone_uk", |a| a.created(1))
+            .step("test_spawn_valid_phone_intl", |a| a.created(1))
+            .step("test_spawn_invalid_phone_no_plus", |a| a.error("format"))
+            .step("test_spawn_invalid_phone_with_dashes", |a| a.error("format"))
+            .step("test_spawn_invalid_phone_with_spaces", |a| a.error("format"))
+            .step("test_spawn_invalid_phone_letters", |a| a.error("format"))
+            // IPv4 format
+            .step("test_spawn_valid_ipv4_localhost", |a| a.created(1))
+            .step("test_spawn_valid_ipv4_private", |a| a.created(1))
+            .step("test_spawn_valid_ipv4_public", |a| a.created(1))
+            .step("test_spawn_valid_ipv4_max", |a| a.created(1))
+            .step("test_spawn_invalid_ipv4_out_of_range", |a| a.error("format"))
+            .step("test_spawn_invalid_ipv4_too_few_octets", |a| a.error("format"))
+            .step("test_spawn_invalid_ipv4_too_many_octets", |a| a.error("format"))
+            .step("test_spawn_invalid_ipv4_letters", |a| a.error("format"))
+            // IPv6 format
+            .step("test_spawn_valid_ipv6_full", |a| a.created(1))
+            .step("test_spawn_valid_ipv6_compressed", |a| a.created(1))
+            .step("test_spawn_valid_ipv6_loopback", |a| a.created(1))
+            .step("test_spawn_valid_ipv6_mapped_ipv4", |a| a.created(1))
+            .step("test_spawn_invalid_ipv6_too_many_groups", |a| a.error("format"))
+            .step("test_spawn_invalid_ipv6_invalid_chars", |a| a.error("format"))
+            // ISO date format
+            .step("test_spawn_valid_iso_date_standard", |a| a.created(1))
+            .step("test_spawn_valid_iso_date_year_end", |a| a.created(1))
+            .step("test_spawn_valid_iso_date_leap_year", |a| a.created(1))
+            .step("test_spawn_invalid_iso_date_wrong_format", |a| a.error("format"))
+            .step("test_spawn_invalid_iso_date_invalid_month", |a| a.error("format"))
+            .step("test_spawn_invalid_iso_date_invalid_day", |a| a.error("format"))
+            .step("test_spawn_invalid_iso_date_no_dashes", |a| a.error("format"))
+            // ISO datetime format
+            .step("test_spawn_valid_iso_datetime_utc", |a| a.created(1))
+            .step("test_spawn_valid_iso_datetime_offset", |a| a.created(1))
+            .step("test_spawn_valid_iso_datetime_negative_offset", |a| a.created(1))
+            .step("test_spawn_valid_iso_datetime_with_ms", |a| a.created(1))
+            .step("test_spawn_invalid_iso_datetime_no_timezone", |a| a.error("format"))
+            .step("test_spawn_invalid_iso_datetime_no_t", |a| a.error("format"))
+            .step("test_spawn_invalid_iso_datetime_invalid_time", |a| a.error("format"))
+            // UUID format
+            .step("test_spawn_valid_uuid_v4", |a| a.created(1))
+            .step("test_spawn_valid_uuid_lowercase", |a| a.created(1))
+            .step("test_spawn_valid_uuid_uppercase", |a| a.created(1))
+            .step("test_spawn_invalid_uuid_too_short", |a| a.error("format"))
+            .step("test_spawn_invalid_uuid_no_dashes", |a| a.error("format"))
+            .step("test_spawn_invalid_uuid_invalid_chars", |a| a.error("format"))
+            // Cleanup
+            .step("test_cleanup_contacts", |a| a.deleted(3))
+            .step("test_cleanup_servers", |a| a.deleted(8))
+            .step("test_cleanup_events", |a| a.deleted(11))
+    }
+
+    #[test]
+    fn test_format_advanced_validation() {
         scenario().run().unwrap();
     }
 }

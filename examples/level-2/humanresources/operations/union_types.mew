@@ -1,0 +1,169 @@
+-- ===========================================================================
+-- OPERATIONS: Union Types
+-- DESCRIPTION: Tests union type aliases (T | U) for polymorphic edge signatures
+-- FEATURES: types/union_type.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create projects and various staff types
+-- ---------------------------------------------------------------------------
+
+--# test_setup_project_alpha
+SPAWN project_alpha: Project {
+  name = "Project Alpha",
+  code = "ALPHA",
+  status = "active"
+}
+
+--# test_setup_project_beta
+SPAWN project_beta: Project {
+  name = "Project Beta",
+  code = "BETA",
+  status = "planning"
+}
+
+--# test_setup_employee_for_union
+SPAWN union_employee: Employee {
+  name = "Union Employee",
+  email = "union.employee@example.com",
+  hire_date = now(),
+  salary = 75000.00,
+  department_code = "ENG"
+}
+
+--# test_setup_contractor_for_union
+SPAWN union_contractor: Contractor {
+  name = "Union Contractor",
+  email = "union.contractor@example.com",
+  company = "ContractCo",
+  hourly_rate = 150.00,
+  contract_end = now()
+}
+
+--# test_setup_manager_for_union
+SPAWN union_manager: Manager {
+  name = "Union Manager",
+  email = "union.manager@example.com",
+  hire_date = now(),
+  salary = 120000.00,
+  department_code = "MGT",
+  budget_authority = 500000.00
+}
+
+--# test_setup_teamlead_for_union
+SPAWN union_teamlead: TeamLead {
+  name = "Union TeamLead",
+  email = "union.teamlead@example.com",
+  hire_date = now(),
+  salary = 95000.00,
+  department_code = "ENG",
+  team_size = 5,
+  tech_stack = "Rust, Python"
+}
+
+-- ---------------------------------------------------------------------------
+-- Union type: StaffMember = Employee | Contractor
+-- ---------------------------------------------------------------------------
+
+--# test_assign_employee_to_project
+LINK assigned_to(#union_employee, #project_alpha)
+
+--# test_assign_contractor_to_project
+LINK assigned_to(#union_contractor, #project_alpha)
+
+--# test_query_all_staff_on_project
+MATCH w: StaffMember, p: Project, assigned_to(w, p)
+WHERE p.code = "ALPHA"
+RETURN w.name, w.email
+
+--# test_filter_union_by_specific_type
+MATCH w: StaffMember, p: Project, assigned_to(w, p)
+WHERE p.code = "ALPHA" AND w:Employee
+RETURN w.name
+
+--# test_filter_union_by_contractor_type
+MATCH w: StaffMember, p: Project, assigned_to(w, p)
+WHERE p.code = "ALPHA" AND w:Contractor
+RETURN w.name
+
+-- ---------------------------------------------------------------------------
+-- Union type: Leader = Manager | TeamLead
+-- ---------------------------------------------------------------------------
+
+--# test_manager_leads_project
+LINK leads_project(#union_manager, #project_alpha)
+
+--# test_teamlead_leads_project
+LINK leads_project(#union_teamlead, #project_beta)
+
+--# test_query_all_project_leaders
+MATCH l: Leader, p: Project, leads_project(l, p)
+RETURN l.name, p.name
+
+--# test_filter_leaders_by_manager
+MATCH l: Leader, p: Project, leads_project(l, p)
+WHERE l:Manager
+RETURN l.name, p.name
+
+--# test_filter_leaders_by_teamlead
+MATCH l: Leader, p: Project, leads_project(l, p)
+WHERE l:TeamLead
+RETURN l.name, p.name
+
+-- ---------------------------------------------------------------------------
+-- Common attribute access through union
+-- ---------------------------------------------------------------------------
+
+--# test_access_common_person_attributes
+MATCH l: Leader, p: Project, leads_project(l, p)
+RETURN l.name, l.email
+
+-- ---------------------------------------------------------------------------
+-- Aggregations with union types
+-- ---------------------------------------------------------------------------
+
+--# test_count_staff_per_project
+MATCH w: StaffMember, p: Project, assigned_to(w, p)
+WHERE p.code = "ALPHA"
+RETURN p.name, COUNT(w) AS staff_count
+
+-- ---------------------------------------------------------------------------
+-- Union type respects inheritance (Manager is also Employee)
+-- ---------------------------------------------------------------------------
+
+--# test_union_type_respects_inheritance
+LINK assigned_to(#union_manager, #project_beta)
+
+--# test_query_project_with_mixed_types
+MATCH w: StaffMember, p: Project, assigned_to(w, p)
+WHERE p.code = "BETA"
+RETURN w.name, w:Employee AS is_employee, w:Manager AS is_manager
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_assigned_to_edges
+MATCH w: StaffMember, p: Project, assigned_to(w, p)
+WHERE w.name STARTS WITH "Union"
+UNLINK assigned_to(w, p)
+
+--# test_cleanup_leads_project_edges
+MATCH l: Leader, p: Project, leads_project(l, p)
+WHERE l.name STARTS WITH "Union"
+UNLINK leads_project(l, p)
+
+--# test_cleanup_projects
+MATCH p: Project WHERE p.code IN ["ALPHA", "BETA"] KILL p
+
+--# test_cleanup_union_employee
+MATCH e: Employee WHERE e.name = "Union Employee" KILL e
+
+--# test_cleanup_union_contractor
+MATCH c: Contractor WHERE c.name = "Union Contractor" KILL c
+
+--# test_cleanup_union_manager
+MATCH m: Manager WHERE m.name = "Union Manager" KILL m
+
+--# test_cleanup_union_teamlead
+MATCH t: TeamLead WHERE t.name = "Union TeamLead" KILL t

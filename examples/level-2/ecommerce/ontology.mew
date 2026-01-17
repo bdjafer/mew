@@ -114,4 +114,32 @@ ontology Ecommerce {
   --- Product belongs to a brand
   edge branded_by(product: Product, brand: Brand)
 
+  -- =========================================================================
+  -- FORMAT VALIDATION NODES (Level 2)
+  -- =========================================================================
+
+  --- Contact information with various format validators
+  node Contact {
+    name: String [required],
+    email: String [format: email],
+    phone: String? [format: phone],
+    website: String? [format: url]
+  }
+
+  --- Server/infrastructure node for IP format testing
+  node Server {
+    hostname: String [required, format: slug],
+    ipv4_address: String? [format: ipv4],
+    ipv6_address: String? [format: ipv6],
+    description: String?
+  }
+
+  --- Event node for date/datetime format testing
+  node ScheduledEvent {
+    name: String [required],
+    event_date: String [format: iso_date],
+    event_datetime: String? [format: iso_datetime],
+    external_id: String? [format: uuid]
+  }
+
 }

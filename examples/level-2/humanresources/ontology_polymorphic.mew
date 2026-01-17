@@ -1,0 +1,118 @@
+-- ===========================================================================
+-- ONTOLOGY: HumanResources Polymorphic
+-- LEVEL: 2 (Structure)
+-- DOMAIN: HR with polymorphic types (union types, any type)
+-- NOTE: This is a separate ontology for testing union/any types
+--       that don't parse in the current implementation
+-- ===========================================================================
+
+ontology HumanResourcesPolymorphic {
+
+  -- =========================================================================
+  -- BASE PERSON TYPES (copied from main ontology)
+  -- =========================================================================
+
+  node Person {
+    name: String [required],
+    email: String [required, unique, format: email],
+    date_of_birth: Timestamp?,
+    phone: String?
+  }
+
+  node Employee : Person {
+    employee_id: String?,
+    hire_date: Timestamp [required],
+    salary: Float [>= 0],
+    department_code: String?
+  }
+
+  node Contractor : Person {
+    company: String [required],
+    hourly_rate: Float [>= 0],
+    contract_end: Timestamp
+  }
+
+  node Manager : Employee {
+    budget_authority: Float [>= 0]
+  }
+
+  node TeamLead : Employee {
+    team_size: Int [>= 0] = 0,
+    tech_stack: String?
+  }
+
+  node Department {
+    name: String [required],
+    code: String [required, unique],
+    budget: Float [>= 0]?
+  }
+
+  node Office {
+    name: String [required],
+    city: String [required],
+    capacity: Int [>= 0]
+  }
+
+  node Skill {
+    name: String [required, unique],
+    category: String?
+  }
+
+  -- =========================================================================
+  -- UNION TYPE FEATURES (Level 2)
+  -- =========================================================================
+
+  --- Union type alias: Staff includes both employees and contractors
+  type StaffMember = Employee | Contractor
+
+  --- Union type alias: Leader can be a Manager or TeamLead
+  type Leader = Manager | TeamLead
+
+  --- A project assignment
+  node Project {
+    name: String [required],
+    code: String [required, unique],
+    status: String [in: ["planning", "active", "completed", "cancelled"]] = "planning",
+    budget: Float?,
+    start_date: Timestamp?,
+    end_date: Timestamp?
+  }
+
+  --- Staff members (Employee or Contractor) can be assigned to projects
+  edge assigned_to(worker: StaffMember, project: Project) {
+    start_date: Timestamp = now(),
+    role: String?,
+    allocation_pct: Int [0..100] = 100
+  }
+
+  --- Leaders (Manager or TeamLead) can lead a project
+  edge leads_project(leader: Leader, project: Project) {
+    start_date: Timestamp = now()
+  }
+
+  -- =========================================================================
+  -- ANY TYPE FEATURES (Level 2)
+  -- =========================================================================
+
+  --- A note/comment that can be attached to any entity
+  node Note {
+    content: String [required],
+    author: String [required],
+    created_at: Timestamp = now(),
+    is_private: Bool = false,
+    priority: String [in: ["low", "normal", "high"]] = "normal"
+  }
+
+  --- Any entity can have notes attached (polymorphic edge)
+  edge has_note(target: any, note: Note)
+
+  --- A tag that can be applied to any entity
+  node GenericTag {
+    name: String [required],
+    color: String = "#808080"
+  }
+
+  --- Any entity can be tagged (polymorphic edge)
+  edge tagged_with(entity: any, tag: GenericTag)
+
+}

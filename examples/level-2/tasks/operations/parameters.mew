@@ -1,0 +1,106 @@
+-- ===========================================================================
+-- OPERATIONS: Parameters
+-- DESCRIPTION: Tests $parameter syntax in queries and mutations
+-- FEATURES: expressions/parameters.md
+-- NOTE: Parameter binding requires runtime API support. These tests verify
+--       that parameter syntax is parsed and that missing parameters error.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create entities for parameter testing
+-- ---------------------------------------------------------------------------
+
+--# test_setup_param_task_1
+SPAWN param_task_1: Task {
+  title = "Parameter test task 1",
+  status = "todo",
+  priority = 5
+}
+
+--# test_setup_param_task_2
+SPAWN param_task_2: Task {
+  title = "Parameter test task 2",
+  status = "in_progress",
+  priority = 3
+}
+
+--# test_setup_param_task_3
+SPAWN param_task_3: Task {
+  title = "Parameter test task 3",
+  status = "done",
+  priority = 1
+}
+
+--# test_setup_param_tag
+SPAWN param_tag: Tag {
+  name = "param-test",
+  color = "#0000FF"
+}
+
+--# test_setup_param_links
+LINK tagged(param_task_1, param_tag)
+LINK tagged(param_task_2, param_tag)
+
+-- ---------------------------------------------------------------------------
+-- Parameter in WHERE clause (missing parameter should error)
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_where_missing_string
+MATCH t: Task WHERE t.status = $status RETURN t
+
+--# test_param_in_where_missing_int
+MATCH t: Task WHERE t.priority > $minPriority RETURN t
+
+--# test_param_in_where_missing_multiple
+MATCH t: Task
+WHERE t.status = $status AND t.priority >= $minPriority
+RETURN t
+
+-- ---------------------------------------------------------------------------
+-- Parameter in pattern filter (missing parameter should error)
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_pattern_filter_missing
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE tag.name = $tagName
+RETURN t
+
+-- ---------------------------------------------------------------------------
+-- Parameter in SPAWN (missing parameter should error)
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_spawn_missing
+SPAWN t: Task {
+  title = $title,
+  priority = $priority
+}
+
+-- ---------------------------------------------------------------------------
+-- Parameter in SET (missing parameter should error)
+-- ---------------------------------------------------------------------------
+
+--# test_param_in_set_missing
+MATCH t: Task WHERE t.title = "Parameter test task 1"
+SET t.status = $newStatus
+
+-- ---------------------------------------------------------------------------
+-- Boolean parameter (missing should error)
+-- ---------------------------------------------------------------------------
+
+--# test_param_bool_type_missing
+MATCH s: SubTask WHERE s.is_blocking = $isBlocking RETURN s
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_param_links
+MATCH t: Task, tag: Tag, tagged(t, tag)
+WHERE t.title STARTS WITH "Parameter test"
+UNLINK tagged(t, tag)
+
+--# test_cleanup_param_tasks
+MATCH t: Task WHERE t.title STARTS WITH "Parameter test" KILL t
+
+--# test_cleanup_param_tag
+MATCH t: Tag WHERE t.name = "param-test" KILL t

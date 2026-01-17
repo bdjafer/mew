@@ -53,4 +53,35 @@ ontology Tasks {
   --- Task blocks another task
   edge blocks(blocker: Task, blocked: Task) [no_self]
 
+  -- =========================================================================
+  -- REFERENTIAL ACTIONS (Level 2)
+  -- =========================================================================
+
+  --- A project groups tasks
+  node Project {
+    name: String [required],
+    code: String [required, unique]
+  }
+
+  --- A person who can be assigned to tasks
+  node Person {
+    name: String [required],
+    email: String [required, unique]
+  }
+
+  --- A protected team
+  node Team {
+    name: String [required],
+    code: String [required, unique]
+  }
+
+  --- Task belongs to project: cascade on project kill
+  edge belongs_to(task: Task, project: Project) [on_kill_target: cascade]
+
+  --- Person assigned to task: unlink when person killed
+  edge assigned(task: Task, person: Person) [on_kill_target: unlink]
+
+  --- Person is member of team: prevent team kill if has members
+  edge team_member(person: Person, team: Team) [on_kill_target: prevent]
+
 }
