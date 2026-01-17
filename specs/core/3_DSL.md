@@ -259,9 +259,10 @@ AttributeDecl =
 
 AttributeModifiers = "[" AttributeModifier ("," AttributeModifier)* "]"
 
-AttributeModifier = 
+AttributeModifier =
     "required"
   | "unique"
+  | "readonly"
   | "indexed" (":" ("asc" | "desc"))?
   | ValueConstraint
 
@@ -356,7 +357,22 @@ constraint <type>_<attr>_unique:
 - Null values don't violate uniqueness
 - Implies `indexed`
 
-### 5.3.3 Indexed
+### 5.3.3 Readonly
+
+Attribute cannot be modified after entity creation. Value can be set during SPAWN but subsequent SET operations on the attribute are rejected.
+
+```
+created_at: Timestamp [readonly] = now()
+```
+
+**Enforcement:** Runtime check at SET time. Not a constraint (not checked at commit).
+
+**Use cases:**
+- Creation timestamps
+- Audit fields
+- Immutable identifiers
+
+### 5.3.4 Indexed
 
 Create index for faster queries.
 
@@ -852,7 +868,7 @@ NodeModifier     = "abstract" | "sealed"
 (* Attributes *)
 AttributeDecl    = DocComment? Identifier ":" TypeExpr AttrModifiers? DefaultValue? ","?
 AttrModifiers    = "[" AttrModifier ("," AttrModifier)* "]"
-AttrModifier     = "required" | "unique" 
+AttrModifier     = "required" | "unique" | "readonly"
                  | "indexed" (":" ("asc" | "desc"))?
                  | ValueConstraint
 ValueConstraint  = CompareConstraint | RangeConstraint | EnumConstraint | LengthConstraint
