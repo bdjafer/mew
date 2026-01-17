@@ -204,6 +204,18 @@ impl Assertion {
             }
         }
 
+        if let Some(min) = self.deleted_min {
+            if result.nodes_deleted < min {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "expected at least {} deleted, got {}",
+                        min, result.nodes_deleted
+                    ),
+                ));
+            }
+        }
+
         if let Some(expected) = self.linked {
             if result.edges_created != expected {
                 return Err(ExampleError::assertion_failed(
@@ -621,6 +633,12 @@ impl AssertionBuilder {
     /// Assert that N nodes were deleted.
     pub fn deleted(mut self, n: usize) -> Self {
         self.assertion.deleted = Some(n);
+        self
+    }
+
+    /// Assert that at least N nodes were deleted.
+    pub fn deleted_gte(mut self, n: usize) -> Self {
+        self.assertion.deleted_min = Some(n);
         self
     }
 
