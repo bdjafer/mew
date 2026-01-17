@@ -9,7 +9,7 @@
 //! - edge_attributes: CRUD operations on edge attributes (level, years_experience, etc.)
 //! - no_self: [no_self] constraint prevents self-referential edges
 //! - complex_joins: Multi-hop joins across 2-4 relationships
-//! - walk_traversal: WALK FOLLOW/UNTIL/DEPTH with COLLECT nodes/edges/path, RETURN endpoint
+//! - walk_traversal: WALK FOLLOW/UNTIL/DEPTH with RETURN NODES/EDGES/PATH/TERMINAL
 //! - multiple_inheritance: TeamLead : Employee, Mentorship (node inherits from 2+ types)
 
 use mew_tests::prelude::*;
@@ -260,24 +260,32 @@ mod walk_traversal {
             .step("test_setup_emp1", |a| a.created(1))
             .step("test_setup_emp2", |a| a.created(1))
             .step("test_setup_reporting_hierarchy", |a| a.linked(6))
-            // WALK: Basic FOLLOW traversal (emp1 -> mgr1 -> dir1 -> vp1 -> ceo)
-            .step("test_walk_follow_reports_to_from_emp1", |a| a.rows_gte(1))
+            // WALK: Basic FOLLOW traversal (emp1 -> mgr1 -> dir1 -> vp1 -> ceo = 4 nodes)
+            .step("test_walk_follow_reports_to_from_emp1", |a| a.rows_gte(4))
             // WALK: With UNTIL termination
             .step("test_walk_until_executive", |a| a.rows(1))
             .step("test_walk_until_management_level_4", |a| a.rows(1))
-            // WALK: COLLECT path
-            .step("test_walk_collect_path", |a| a.rows(1))
-            // WALK: COLLECT edges
-            .step("test_walk_collect_edges", |a| a.rows_gte(1))
+            // WALK: RETURN PATH
+            .step("test_walk_return_path", |a| a.rows(1))
+            // WALK: RETURN EDGES
+            .step("test_walk_return_edges", |a| a.rows_gte(4))
             // WALK: With depth limit
             .step("test_walk_max_depth_2", |a| a.rows_gte(1))
             .step("test_walk_max_depth_1", |a| a.rows(1))
             // WALK: From top down (reverse direction)
             .step("test_walk_reverse_from_ceo", |a| a.rows_gte(6))
-            // WALK: With depth range
-            .step("test_walk_depth_range", |a| a.rows_gte(1))
+            // WALK: Count nodes at each level
+            .step("test_walk_count_direct_reports", |a| a.scalar("direct_report_count", 2i64))
+            // WALK: Find all managers in chain
+            .step("test_walk_managers_only_in_chain", |a| a.rows_gte(3))
+            // WALK: Combined with filter on attributes
+            .step("test_walk_high_salary_in_chain", |a| a.rows_gte(2))
             // WALK: Multiple starting points
-            .step("test_walk_from_multiple_employees", |a| a.rows_gte(1))
+            .step("test_walk_from_multiple_employees", |a| a.rows(2))
+            // WALK: With aggregation
+            .step("test_walk_avg_salary_in_chain", |a| a.rows(1))
+            // WALK: Detect cycles
+            .step("test_walk_detects_no_cycles", |a| a.rows(1))
             // Cleanup
             .step("test_cleanup_walk_employees", |a| a.deleted(7))
     }

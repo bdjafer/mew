@@ -1,6 +1,6 @@
 -- ===========================================================================
 -- SCENARIO: WALK Traversal
--- DESCRIPTION: Tests WALK with FOLLOW, UNTIL, DEPTH, COLLECT
+-- DESCRIPTION: Tests WALK with FOLLOW, UNTIL, RETURN NODES/EDGES/PATH/TERMINAL
 -- FOCUS: Level-2 WALK traversal (unique to this ontology)
 -- ===========================================================================
 
@@ -117,9 +117,8 @@ LINK reports_to(emp2, mgr1)
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
 WALK FROM e FOLLOW reports_to
-COLLECT nodes
-RETURN endpoint
---@ expect:rows >= 1
+RETURN NODES AS chain
+--@ expect:rows >= 4
 
 -- ---------------------------------------------------------------------------
 -- WALK: With UNTIL termination
@@ -128,40 +127,38 @@ RETURN endpoint
 --# test_walk_until_executive
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
-WALK FROM e FOLLOW reports_to UNTIL endpoint:Executive
-RETURN endpoint
+WALK FROM e FOLLOW reports_to UNTIL node:Executive
+RETURN TERMINAL AS executive
 --@ expect:rows = 1
 
 --# test_walk_until_management_level_4
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
-WALK FROM e FOLLOW reports_to UNTIL endpoint.management_level >= 4
-RETURN endpoint
+WALK FROM e FOLLOW reports_to UNTIL node.management_level >= 4
+RETURN TERMINAL AS vp
 --@ expect:rows = 1
 
 -- ---------------------------------------------------------------------------
--- WALK: COLLECT path
+-- WALK: RETURN PATH
 -- ---------------------------------------------------------------------------
 
---# test_walk_collect_path
+--# test_walk_return_path
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
 WALK FROM e FOLLOW reports_to
-COLLECT path
-RETURN endpoint, path
+RETURN PATH AS reporting_path
 --@ expect:rows = 1
 
 -- ---------------------------------------------------------------------------
--- WALK: COLLECT edges
+-- WALK: RETURN EDGES
 -- ---------------------------------------------------------------------------
 
---# test_walk_collect_edges
+--# test_walk_return_edges
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
 WALK FROM e FOLLOW reports_to
-COLLECT edges
-RETURN endpoint, edges
---@ expect:rows >= 1
+RETURN EDGES AS reporting_edges
+--@ expect:rows >= 4
 
 -- ---------------------------------------------------------------------------
 -- WALK: With depth limit
@@ -171,15 +168,14 @@ RETURN endpoint, edges
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
 WALK FROM e FOLLOW reports_to DEPTH 2
-COLLECT nodes
-RETURN endpoint, depth
+RETURN NODES AS limited_chain
 --@ expect:rows >= 1
 
 --# test_walk_max_depth_1
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
 WALK FROM e FOLLOW reports_to DEPTH 1
-RETURN endpoint
+RETURN NODES AS immediate_manager
 --@ expect:rows = 1
 
 -- ---------------------------------------------------------------------------
@@ -189,21 +185,45 @@ RETURN endpoint
 --# test_walk_reverse_from_ceo
 MATCH ceo: Executive
 WHERE ceo.employee_id = "EMP900001"
-WALK FROM ceo FOLLOW reports_to <-
-COLLECT nodes
-RETURN endpoint
+WALK FROM ceo FOLLOW <-reports_to
+RETURN NODES AS all_reports
 --@ expect:rows >= 6
 
 -- ---------------------------------------------------------------------------
--- WALK: With depth range
+-- WALK: Count nodes at each level
 -- ---------------------------------------------------------------------------
 
---# test_walk_depth_range
+--# test_walk_count_direct_reports
+MATCH mgr: Manager
+WHERE mgr.employee_id = "EMP900005"
+WALK FROM mgr FOLLOW <-reports_to DEPTH 1
+RETURN count(NODES) AS direct_report_count
+--@ expect:rows = 1
+--@ expect:has_row { direct_report_count = 2 }
+
+-- ---------------------------------------------------------------------------
+-- WALK: Find all managers in chain
+-- ---------------------------------------------------------------------------
+
+--# test_walk_managers_only_in_chain
 MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
-WALK FROM e FOLLOW reports_to DEPTH 1..3
-RETURN endpoint, depth
---@ expect:rows >= 1
+WALK FROM e FOLLOW reports_to
+RETURN NODES AS managers
+WHERE node:Manager
+--@ expect:rows >= 3
+
+-- ---------------------------------------------------------------------------
+-- WALK: Combined with filter on attributes
+-- ---------------------------------------------------------------------------
+
+--# test_walk_high_salary_in_chain
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+RETURN NODES AS high_earners
+WHERE node.salary > 200000.0
+--@ expect:rows >= 2
 
 -- ---------------------------------------------------------------------------
 -- WALK: Multiple starting points
@@ -213,8 +233,32 @@ RETURN endpoint, depth
 MATCH e: Employee
 WHERE e.employee_id IN ["EMP900006", "EMP900007"]
 WALK FROM e FOLLOW reports_to DEPTH 1
-RETURN endpoint
---@ expect:rows >= 1
+RETURN e.last_name AS employee, TERMINAL.last_name AS manager
+--@ expect:rows = 2
+
+-- ---------------------------------------------------------------------------
+-- WALK: With aggregation
+-- ---------------------------------------------------------------------------
+
+--# test_walk_avg_salary_in_chain
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to
+WITH collect(node.salary) AS salaries
+RETURN avg(salaries) AS avg_chain_salary
+--@ expect:rows = 1
+
+-- ---------------------------------------------------------------------------
+-- WALK: Detect cycles (org shouldn't have any, but test the capability)
+-- ---------------------------------------------------------------------------
+
+--# test_walk_detects_no_cycles
+MATCH e: Employee
+WHERE e.employee_id = "EMP900006"
+WALK FROM e FOLLOW reports_to DETECT CYCLES
+RETURN NODES AS chain, HAS_CYCLE AS has_cycle
+--@ expect:rows = 1
+--@ expect:has_row { has_cycle = false }
 
 -- ---------------------------------------------------------------------------
 -- CLEANUP
@@ -222,6 +266,7 @@ RETURN endpoint
 
 --# test_cleanup_walk_employees
 MATCH e: Employee
-WHERE starts_with(e.employee_id, "EMP9000")
+WHERE e.employee_id STARTS WITH "EMP9000"
 KILL e
 --@ expect:ok
+
