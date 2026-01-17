@@ -150,11 +150,24 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'scenarios/needs-verify')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main
+      - name: Checkout main branch
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 2
+
+      - name: Setup PR branch for pushing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The files to verify are on main, but we need to push fixes to PR branch
+          # Merge the PR branch so we can push to it
+          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+          git fetch origin "$PR_BRANCH"
+          git checkout -B "$PR_BRANCH" "origin/$PR_BRANCH"
+          # Merge main into PR branch to get the latest files
+          git merge origin/main --no-edit || true
+          git push origin "$PR_BRANCH" || true
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -162,8 +175,8 @@ jobs:
       - name: Detect operation files to verify
         id: detect
         run: |
-          # Get changed files from the merge that created this PR
-          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          # Get changed files from the last push to main
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only origin/main~1 origin/main)
 
           FILES=""
           for file in $CHANGED; do
@@ -260,11 +273,12 @@ jobs:
               console.log('Verification passed - PR closed');
             } else {
               // Changes needed - commit and request confirmation
+              const prBranch = '${{ github.event.pull_request.head.ref }}';
               execSync('git config user.name "github-actions[bot]"');
               execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
               execSync('git add -A');
               execSync('git commit -m "fix: correct scenario assertions"');
-              execSync('git push');
+              execSync(`git push origin HEAD:${prBranch}`);
 
               await github.rest.issues.createComment({
                 owner,
