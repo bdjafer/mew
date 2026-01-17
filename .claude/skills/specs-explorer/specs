@@ -1,0 +1,237 @@
+#!/bin/bash
+# specs - MEW specification explorer CLI
+# Usage: specs <command> [args]
+
+set -e
+
+# Auto-detect specs directory (works from any subdirectory)
+find_specs_dir() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -d "$dir/specs" ]]; then
+            echo "$dir/specs"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    echo "specs" # fallback
+}
+
+SPECS_DIR="${SPECS_DIR:-$(find_specs_dir)}"
+
+# Colors (disable if not tty)
+if [[ -t 1 ]]; then
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    GREEN='\033[32m'
+    YELLOW='\033[33m'
+    CYAN='\033[36m'
+    RESET='\033[0m'
+else
+    BOLD='' DIM='' GREEN='' YELLOW='' CYAN='' RESET=''
+fi
+
+# ============================================================================
+# COMMANDS
+# ============================================================================
+
+cmd_list() {
+    find "$SPECS_DIR" -name "*.md" -type f | sort | sed "s|$SPECS_DIR/||"
+}
+
+cmd_count() {
+    find "$SPECS_DIR" -name "*.md" -type f | xargs dirname | sort | uniq -c | sort -rn | \
+        sed "s|$SPECS_DIR/||"
+}
+
+cmd_tree() {
+    if command -v tree &> /dev/null; then
+        tree "$SPECS_DIR" -P "*.md" --prune
+    else
+        find "$SPECS_DIR" -name "*.md" -type f | sed "s|$SPECS_DIR/||" | sort
+    fi
+}
+
+cmd_cat() {
+    local query="$1"
+    [[ -z "$query" ]] && { echo "Usage: specs cat <category>"; echo "Categories: literal type expression pattern declaration statement modifier execution"; return 1; }
+    grep -l "^category: $query" "$SPECS_DIR"/**/*.md 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_status() {
+    local query="$1"
+    [[ -z "$query" ]] && { echo "Usage: specs status <status>"; echo "Values: draft stable deprecated"; return 1; }
+    grep -l "^status: $query" "$SPECS_DIR"/**/*.md 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_pri() {
+    local query="$1"
+    [[ -z "$query" ]] && { echo "Usage: specs pri <priority>"; echo "Values: essential common convenience specialized"; return 1; }
+    grep -l "^priority: $query" "$SPECS_DIR"/**/*.md 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_deps() {
+    local specfile="$1"
+    [[ -z "$specfile" ]] && { echo "Usage: specs deps <spec-file>"; return 1; }
+    [[ ! -f "$specfile" && -f "$SPECS_DIR/$specfile" ]] && specfile="$SPECS_DIR/$specfile"
+    grep "^requires:" "$specfile" 2>/dev/null | sed 's/requires: \[//' | sed 's/\]//' | tr ',' '\n' | tr -d ' '
+}
+
+cmd_rdeps() {
+    local dep="$1"
+    [[ -z "$dep" ]] && { echo "Usage: specs rdeps <name>"; return 1; }
+    grep -l "requires:.*$dep" "$SPECS_DIR"/**/*.md 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_meta() {
+    local specfile="$1"
+    [[ -z "$specfile" ]] && { echo "Usage: specs meta <spec-file>"; return 1; }
+    [[ ! -f "$specfile" && -f "$SPECS_DIR/$specfile" ]] && specfile="$SPECS_DIR/$specfile"
+    sed -n '/^---$/,/^---$/p' "$specfile" | grep -v "^---$"
+}
+
+cmd_show() {
+    local specfile="$1"
+    [[ -z "$specfile" ]] && { echo "Usage: specs show <spec-file>"; return 1; }
+    [[ ! -f "$specfile" && -f "$SPECS_DIR/$specfile" ]] && specfile="$SPECS_DIR/$specfile"
+
+    echo -e "${BOLD}$(basename "$specfile" .md)${RESET}"
+    echo -e "${DIM}$(realpath "$specfile")${RESET}"
+    echo ""
+    sed -n '/^---$/,/^---$/p' "$specfile" | grep -v "^---$" | while read -r line; do
+        local key="${line%%:*}"
+        local val="${line#*: }"
+        printf "${CYAN}%-12s${RESET} %s\n" "$key" "$val"
+    done
+}
+
+cmd_overview() {
+    printf "${BOLD}%-28s %-14s %-10s %s${RESET}\n" "SPEC" "CATEGORY" "STATUS" "PRIORITY"
+    echo "────────────────────────────────────────────────────────────────────"
+    for f in $(find "$SPECS_DIR" -name "*.md" -type f | sort); do
+        local name=$(basename "$f" .md)
+        [[ "$name" == "spec_template" || "$name" == "meta-roadmap" || "$name" == "architecture" ]] && continue
+        local cat=$(grep "^category:" "$f" 2>/dev/null | cut -d: -f2 | tr -d ' ' | head -1)
+        local status=$(grep "^status:" "$f" 2>/dev/null | cut -d: -f2 | tr -d ' ' | head -1)
+        local pri=$(grep "^priority:" "$f" 2>/dev/null | cut -d: -f2 | tr -d ' ' | head -1)
+        [[ -z "$cat" ]] && continue
+        printf "%-28s %-14s %-10s %s\n" "$name" "$cat" "$status" "$pri"
+    done
+}
+
+cmd_dist() {
+    local field="${1:-category}"
+    echo -e "${BOLD}Distribution: $field${RESET}"
+    grep -h "^$field:" "$SPECS_DIR"/**/*.md 2>/dev/null | grep -v "|" | sort | uniq -c | sort -rn
+}
+
+cmd_todo() {
+    echo -e "${BOLD}Essential specs still in draft:${RESET}"
+    grep -l "^status: draft" "$SPECS_DIR"/**/*.md 2>/dev/null | \
+        xargs grep -l "^priority: essential" 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_filter() {
+    local category="$1"
+    local status="$2"
+    [[ -z "$category" || -z "$status" ]] && { echo "Usage: specs filter <category> <status>"; return 1; }
+    grep -l "^category: $category" "$SPECS_DIR"/**/*.md 2>/dev/null | \
+        xargs grep -l "^status: $status" 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_search() {
+    local term="$1"
+    [[ -z "$term" ]] && { echo "Usage: specs search <term>"; return 1; }
+    grep -l "$term" "$SPECS_DIR"/**/*.md 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_grep() {
+    local term="$1"
+    [[ -z "$term" ]] && { echo "Usage: specs grep <term>"; return 1; }
+    grep -n --color=auto "$term" "$SPECS_DIR"/**/*.md 2>/dev/null | sed "s|$SPECS_DIR/||"
+}
+
+cmd_find() {
+    local pattern="$1"
+    [[ -z "$pattern" ]] && { echo "Usage: specs find <pattern>"; return 1; }
+    find "$SPECS_DIR" -name "*$pattern*" -type f | sed "s|$SPECS_DIR/||"
+}
+
+cmd_help() {
+    cat << EOF
+${BOLD}specs${RESET} - MEW specification explorer
+
+${BOLD}USAGE${RESET}
+    specs <command> [arguments]
+
+${BOLD}LISTING${RESET}
+    ${GREEN}list${RESET}              List all spec files
+    ${GREEN}count${RESET}             Count specs by directory
+    ${GREEN}tree${RESET}              Show directory tree
+    ${GREEN}overview${RESET}          All specs with metadata table
+
+${BOLD}FILTER BY FRONTMATTER${RESET}
+    ${GREEN}cat${RESET} <category>    Filter by category (statement, modifier, declaration...)
+    ${GREEN}status${RESET} <status>   Filter by status (draft, stable, deprecated)
+    ${GREEN}pri${RESET} <priority>    Filter by priority (essential, common, convenience, specialized)
+
+${BOLD}DEPENDENCIES${RESET}
+    ${GREEN}deps${RESET} <file>       Show what a spec requires
+    ${GREEN}rdeps${RESET} <name>      Find specs that depend on <name>
+
+${BOLD}INSPECT${RESET}
+    ${GREEN}meta${RESET} <file>       Show frontmatter only
+    ${GREEN}show${RESET} <file>       Pretty-print spec summary
+
+${BOLD}COMBINED${RESET}
+    ${GREEN}todo${RESET}              Show essential + draft specs
+    ${GREEN}filter${RESET} <cat> <st> Filter by category AND status
+    ${GREEN}dist${RESET} [field]      Show distribution (default: category)
+
+${BOLD}SEARCH${RESET}
+    ${GREEN}search${RESET} <term>     Find specs containing term (filenames only)
+    ${GREEN}grep${RESET} <term>       Search with line context
+    ${GREEN}find${RESET} <pattern>    Find by filename pattern
+
+${BOLD}EXAMPLES${RESET}
+    specs cat statement          # All statement specs
+    specs status draft           # All draft specs
+    specs pri essential          # Essential specs
+    specs deps statements/match.md
+    specs rdeps patterns         # What depends on patterns
+    specs filter statement draft # Draft statements
+    specs grep "MATCH"           # Search content
+    specs show statements/match.md
+
+${BOLD}CATEGORIES${RESET}
+    literal, type, expression, pattern, declaration, statement, modifier, execution
+
+${DIM}Specs directory: $SPECS_DIR${RESET}
+EOF
+}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+case "${1:-help}" in
+    list)     cmd_list ;;
+    count)    cmd_count ;;
+    tree)     cmd_tree ;;
+    cat)      cmd_cat "$2" ;;
+    status)   cmd_status "$2" ;;
+    pri)      cmd_pri "$2" ;;
+    deps)     cmd_deps "$2" ;;
+    rdeps)    cmd_rdeps "$2" ;;
+    meta)     cmd_meta "$2" ;;
+    show)     cmd_show "$2" ;;
+    overview) cmd_overview ;;
+    dist)     cmd_dist "$2" ;;
+    todo)     cmd_todo ;;
+    filter)   cmd_filter "$2" "$3" ;;
+    search)   cmd_search "$2" ;;
+    grep)     cmd_grep "$2" ;;
+    find)     cmd_find "$2" ;;
+    help|-h|--help) cmd_help ;;
+    *)        echo "Unknown command: $1"; echo "Run 'specs help' for usage."; exit 1 ;;
+esac
