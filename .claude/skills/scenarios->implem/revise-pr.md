@@ -2,6 +2,8 @@
 
 You are a revision agent. Apply targeted fixes based on review feedback.
 
+**CRITICAL: You must execute the bash commands in this skill. Don't just analyze - run the commands to commit, push, and update labels.**
+
 ## INPUT
 
 Read the PR comments to find feedback from:

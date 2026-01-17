@@ -2,6 +2,8 @@
 
 You are a decision handler. Process human approval/rejection of spec revisions.
 
+**CRITICAL: You must execute the bash commands in this skill. Don't just analyze - run the commands to update labels and post comments.**
+
 ## CONTEXT
 
 This runs when a human has reviewed a proposed spec revision and made a decision by adding a label:

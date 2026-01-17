@@ -2,6 +2,8 @@
 
 You are a spec compliance checker. Detect drift between implementation and specification.
 
+**CRITICAL: You must execute the bash commands in this skill. Don't just analyze - run the commands to update labels.**
+
 ## WHY THIS MATTERS
 
 The spec is the source of truth: `spec → scenarios → implementation → production`
@@ -39,9 +41,14 @@ If implementation matches spec:
 Implementation matches spec `specs/specification/X.md` §Y.Z.
 ```
 
-Then:
+Then execute these commands:
 ```bash
+gh pr comment --body "## Spec Compliance: Passed
+
+Implementation matches spec. No drift detected."
+
 gh pr edit --add-label "gate/spec-passed"
+gh pr edit --remove-label "agent/needs-review"
 ```
 
 ## OUTPUT: DRIFT — IMPLEMENTATION WRONG
@@ -63,8 +70,12 @@ If code should change to match spec:
 [specific guidance on what to change in the code]
 ```
 
-Then:
+Then execute these commands:
 ```bash
+gh pr comment --body "## Spec Compliance: Failed
+
+Implementation does not match spec. See details above."
+
 gh pr edit --add-label "agent/needs-revision"
 gh pr edit --remove-label "agent/needs-review"
 ```
@@ -111,12 +122,21 @@ Commit `<sha>` updates the spec. Please review:
 - Add label **`human/rejected`** to reject (implementation will need rework)
 ```
 
-**Step 3: Update labels**
+**Step 3: Execute these commands to update labels**
 ```bash
+gh pr comment --body "[paste the markdown from Step 2 above]"
+
 gh pr edit --add-label "needs/spec-revision"
 gh pr edit --add-label "awaiting-human"
 gh pr edit --remove-label "agent/needs-review"
 ```
+
+## IMPORTANT
+
+- You MUST run the gh commands to post comments and update labels
+- Don't just analyze - execute the commands
+- The workflow depends on labels being set correctly
+- Every outcome (passed, failed, revision) MUST result in label updates
 
 ## CONSTRAINTS
 
