@@ -33,15 +33,20 @@ LINK friend_of(#charlie, #diana)
 -- ---------------------------------------------------------------------------
 
 --# test_direct_followers_of_alice
-MATCH follows(follower, #alice)
+MATCH follower: User, followed: User, follows(follower, followed)
+WHERE followed.username = "alice"
 RETURN follower.username
 
 --# test_transitive_followers_plus
-MATCH follows+(follower, #alice)
+-- Transitive edge patterns not implemented
+MATCH follower: User, followed: User, follows+(follower, followed)
+WHERE followed.username = "alice"
 RETURN follower.username
 
 --# test_transitive_who_alice_reaches
-MATCH follows+(#alice, reached)
+-- Transitive edge patterns not implemented
+MATCH starter: User, reached: User, follows+(starter, reached)
+WHERE starter.username = "alice"
 RETURN reached.username
 
 -- ---------------------------------------------------------------------------
@@ -49,12 +54,15 @@ RETURN reached.username
 -- ---------------------------------------------------------------------------
 
 --# test_transitive_star_includes_self
-MATCH follows*(user, #alice)
-WHERE user.username = "alice"
+-- Transitive edge patterns not implemented
+MATCH user: User, target: User, follows*(user, target)
+WHERE target.username = "alice" AND user.username = "alice"
 RETURN user.username
 
 --# test_transitive_star_all
-MATCH follows*(follower, #alice)
+-- Transitive edge patterns not implemented
+MATCH follower: User, target: User, follows*(follower, target)
+WHERE target.username = "alice"
 RETURN follower.username
 
 -- ---------------------------------------------------------------------------
@@ -62,15 +70,21 @@ RETURN follower.username
 -- ---------------------------------------------------------------------------
 
 --# test_transitive_depth_2
-MATCH follows+(follower, #alice) [depth: 2]
+-- Transitive edge patterns not implemented
+MATCH follower: User, target: User, follows+(follower, target) [depth: 2]
+WHERE target.username = "alice"
 RETURN follower.username
 
 --# test_transitive_depth_range
-MATCH follows+(follower, #alice) [depth: 2..4]
+-- Transitive edge patterns not implemented
+MATCH follower: User, target: User, follows+(follower, target) [depth: 2..4]
+WHERE target.username = "alice"
 RETURN follower.username
 
 --# test_transitive_depth_exact
-MATCH follows+(follower, #alice) [depth: 3]
+-- Transitive edge patterns not implemented
+MATCH follower: User, target: User, follows+(follower, target) [depth: 3]
+WHERE target.username = "alice"
 RETURN follower.username
 
 -- ---------------------------------------------------------------------------
@@ -78,15 +92,21 @@ RETURN follower.username
 -- ---------------------------------------------------------------------------
 
 --# test_friends_of_friends
-MATCH friend_of+(u, #alice)
+-- Transitive edge patterns not implemented
+MATCH u: User, target: User, friend_of+(u, target)
+WHERE target.username = "alice"
 RETURN u.username
 
 --# test_friends_within_2_hops
-MATCH friend_of+(u, #alice) [depth: 2]
+-- Transitive edge patterns not implemented
+MATCH u: User, target: User, friend_of+(u, target) [depth: 2]
+WHERE target.username = "alice"
 RETURN u.username
 
 --# test_connection_path_exists
-MATCH friend_of+(#alice, #diana)
+-- Transitive edge patterns not implemented
+MATCH a: User, d: User, friend_of+(a, d)
+WHERE a.username = "alice" AND d.username = "diana"
 RETURN true AS connected
 
 -- ---------------------------------------------------------------------------
@@ -101,7 +121,8 @@ MATCH follows+(u, u)
 RETURN u.username AS in_cycle
 
 --# test_remove_cycle
-MATCH follows(#alice, #frank) AS f
+MATCH u1: User, u2: User, follows(u1, u2) AS f
+WHERE u1.username = "alice" AND u2.username = "frank"
 UNLINK f
 
 -- ---------------------------------------------------------------------------
@@ -122,11 +143,15 @@ RETURN u.username, verified.username
 -- ---------------------------------------------------------------------------
 
 --# test_count_reachable_users
-MATCH follows+(_, #alice)
+-- Transitive edge patterns not implemented
+MATCH u: User, target: User, follows+(u, target)
+WHERE target.username = "alice"
 RETURN COUNT(*) AS reachable_count
 
 --# test_count_by_depth
-MATCH follows+(follower, #alice) [depth: 1..3]
+-- Transitive edge patterns not implemented
+MATCH follower: User, target: User, follows+(follower, target) [depth: 1..3]
+WHERE target.username = "alice"
 RETURN COUNT(follower) AS within_3_hops
 
 -- ---------------------------------------------------------------------------
