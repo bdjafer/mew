@@ -16,6 +16,7 @@ pub struct Assertion {
     pub created: Option<usize>,
     pub modified: Option<usize>,
     pub deleted: Option<usize>,
+    pub deleted_min: Option<usize>,
     pub linked: Option<usize>,
     pub unlinked: Option<usize>,
 
@@ -192,6 +193,18 @@ impl Assertion {
                     format!(
                         "expected {} deleted, got {}",
                         expected, result.nodes_deleted
+                    ),
+                ));
+            }
+        }
+
+        if let Some(min) = self.deleted_min {
+            if result.nodes_deleted < min {
+                return Err(ExampleError::assertion_failed(
+                    step,
+                    format!(
+                        "expected at least {} deleted, got {}",
+                        min, result.nodes_deleted
                     ),
                 ));
             }
@@ -614,6 +627,12 @@ impl AssertionBuilder {
     /// Assert that N nodes were deleted.
     pub fn deleted(mut self, n: usize) -> Self {
         self.assertion.deleted = Some(n);
+        self
+    }
+
+    /// Assert that at least N nodes were deleted.
+    pub fn deleted_gte(mut self, n: usize) -> Self {
+        self.assertion.deleted_min = Some(n);
         self
     }
 
