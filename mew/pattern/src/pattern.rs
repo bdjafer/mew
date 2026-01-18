@@ -139,13 +139,27 @@ fn compile_edge_pattern(
         }
     }
 
+    // For symmetric edges, generate an internal edge variable if none provided
+    // This is needed for edge deduplication in cross-join queries
+    let edge_var = if edge.alias.is_some() {
+        edge.alias.clone()
+    } else if let Some(edge_type) = registry.get_edge_type(edge_type_id) {
+        if edge_type.symmetric {
+            Some(format!("_edge_{}", edge.edge_type))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // If the first target is bound, this is a follow operation
     // Otherwise it's a check operation
     if bound_vars.contains(&edge.targets[0]) {
         Ok(PatternOp::FollowEdge {
             edge_type_id,
             from_vars: edge.targets.clone(),
-            edge_var: edge.alias.clone(),
+            edge_var,
         })
     } else {
         Ok(PatternOp::CheckEdge {

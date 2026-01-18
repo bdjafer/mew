@@ -44,6 +44,9 @@ impl<'r, 'g> Matcher<'r, 'g> {
         // Start with the initial bindings
         let mut candidates = vec![initial];
 
+        // Track edge variables that need deduplication (for symmetric edges)
+        let mut edge_vars_for_dedup: Vec<String> = Vec::new();
+
         // Process each operation
         for op in &pattern.ops {
             let mut new_candidates = Vec::new();
@@ -54,6 +57,72 @@ impl<'r, 'g> Matcher<'r, 'g> {
             }
 
             candidates = new_candidates;
+
+            // Track edge variables from symmetric edge FollowEdge operations
+            if let PatternOp::FollowEdge {
+                edge_type_id,
+                edge_var,
+                ..
+            } = op
+            {
+                if let Some(ref var) = edge_var {
+                    if let Some(edge_type) = self.registry.get_edge_type(*edge_type_id) {
+                        if edge_type.symmetric {
+                            edge_vars_for_dedup.push(var.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Deduplicate by edge_id for symmetric edges
+        // This ensures each physical edge appears only once in results
+        // We prefer forward (stored-order) matches over reverse matches
+        for edge_var in &edge_vars_for_dedup {
+            // First pass: collect all matches, grouping by edge_id
+            let mut edge_matches: std::collections::HashMap<mew_core::EdgeId, Vec<Bindings>> =
+                std::collections::HashMap::new();
+            let mut non_edge_bindings = Vec::new();
+
+            for bindings in candidates {
+                if let Some(binding) = bindings.get(edge_var) {
+                    if let Some(edge_id) = binding.as_edge() {
+                        edge_matches.entry(edge_id).or_default().push(bindings);
+                    } else {
+                        non_edge_bindings.push(bindings);
+                    }
+                } else {
+                    non_edge_bindings.push(bindings);
+                }
+            }
+
+            // Second pass: for each edge_id, prefer forward match over reverse match
+            let reverse_marker = format!("_reverse_{}", edge_var);
+            let mut deduped = non_edge_bindings;
+            for (_edge_id, matches) in edge_matches {
+                if matches.len() == 1 {
+                    // Only one match, use it
+                    deduped.push(matches.into_iter().next().unwrap());
+                } else {
+                    // Multiple matches - prefer the one WITHOUT reverse marker
+                    let mut forward = None;
+                    let mut reverse = None;
+                    for m in matches {
+                        if m.get(&reverse_marker).is_some() {
+                            reverse = Some(m);
+                        } else {
+                            forward = Some(m);
+                        }
+                    }
+                    // Prefer forward, fall back to reverse
+                    if let Some(m) = forward {
+                        deduped.push(m);
+                    } else if let Some(m) = reverse {
+                        deduped.push(m);
+                    }
+                }
+            }
+            candidates = deduped;
         }
 
         Ok(candidates)
@@ -98,6 +167,13 @@ impl<'r, 'g> Matcher<'r, 'g> {
                     .as_node()
                     .ok_or_else(|| crate::PatternError::type_error("expected node binding"))?;
 
+                // Check if this edge type is symmetric
+                let is_symmetric = self
+                    .registry
+                    .get_edge_type(*edge_type_id)
+                    .map(|et| et.symmetric)
+                    .unwrap_or(false);
+
                 // Find edges from this node with matching type
                 let edges: Vec<_> = self
                     .graph
@@ -130,6 +206,67 @@ impl<'r, 'g> Matcher<'r, 'g> {
                                 new_bindings.insert(alias, Binding::Edge(edge_id));
                             }
                             matches.push(new_bindings);
+                        }
+                    }
+                }
+
+                // For symmetric edges, also search edges where source_id is at position 1
+                // This handles the case: friend_of(alice, bob) stored, query friend_of(bob, x)
+                //
+                // Note: This does NOT cause duplicates because:
+                // - Forward search uses edges_from(source_id) - finds edges where source_id is at pos 0
+                // - Reverse search uses edges_to(source_id) - finds edges where source_id is at pos > 0
+                // For a given candidate, only ONE of these will match, never both.
+                if is_symmetric && from_vars.len() == 2 {
+                    let reverse_edges: Vec<_> = self
+                        .graph
+                        .edges_to(source_id, Some(*edge_type_id))
+                        .collect();
+
+                    for edge_id in reverse_edges {
+                        if let Some(edge) = self.graph.get_edge(edge_id) {
+                            // For symmetric edge, the query pattern edge(a, b) should match
+                            // stored edge(x, y) when a=y (position 1).
+                            // So we need to check: from_vars[0] matches edge.targets[1]
+                            //                      from_vars[1] matches edge.targets[0]
+                            let mut all_match = true;
+
+                            // Check first variable against position 1
+                            if let Some(binding) = bindings.get(&from_vars[0]) {
+                                if let Some(expected_id) = binding.as_node() {
+                                    if edge.targets.len() > 1 {
+                                        let actual_id = edge.targets[1].as_node();
+                                        if actual_id != Some(expected_id) {
+                                            all_match = false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Check second variable against position 0 (if bound)
+                            if all_match {
+                                if let Some(binding) = bindings.get(&from_vars[1]) {
+                                    if let Some(expected_id) = binding.as_node() {
+                                        let actual_id = edge.targets[0].as_node();
+                                        if actual_id != Some(expected_id) {
+                                            all_match = false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if all_match {
+                                let mut new_bindings = bindings.clone();
+                                if let Some(alias) = edge_var {
+                                    new_bindings.insert(alias, Binding::Edge(edge_id));
+                                    // Mark as reverse match for deduplication preference
+                                    new_bindings.insert(
+                                        &format!("_reverse_{}", alias),
+                                        Binding::Value(mew_core::Value::Bool(true)),
+                                    );
+                                }
+                                matches.push(new_bindings);
+                            }
                         }
                     }
                 }
@@ -384,5 +521,75 @@ mod tests {
             .collect();
         assert!(node_ids.contains(&task_b));
         assert!(node_ids.contains(&task_c));
+    }
+
+    #[test]
+    fn test_match_symmetric_edge_reverse() {
+        // GIVEN registry with symmetric edge friend_of(Person, Person)
+        let mut builder = RegistryBuilder::new();
+        builder
+            .add_type("Person")
+            .attr(AttrDef::new("name", "String"))
+            .done()
+            .unwrap();
+        builder
+            .add_edge_type("friend_of")
+            .param("a", "Person")
+            .param("b", "Person")
+            .symmetric()
+            .done()
+            .unwrap();
+        let registry = builder.build().unwrap();
+
+        // GIVEN graph with alice, bob and friend_of(alice, bob)
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+        let friend_of_type_id = registry.get_edge_type_id("friend_of").unwrap();
+
+        let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+        let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+
+        graph
+            .create_edge(friend_of_type_id, vec![alice.into(), bob.into()], attrs! {})
+            .unwrap();
+
+        // PATTERN: a: Person, b: Person, friend_of(a, b)
+        let elements = vec![
+            PatternElem::Node(NodePattern {
+                var: "a".to_string(),
+                type_name: "Person".to_string(),
+                span: Default::default(),
+            }),
+            PatternElem::Node(NodePattern {
+                var: "b".to_string(),
+                type_name: "Person".to_string(),
+                span: Default::default(),
+            }),
+            PatternElem::Edge(EdgePattern {
+                edge_type: "friend_of".to_string(),
+                targets: vec!["a".to_string(), "b".to_string()],
+                alias: None,
+                transitive: None,
+                span: Default::default(),
+            }),
+        ];
+        let pattern = CompiledPattern::compile(&elements, &registry).unwrap();
+
+        // WHEN
+        let matcher = Matcher::new(&registry, &graph);
+        let matches = matcher.find_all(&pattern).unwrap();
+
+        // THEN: For symmetric edge with cross-join, should return 1 match (not 2).
+        // Per spec: "Only one edge is stored" - queries should return each edge once.
+        assert_eq!(
+            matches.len(),
+            1,
+            "Symmetric edge cross-join should return one row per physical edge"
+        );
+
+        // Verify the match contains the edge in stored order (alice, bob)
+        let binding = &matches[0];
+        assert_eq!(binding.get("a").unwrap().as_node(), Some(alice));
+        assert_eq!(binding.get("b").unwrap().as_node(), Some(bob));
     }
 }

@@ -40,7 +40,7 @@ mod symmetric {
             .step("test_query_mutual_block_forward", |a| a.rows(1))
             .step("test_query_mutual_block_reverse", |a| a.rows(1)) // Symmetric: (charlie, bob) should find the edge
             // Count verification
-            .step("test_count_symmetric_edges", |a| a.value(1)) // Single deduplicated friendship edge
+            .step("test_count_symmetric_edges", |a| a.value(1))
             .step("test_count_user_relationships", |a| a.rows_gte(1))
             // Unlink symmetric
             .step("test_unlink_friendship", |a| a.unlinked(1))
@@ -95,8 +95,8 @@ mod higher_order {
             // Query patterns not implemented
             .step("test_query_edges_about_edges", |a| a.error("type"))
             .step("test_join_through_higher_order", |a| a.error("type"))
-            // Cleanup
-            .step("test_cleanup", |a| a.deleted_gte(7))
+            // Cleanup: 2 reactions + 2 posts + 3 users = 7
+            .step("test_cleanup", |a| a.deleted(7))
     }
 
     #[test]

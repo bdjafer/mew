@@ -100,6 +100,13 @@ pub enum PlanOp {
     /// Remove duplicate rows.
     Distinct { input: Box<PlanOp> },
 
+    /// Deduplicate by edge binding variable (for symmetric edges).
+    /// Keeps only one row per unique edge_id.
+    EdgeDedup {
+        input: Box<PlanOp>,
+        edge_var: String,
+    },
+
     /// Empty result (for patterns that can't match).
     Empty,
 }
@@ -158,6 +165,29 @@ impl<'r> QueryPlanner<'r> {
                 input: Box::new(plan),
                 condition: cond.clone(),
             };
+        }
+
+        // Add EdgeDedup for symmetric edges
+        // This deduplicates by edge_id after WHERE filtering, so each physical edge appears once
+        for elem in &stmt.pattern {
+            if let mew_parser::PatternElem::Edge(ep) = elem {
+                // Check if this edge type is symmetric
+                if let Some(edge_type_id) = self.registry.get_edge_type_id(&ep.edge_type) {
+                    if let Some(edge_type) = self.registry.get_edge_type(edge_type_id) {
+                        if edge_type.symmetric {
+                            // Use explicit alias or generated internal variable name
+                            let edge_var = ep
+                                .alias
+                                .clone()
+                                .unwrap_or_else(|| format!("_edge_{}", ep.edge_type));
+                            plan = PlanOp::EdgeDedup {
+                                input: Box::new(plan),
+                                edge_var,
+                            };
+                        }
+                    }
+                }
+            }
         }
 
         // Handle OPTIONAL MATCH clauses (left outer joins)
@@ -328,12 +358,26 @@ impl<'r> QueryPlanner<'r> {
                         .get_edge_type_id(&ep.edge_type)
                         .ok_or_else(|| QueryError::unknown_edge_type(&ep.edge_type))?;
 
+                    // For symmetric edges, generate an internal edge variable if none provided
+                    // This is needed for EdgeDedup to track edge_ids
+                    let edge_var = if ep.alias.is_some() {
+                        ep.alias.clone()
+                    } else if let Some(edge_type) = self.registry.get_edge_type(edge_type_id) {
+                        if edge_type.symmetric {
+                            Some(format!("_edge_{}", ep.edge_type))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     if let Some(p) = plan {
                         plan = Some(PlanOp::EdgeJoin {
                             input: Box::new(p),
                             edge_type_id,
                             from_vars: ep.targets.clone(),
-                            edge_var: ep.alias.clone(),
+                            edge_var,
                         });
                     }
                 }
