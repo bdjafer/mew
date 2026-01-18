@@ -237,10 +237,36 @@ impl<'r> Analyzer<'r> {
             });
         }
 
+        // For transitive patterns (follows+, follows*), variables can be implicitly bound
+        // by the edge pattern itself rather than requiring prior node pattern declarations.
+        // This enables patterns like: MATCH follows+(u, u) RETURN u.username
+        let is_transitive = pattern.transitive.is_some();
+
         // Check that target variables exist (skip "_" wildcard)
-        for target in &pattern.targets {
-            if target != "_" && !self.scope.is_defined(target) {
-                return Err(AnalyzerError::undefined_variable(target, pattern.span));
+        // For transitive patterns, implicitly bind undefined variables based on edge param types
+        for (i, target) in pattern.targets.iter().enumerate() {
+            if target == "_" {
+                continue;
+            }
+            if !self.scope.is_defined(target) {
+                if is_transitive {
+                    // Implicitly bind the variable to the appropriate node type from edge params
+                    let param = &edge_def.params[i];
+                    let type_constraint = &param.type_constraint;
+                    let var_type = if let Some(type_id) = self.registry.get_type_id(type_constraint)
+                    {
+                        Type::NodeRef(type_id)
+                    } else if type_constraint == "any" {
+                        Type::AnyNodeRef
+                    } else {
+                        // Unknown type constraint, use AnyNodeRef
+                        Type::AnyNodeRef
+                    };
+                    let binding = VarBinding::new(target, var_type);
+                    self.scope.define(binding);
+                } else {
+                    return Err(AnalyzerError::undefined_variable(target, pattern.span));
+                }
             }
         }
 

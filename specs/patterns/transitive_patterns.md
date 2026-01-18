@@ -113,7 +113,34 @@ parent_of+(x, y)
 -- x and y must both be Person (or subtype)
 ```
 
-### 3.6 Restrictions
+### 3.6 Implicit Variable Binding
+
+Unlike regular edge patterns which require targets to reference previously declared node pattern variables, transitive patterns support **implicit variable binding**. When an undeclared variable appears as a target in a transitive pattern, it is automatically bound to the appropriate type based on the edge parameter at that position.
+
+```
+edge follows(follower: User, followed: User)
+
+-- Explicit binding (always valid)
+MATCH u: User, follows+(u, u)
+RETURN u.username
+
+-- Implicit binding (valid only in transitive patterns)
+MATCH follows+(u, u)
+RETURN u.username
+-- u is implicitly bound to User based on edge signature
+```
+
+**Why implicit binding for transitive patterns?**
+
+Cycle detection is a primary use case for transitive patterns. The pattern `edge+(x, x)` inherently constrains `x` to the edge's endpoint type. Requiring explicit declarations like `MATCH x: T, edge+(x, x)` would be redundant — the type is already determined by the edge definition.
+
+**Rules:**
+- Implicit binding applies only to transitive patterns (`+` or `*`)
+- The variable type is inferred from the edge parameter type at the corresponding position
+- If the edge parameter type is `any`, the variable has type `AnyNodeRef`
+- Once implicitly bound, the variable is available in subsequent clauses (WHERE, RETURN)
+
+### 3.7 Restrictions
 
 - Cannot bind intermediate nodes (no path variable)
 - Use sparingly in constraints due to performance cost
@@ -195,7 +222,14 @@ constraint no_dependency_cycle:
   => false
 ```
 
-### 6.2 Ancestor Query
+### 6.2 Cycle Detection Query (Implicit Binding)
+```
+-- Find all users in a follow cycle (using implicit variable binding)
+MATCH follows+(u, u)
+RETURN u.username AS in_cycle
+```
+
+### 6.3 Ancestor Query
 ```
 MATCH
   ancestor: Person,
@@ -205,7 +239,7 @@ WHERE descendant.name = "Alice"
 RETURN ancestor.name
 ```
 
-### 6.3 Reachability Check
+### 6.4 Reachability Check
 ```
 MATCH
   start: Node,
@@ -215,7 +249,7 @@ WHERE start.id = $startId AND end.id = $endId
 RETURN start, end
 ```
 
-### 6.4 Bounded Depth
+### 6.5 Bounded Depth
 ```
 -- Find managers up to 5 levels up
 MATCH
@@ -226,7 +260,7 @@ WHERE employee.name = "Bob"
 RETURN manager.name
 ```
 
-### 6.5 Reflexive Use Case
+### 6.6 Reflexive Use Case
 ```
 -- Find node and all its descendants (including self)
 MATCH
