@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MEW Playground</title>
+    <link rel="stylesheet" href="/src/styles/main.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="header">
+        <h1>MEW Playground</h1>
+        <div id="session-info"></div>
+      </header>
+      <main id="main">
+        <aside id="sidebar">
+          <div id="editor-panel">
+            <h2>Ontology</h2>
+            <div id="editor-container"></div>
+            <button id="load-ontology">Load Ontology</button>
+          </div>
+          <div id="query-panel">
+            <h2>Query</h2>
+            <div id="query-container"></div>
+            <button id="execute-query">Execute</button>
+          </div>
+        </aside>
+        <section id="visualization">
+          <canvas id="graph-canvas"></canvas>
+          <div id="minimap"></div>
+          <div id="results-panel"></div>
+          <div id="status-bar">
+            <div class="status-left">
+              <span id="graph-stats"></span>
+              <span id="selection-info"></span>
+            </div>
+            <div class="status-right">
+              <div id="zoom-controls">
+                <button id="zoom-out">-</button>
+                <span id="zoom-level">100%</span>
+                <button id="zoom-in">+</button>
+                <button id="zoom-fit">Fit</button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <aside id="detail-panel">
+          <h2>Details</h2>
+          <div id="detail-content"></div>
+        </aside>
+      </main>
+      <footer id="footer">
+        <div id="result-output"></div>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
