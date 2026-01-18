@@ -144,9 +144,32 @@ impl<'r> Analyzer<'r> {
             }
         }
 
-        // Analyze RETURN clause
+        // Analyze OPTIONAL MATCH clauses
+        // Variables bound in OPTIONAL MATCH are available in RETURN and ORDER BY
+        for optional_match in &stmt.optional_matches {
+            for elem in &optional_match.pattern {
+                self.analyze_pattern_elem(elem)?;
+            }
+            if let Some(where_expr) = &optional_match.where_clause {
+                let where_type = self.analyze_expr(where_expr)?;
+                if where_type != Type::Bool && where_type != Type::Any {
+                    return Err(AnalyzerError::type_mismatch(
+                        &Type::Bool,
+                        &where_type,
+                        where_expr.span(),
+                    ));
+                }
+            }
+        }
+
+        // Analyze RETURN clause and bind aliases
         for proj in &stmt.return_clause.projections {
-            self.analyze_projection(proj)?;
+            let proj_type = self.analyze_projection(proj)?;
+            // Bind alias if present (so it can be used in ORDER BY)
+            if let Some(alias) = &proj.alias {
+                let binding = VarBinding::new(alias, proj_type);
+                self.scope.define(binding);
+            }
         }
 
         // Analyze ORDER BY if present
