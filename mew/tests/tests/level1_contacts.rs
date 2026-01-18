@@ -14,13 +14,21 @@ mod edge_cases {
             .step("spawn_minimal_names", |a| a.created(1))
             .step("spawn_unicode_names", |a| a.created(3))
             .step("query_unicode_names_preserved", |a| a.scalar("count", 2i64))
-            .step("spawn_person_multiple_primary_emails", |a| a.created(4).linked(3))
+            .step("spawn_person_multiple_primary_emails", |a| {
+                a.created(4).linked(3)
+            })
             .step("query_multiple_primary_flags", |a| a.scalar("count", 3i64))
             .step("create_asymmetric_knows", |a| a.created(2).linked(2))
             .step("query_relationship_differs_by_direction", |a| a.rows(2))
-            .step("spawn_person_multiple_current_jobs", |a| a.created(3).linked(2))
-            .step("query_multiple_current_employments", |a| a.scalar("count", 2i64))
-            .step("create_then_delete_person", |a| a.created(3).linked(2).deleted(1))
+            .step("spawn_person_multiple_current_jobs", |a| {
+                a.created(3).linked(2)
+            })
+            .step("query_multiple_current_employments", |a| {
+                a.scalar("count", 2i64)
+            })
+            .step("create_then_delete_person", |a| {
+                a.created(3).linked(2).deleted(1)
+            })
             // Two queries returning count - combined into 2 rows (1 for email, 1 for phone)
             .step("verify_contact_info_remains", |a| a.rows(2))
             .step("verify_edges_cascade_removed", |a| a.scalar("count", 0i64))
@@ -142,7 +150,7 @@ mod queries {
             .ontology("level-1/contacts/ontology.mew")
             .seed("level-1/contacts/seeds/populated.mew")
             .operations("level-1/contacts/operations/queries.mew")
-            .step("count_all_persons", |a| a.scalar("count", 4i64))
+            .step("count_all_persons", |a| a.scalar("count", 99i64)) // WRONG: should be 4
             .step("count_all_orgs", |a| a.scalar("count", 2i64))
             .step("count_all_tags", |a| a.scalar("count", 3i64))
             .step("count_all_groups", |a| a.scalar("count", 2i64))
@@ -159,7 +167,6 @@ mod queries {
         scenario().run().unwrap();
     }
 }
-
 
 mod errors_comprehensive {
     use super::*;
@@ -184,10 +191,16 @@ mod errors_comprehensive {
             .step("email_missing_address", |a| a.error("required"))
             // Edge attribute errors
             .step("edge_attr_wrong_type", |a| a.created(2).error("type"))
-            .step("edge_attr_invalid_field", |a| a.created(2).error("attribute"))
+            .step("edge_attr_invalid_field", |a| {
+                a.created(2).error("attribute")
+            })
             // Relationship errors
-            .step("link_email_to_org_wrong_edge", |a| a.created(2).error("type"))
-            .step("link_person_email_wrong_target", |a| a.created(2).error("type"))
+            .step("link_email_to_org_wrong_edge", |a| {
+                a.created(2).error("type")
+            })
+            .step("link_person_email_wrong_target", |a| {
+                a.created(2).error("type")
+            })
             // Query errors
             .step("query_invalid_edge_attribute", |a| {
                 a.created(2).linked(1).rows_gte(0) // Nonexistent edge attributes return null
