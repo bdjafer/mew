@@ -54,6 +54,16 @@ pub enum MutationError {
     #[error("Acyclic constraint violated for edge type {edge_type}")]
     AcyclicViolation { edge_type: String },
 
+    #[error(
+        "cardinality exceeded: '{param}' already has {current} '{edge_type}' edges (max: {max})"
+    )]
+    CardinalityViolation {
+        edge_type: String,
+        param: String,
+        current: u32,
+        max: u32,
+    },
+
     #[error("Deletion restricted by edge type {edge_type}")]
     OnKillRestrict { edge_type: String },
 
@@ -192,6 +202,20 @@ impl MutationError {
     pub fn acyclic_violation(edge_type: impl Into<String>) -> Self {
         Self::AcyclicViolation {
             edge_type: edge_type.into(),
+        }
+    }
+
+    pub fn cardinality_violation(
+        edge_type: impl Into<String>,
+        param: impl Into<String>,
+        current: u32,
+        max: u32,
+    ) -> Self {
+        Self::CardinalityViolation {
+            edge_type: edge_type.into(),
+            param: param.into(),
+            current,
+            max,
         }
     }
 
