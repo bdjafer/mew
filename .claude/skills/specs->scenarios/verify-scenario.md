@@ -4,17 +4,23 @@ Your goal: verify that a scenario's expected outputs are actually correct.
 
 This runs after every `/expand-scenarios`. A test with wrong expectations is worse than no test—it creates false confidence or masks real bugs.
 
-## Scope: Operation Files Only
+## Scope: Only Changed Operations
 
-You will be given specific operation file(s) to verify. Each file is at:
-`examples/level-N/ontology-name/operations/operation-name.mew`
+You may be given:
+1. **Specific operation files** - verify these directly
+2. **Test file names** - run `git diff HEAD~1 HEAD` to see what changed
 
-For each operation file, you need to verify:
-1. The corresponding test file's assertions match
+### For test file changes:
+1. Run `git diff HEAD~1 HEAD` to see the actual diff
+2. Identify which step assertions were modified (e.g., `.rows(N)`, `.scalar(...)`, `.error(...)`)
+3. Find the corresponding operation file for each changed step
+4. **ONLY verify those specific operations** - NOT all operations in the ontology
 
-The test file is at: `mew/tests/tests/levelN_ontology-name.rs`
+Example: If the diff shows `.step("query_favorites", |a| a.rows(5))` changed to `.rows(3)`:
+- Find which operation file contains `query_favorites`
+- Verify ONLY that operation
 
-**ONLY verify the operations in the files you're given.** Do not verify the entire ontology.
+**Do NOT expand test file changes to verify all operations.** Be surgical.
 
 ## The Core Question
 

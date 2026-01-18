@@ -43,41 +43,38 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Detect changed operation files
+      - name: Detect changed files
         id: detect
         run: |
           # Get changed files
           CHANGED=$(git diff --name-only HEAD~1 HEAD)
 
-          # Collect specific operation files that changed
-          FILES=""
+          # Collect operation files and test files separately
+          OP_FILES=""
+          TEST_FILES=""
 
           for file in $CHANGED; do
             # Match operation files: examples/level-N/ontology/operations/name.mew
             if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/operations/([^/]+)\.mew$ ]]; then
-              if [[ ! "$FILES" =~ "$file" ]]; then
-                FILES="$FILES $file"
+              if [[ ! "$OP_FILES" =~ "$file" ]]; then
+                OP_FILES="$OP_FILES $file"
               fi
             fi
             # Match test files: mew/tests/tests/levelN_ontology.rs
             if [[ "$file" =~ ^mew/tests/tests/level([0-9]+)_([^.]+)\.rs$ ]]; then
-              LEVEL="${BASH_REMATCH[1]}"
-              ONTOLOGY="${BASH_REMATCH[2]}"
-              # Find corresponding operation files for this test
-              for opfile in examples/level-$LEVEL/$ONTOLOGY/operations/*.mew; do
-                if [ -f "$opfile" ] && [[ ! "$FILES" =~ "$opfile" ]]; then
-                  FILES="$FILES $opfile"
-                fi
-              done
+              if [[ ! "$TEST_FILES" =~ "$file" ]]; then
+                TEST_FILES="$TEST_FILES $file"
+              fi
             fi
           done
 
-          if [ -z "$FILES" ]; then
+          if [ -z "$OP_FILES" ] && [ -z "$TEST_FILES" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "files=$FILES" >> $GITHUB_OUTPUT
-            echo "Detected operation files: $FILES"
+            echo "op_files=$OP_FILES" >> $GITHUB_OUTPUT
+            echo "test_files=$TEST_FILES" >> $GITHUB_OUTPUT
+            echo "Detected: ops=[$OP_FILES] tests=[$TEST_FILES]"
           fi
 
       - name: Create verification PR
@@ -99,13 +96,25 @@ jobs:
           git push -u origin "$BRANCH"
 
           # Create PR
-          FILES="${{ steps.detect.outputs.files }}"
+          OP_FILES="${{ steps.detect.outputs.op_files }}"
+          TEST_FILES="${{ steps.detect.outputs.test_files }}"
           BODY="## Scenario Verification
 
-          Checking assertions for:
-          $(for FILE in $FILES; do
-            echo "- \`$FILE\`"
-          done)
+          $(if [ -n "$OP_FILES" ]; then
+            echo "**Changed operation files:**"
+            for FILE in $OP_FILES; do
+              echo "- \`$FILE\`"
+            done
+          fi)
+
+          $(if [ -n "$TEST_FILES" ]; then
+            echo "**Changed test files:**"
+            for FILE in $TEST_FILES; do
+              echo "- \`$FILE\`"
+            done
+            echo ""
+            echo "_Agent will check diff to find affected operations._"
+          fi)
 
           This PR will be auto-closed after verification.
 
@@ -172,49 +181,64 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Detect operation files to verify
+      - name: Detect changed files
         id: detect
         run: |
           # Get changed files from the last push to main
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only origin/main~1 origin/main)
 
-          FILES=""
+          OP_FILES=""
+          TEST_FILES=""
           for file in $CHANGED; do
             # Match operation files
             if [[ "$file" =~ ^examples/level-([0-9]+)/([^/]+)/operations/([^/]+)\.mew$ ]]; then
-              if [[ ! "$FILES" =~ "$file" ]]; then
-                FILES="$FILES $file"
+              if [[ ! "$OP_FILES" =~ "$file" ]]; then
+                OP_FILES="$OP_FILES $file"
               fi
             fi
-            # Match test files - find corresponding operations
+            # Match test files
             if [[ "$file" =~ ^mew/tests/tests/level([0-9]+)_([^.]+)\.rs$ ]]; then
-              LEVEL="${BASH_REMATCH[1]}"
-              ONTOLOGY="${BASH_REMATCH[2]}"
-              for opfile in examples/level-$LEVEL/$ONTOLOGY/operations/*.mew; do
-                if [ -f "$opfile" ] && [[ ! "$FILES" =~ "$opfile" ]]; then
-                  FILES="$FILES $opfile"
-                fi
-              done
+              if [[ ! "$TEST_FILES" =~ "$file" ]]; then
+                TEST_FILES="$TEST_FILES $file"
+              fi
             fi
           done
 
-          echo "files=$FILES" >> $GITHUB_OUTPUT
+          echo "op_files=$OP_FILES" >> $GITHUB_OUTPUT
+          echo "test_files=$TEST_FILES" >> $GITHUB_OUTPUT
 
       - name: Load skill prompt
         id: skill
         run: |
-          FILES="${{ steps.detect.outputs.files }}"
+          OP_FILES="${{ steps.detect.outputs.op_files }}"
+          TEST_FILES="${{ steps.detect.outputs.test_files }}"
           {
             echo "prompt<<SKILL_EOF"
             echo "# Scenario Verification"
             echo ""
-            echo "Verify ONLY the following operation files (do NOT verify other files):"
-            for FILE in $FILES; do
-              echo "- \`$FILE\`"
-            done
-            echo ""
-            echo "For each file, verify that the test assertions match what the operations should produce."
-            echo ""
+
+            if [ -n "$OP_FILES" ]; then
+              echo "## Changed Operation Files"
+              echo "Verify these operation files directly:"
+              for FILE in $OP_FILES; do
+                echo "- \`$FILE\`"
+              done
+              echo ""
+            fi
+
+            if [ -n "$TEST_FILES" ]; then
+              echo "## Changed Test Files"
+              echo "These test files were modified:"
+              for FILE in $TEST_FILES; do
+                echo "- \`$FILE\`"
+              done
+              echo ""
+              echo "**IMPORTANT:** For test file changes, run \`git diff HEAD~1 HEAD\` to see what assertions changed."
+              echo "Only verify the SPECIFIC operations whose assertions were modified in the diff."
+              echo "Do NOT verify all operations in the ontology - only those affected by the diff."
+              echo ""
+            fi
+
             cat ".claude/skills/specs->scenarios/verify-scenario.md"
             echo "SKILL_EOF"
           } >> "$GITHUB_OUTPUT"
