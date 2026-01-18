@@ -138,6 +138,26 @@ outdated:
     cd mew && cargo outdated -R
 
 # ============================================================================
+# Playground
+# ============================================================================
+
+# Build WASM module for playground
+playground-wasm:
+    cd mew/playground && wasm-pack build --target web --out-dir web/pkg
+
+# Install playground dependencies
+playground-setup:
+    cd mew/playground/web && npm install
+
+# Start playground dev server
+playground-dev: playground-wasm
+    cd mew/playground/web && npm run dev
+
+# Build playground for production
+playground-build: playground-wasm
+    cd mew/playground/web && npm run build
+
+# ============================================================================
 # Shortcuts
 # ============================================================================
 
@@ -152,3 +172,6 @@ t: test
 
 # Alias: run clippy
 c: lint
+
+# Alias: start playground
+pg: playground-dev

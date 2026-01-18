@@ -483,8 +483,10 @@ impl<'r> QueryPlanner<'r> {
         }
 
         // Check if we're returning TERMINAL (need to stop at first node matching UNTIL)
-        let return_terminal =
-            matches!(stmt.return_type, mew_parser::WalkReturnType::Terminal { .. });
+        let return_terminal = matches!(
+            stmt.return_type,
+            mew_parser::WalkReturnType::Terminal { .. }
+        );
 
         let plan = PlanOp::TransitiveClosure {
             start_var: "start".to_string(),
