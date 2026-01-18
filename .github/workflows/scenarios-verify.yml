@@ -137,15 +137,15 @@ jobs:
       - name: Trigger verification workflow
         if: steps.detect.outputs.has_changes == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
           PR_NUMBER="${{ steps.create-pr.outputs.pr_number }}"
 
           # Wait a moment for PR to be fully created
           sleep 3
 
-          # Toggle the label to trigger the verification workflow
-          # This works because gh CLI operations with user token CAN trigger workflows
+          # Toggle the label using PAT to trigger the verification workflow
+          # PAT-based operations DO trigger workflow events (unlike GITHUB_TOKEN)
           gh pr edit "$PR_NUMBER" --remove-label "scenarios/needs-verify" || true
           sleep 1
           gh pr edit "$PR_NUMBER" --add-label "scenarios/needs-verify"
