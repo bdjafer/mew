@@ -87,11 +87,37 @@ impl Type {
     /// Get the result type of a binary operation.
     pub fn binary_result(&self, op: BinaryOpType, other: &Type) -> Option<Type> {
         match op {
-            BinaryOpType::Add | BinaryOpType::Sub | BinaryOpType::Mul | BinaryOpType::Div => {
+            BinaryOpType::Add => match (self, other) {
+                (Type::Int, Type::Int) => Some(Type::Int),
+                (Type::Float, Type::Float) => Some(Type::Float),
+                (Type::Int, Type::Float) | (Type::Float, Type::Int) => Some(Type::Float),
+                // Timestamp + Duration = Timestamp
+                (Type::Timestamp, Type::Duration) => Some(Type::Timestamp),
+                // Duration + Duration = Duration
+                (Type::Duration, Type::Duration) => Some(Type::Duration),
+                (Type::Any, _) | (_, Type::Any) => Some(Type::Any),
+                _ => None,
+            },
+            BinaryOpType::Sub => match (self, other) {
+                (Type::Int, Type::Int) => Some(Type::Int),
+                (Type::Float, Type::Float) => Some(Type::Float),
+                (Type::Int, Type::Float) | (Type::Float, Type::Int) => Some(Type::Float),
+                // Timestamp - Duration = Timestamp
+                (Type::Timestamp, Type::Duration) => Some(Type::Timestamp),
+                // Timestamp - Timestamp = Duration
+                (Type::Timestamp, Type::Timestamp) => Some(Type::Duration),
+                // Duration - Duration = Duration
+                (Type::Duration, Type::Duration) => Some(Type::Duration),
+                (Type::Any, _) | (_, Type::Any) => Some(Type::Any),
+                _ => None,
+            },
+            BinaryOpType::Mul | BinaryOpType::Div => {
                 match (self, other) {
                     (Type::Int, Type::Int) => Some(Type::Int),
                     (Type::Float, Type::Float) => Some(Type::Float),
                     (Type::Int, Type::Float) | (Type::Float, Type::Int) => Some(Type::Float),
+                    // Duration * Int = Duration, Duration / Int = Duration
+                    (Type::Duration, Type::Int) => Some(Type::Duration),
                     (Type::Any, _) | (_, Type::Any) => Some(Type::Any),
                     _ => None,
                 }
