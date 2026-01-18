@@ -306,10 +306,7 @@ fn run_tests(path: &PathBuf, name: &str, opts: &Opts) -> Result<Outcome, String>
 
     write_reports(name, &suite, &summary, &results, opts)?;
 
-    let first_failure = results
-        .iter()
-        .find(|r| !r.passed)
-        .map(format_failure);
+    let first_failure = results.iter().find(|r| !r.passed).map(format_failure);
 
     Ok(Outcome {
         passed: summary.passed,

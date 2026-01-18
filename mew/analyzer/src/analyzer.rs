@@ -40,7 +40,7 @@ impl<'r> Analyzer<'r> {
             Stmt::Set(s) => self.analyze_set(s),
             Stmt::Walk(w) => self.analyze_walk(w),
             Stmt::Inspect(_) => Ok(Type::Any), // INSPECT returns entity data
-            Stmt::Txn(_) => Ok(Type::Null), // Txn statements don't produce a value
+            Stmt::Txn(_) => Ok(Type::Null),    // Txn statements don't produce a value
             Stmt::Explain(e) => {
                 // Analyze inner statement but return plan type
                 self.analyze_stmt(&e.statement)?;
@@ -279,7 +279,9 @@ impl<'r> Analyzer<'r> {
         }
 
         // Return type of last item (for single spawns, this is the only type)
-        Ok(Type::NodeRef(last_type_id.unwrap_or(mew_core::TypeId::new(0))))
+        Ok(Type::NodeRef(
+            last_type_id.unwrap_or(mew_core::TypeId::new(0)),
+        ))
     }
 
     /// Analyze an attribute assignment.
@@ -459,7 +461,7 @@ impl<'r> Analyzer<'r> {
             }
             mew_parser::TargetRef::Id(_) => Ok(Type::AnyNodeRef),
             mew_parser::TargetRef::Pattern(match_stmt) => self.analyze_match(match_stmt),
-            mew_parser::TargetRef::InlineSpawn(spawn_stmt) => self.analyze_spawn(spawn_stmt)
+            mew_parser::TargetRef::InlineSpawn(spawn_stmt) => self.analyze_spawn(spawn_stmt),
         }
     }
 

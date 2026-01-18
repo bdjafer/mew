@@ -56,10 +56,7 @@ impl Default for TransactionState {
 }
 
 /// Execute a transaction control statement.
-pub fn execute_txn(
-    state: &mut TransactionState,
-    stmt: &TxnStmt,
-) -> SessionResult<StatementResult> {
+pub fn execute_txn(state: &mut TransactionState, stmt: &TxnStmt) -> SessionResult<StatementResult> {
     match stmt {
         TxnStmt::Begin { .. } => {
             if state.in_transaction {

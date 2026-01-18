@@ -52,7 +52,10 @@ pub enum TargetError {
 /// Resolve a binding name to an EntityId.
 ///
 /// Used for both Var and Id targets which reference bound variables.
-fn resolve_binding(name: &str, bindings: &HashMap<String, EntityId>) -> Result<EntityId, TargetError> {
+fn resolve_binding(
+    name: &str,
+    bindings: &HashMap<String, EntityId>,
+) -> Result<EntityId, TargetError> {
     bindings
         .get(name)
         .copied()
@@ -151,11 +154,12 @@ fn resolve_edge_pattern(
     }
 
     // Find edge type ID
-    let edge_type_id = registry
-        .get_edge_type_id(edge_type)
-        .ok_or_else(|| TargetError::UnknownEdgeType {
-            name: edge_type.to_string(),
-        })?;
+    let edge_type_id =
+        registry
+            .get_edge_type_id(edge_type)
+            .ok_or_else(|| TargetError::UnknownEdgeType {
+                name: edge_type.to_string(),
+            })?;
 
     // Need at least 2 targets
     if target_ids.len() < 2 {
@@ -164,18 +168,18 @@ fn resolve_edge_pattern(
         });
     }
 
-    let source_node_id = target_ids[0].as_node().ok_or_else(|| {
-        TargetError::SourceNotNode {
+    let source_node_id = target_ids[0]
+        .as_node()
+        .ok_or_else(|| TargetError::SourceNotNode {
             position: 0,
             actual_type: format!("{:?}", target_ids[0]),
-        }
-    })?;
-    let target_node_id = target_ids[1].as_node().ok_or_else(|| {
-        TargetError::TargetNotNode {
+        })?;
+    let target_node_id = target_ids[1]
+        .as_node()
+        .ok_or_else(|| TargetError::TargetNotNode {
             position: 1,
             actual_type: format!("{:?}", target_ids[1]),
-        }
-    })?;
+        })?;
 
     // Search for matching edge
     for edge_id in graph.edges_from(source_node_id, None) {

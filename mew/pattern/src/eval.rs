@@ -36,12 +36,14 @@ impl<'r> Evaluator<'r> {
             Expr::Param(name, _) => Err(PatternError::missing_parameter(name)),
             Expr::Exists(pattern_elems, where_clause, _) => {
                 // Compile the subpattern and check if any matches exist
-                let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
+                let exists =
+                    self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
                 Ok(Value::Bool(exists))
             }
             Expr::NotExists(pattern_elems, where_clause, _) => {
                 // Compile the subpattern and check if no matches exist
-                let exists = self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
+                let exists =
+                    self.eval_exists(pattern_elems, where_clause.as_deref(), bindings, graph)?;
                 Ok(Value::Bool(!exists))
             }
             Expr::List(elements, _) => {
@@ -274,7 +276,9 @@ impl<'r> Evaluator<'r> {
                         let (year, _, _) = Self::timestamp_to_date(ms);
                         return Ok(Value::Int(year as i64));
                     }
-                    return Err(PatternError::type_error("YEAR expects a timestamp argument"));
+                    return Err(PatternError::type_error(
+                        "YEAR expects a timestamp argument",
+                    ));
                 }
                 Err(PatternError::type_error("YEAR expects one argument"))
             }
@@ -285,7 +289,9 @@ impl<'r> Evaluator<'r> {
                         let (_, month, _) = Self::timestamp_to_date(ms);
                         return Ok(Value::Int(month as i64));
                     }
-                    return Err(PatternError::type_error("MONTH expects a timestamp argument"));
+                    return Err(PatternError::type_error(
+                        "MONTH expects a timestamp argument",
+                    ));
                 }
                 Err(PatternError::type_error("MONTH expects one argument"))
             }
@@ -307,7 +313,9 @@ impl<'r> Evaluator<'r> {
                         let (hour, _, _) = Self::timestamp_to_time(ms);
                         return Ok(Value::Int(hour as i64));
                     }
-                    return Err(PatternError::type_error("HOUR expects a timestamp argument"));
+                    return Err(PatternError::type_error(
+                        "HOUR expects a timestamp argument",
+                    ));
                 }
                 Err(PatternError::type_error("HOUR expects one argument"))
             }
@@ -318,7 +326,9 @@ impl<'r> Evaluator<'r> {
                         let (_, minute, _) = Self::timestamp_to_time(ms);
                         return Ok(Value::Int(minute as i64));
                     }
-                    return Err(PatternError::type_error("MINUTE expects a timestamp argument"));
+                    return Err(PatternError::type_error(
+                        "MINUTE expects a timestamp argument",
+                    ));
                 }
                 Err(PatternError::type_error("MINUTE expects one argument"))
             }
@@ -329,7 +339,9 @@ impl<'r> Evaluator<'r> {
                         let (_, _, second) = Self::timestamp_to_time(ms);
                         return Ok(Value::Int(second as i64));
                     }
-                    return Err(PatternError::type_error("SECOND expects a timestamp argument"));
+                    return Err(PatternError::type_error(
+                        "SECOND expects a timestamp argument",
+                    ));
                 }
                 Err(PatternError::type_error("SECOND expects one argument"))
             }
@@ -345,14 +357,26 @@ impl<'r> Evaluator<'r> {
             "min" => {
                 // Binary min: min(a, b) returns smaller value
                 if args.len() >= 2 {
-                    return self.binary_numeric_compare(&args[0], &args[1], bindings, graph, |a, b| a < b);
+                    return self.binary_numeric_compare(
+                        &args[0],
+                        &args[1],
+                        bindings,
+                        graph,
+                        |a, b| a < b,
+                    );
                 }
                 Ok(Value::Null) // Aggregate placeholder
             }
             "max" => {
                 // Binary max: max(a, b) returns larger value
                 if args.len() >= 2 {
-                    return self.binary_numeric_compare(&args[0], &args[1], bindings, graph, |a, b| a > b);
+                    return self.binary_numeric_compare(
+                        &args[0],
+                        &args[1],
+                        bindings,
+                        graph,
+                        |a, b| a > b,
+                    );
                 }
                 Ok(Value::Null) // Aggregate placeholder
             }
@@ -430,7 +454,11 @@ impl<'r> Evaluator<'r> {
                         Value::Float(f) => result.push_str(&f.to_string()),
                         Value::Bool(b) => result.push_str(&b.to_string()),
                         Value::Null => {}
-                        _ => return Err(PatternError::type_error("CONCAT expects string or primitive arguments")),
+                        _ => {
+                            return Err(PatternError::type_error(
+                                "CONCAT expects string or primitive arguments",
+                            ))
+                        }
                     }
                 }
                 Ok(Value::String(result))
@@ -447,7 +475,10 @@ impl<'r> Evaluator<'r> {
                         let result = if args.len() >= 3 {
                             let length = self.eval(&args[2], bindings, graph)?;
                             if let Value::Int(len) = length {
-                                s.chars().skip(start_idx).take(len.max(0) as usize).collect()
+                                s.chars()
+                                    .skip(start_idx)
+                                    .take(len.max(0) as usize)
+                                    .collect()
                             } else {
                                 s.chars().skip(start_idx).collect()
                             }
@@ -457,7 +488,9 @@ impl<'r> Evaluator<'r> {
                         return Ok(Value::String(result));
                     }
                 }
-                Err(PatternError::type_error("SUBSTRING expects (string, start[, length])"))
+                Err(PatternError::type_error(
+                    "SUBSTRING expects (string, start[, length])",
+                ))
             }
             "trim" => {
                 if let Some(arg) = args.first() {
@@ -476,7 +509,9 @@ impl<'r> Evaluator<'r> {
                         return Ok(Value::Bool(s.starts_with(&prefix)));
                     }
                 }
-                Err(PatternError::type_error("STARTS_WITH expects (string, prefix)"))
+                Err(PatternError::type_error(
+                    "STARTS_WITH expects (string, prefix)",
+                ))
             }
             "ends_with" => {
                 if args.len() >= 2 {
@@ -486,7 +521,9 @@ impl<'r> Evaluator<'r> {
                         return Ok(Value::Bool(s.ends_with(&suffix)));
                     }
                 }
-                Err(PatternError::type_error("ENDS_WITH expects (string, suffix)"))
+                Err(PatternError::type_error(
+                    "ENDS_WITH expects (string, suffix)",
+                ))
             }
             "contains" => {
                 if args.len() >= 2 {
@@ -496,7 +533,9 @@ impl<'r> Evaluator<'r> {
                         return Ok(Value::Bool(s.contains(&pattern)));
                     }
                 }
-                Err(PatternError::type_error("CONTAINS expects (string, pattern)"))
+                Err(PatternError::type_error(
+                    "CONTAINS expects (string, pattern)",
+                ))
             }
             "in" => {
                 // x IN [a, b, c] - check if x is in the list
@@ -514,11 +553,15 @@ impl<'r> Evaluator<'r> {
                     let s = self.eval(&args[0], bindings, graph)?;
                     let from = self.eval(&args[1], bindings, graph)?;
                     let to = self.eval(&args[2], bindings, graph)?;
-                    if let (Value::String(s), Value::String(from), Value::String(to)) = (s, from, to) {
+                    if let (Value::String(s), Value::String(from), Value::String(to)) =
+                        (s, from, to)
+                    {
                         return Ok(Value::String(s.replace(&from, &to)));
                     }
                 }
-                Err(PatternError::type_error("REPLACE expects (string, from, to)"))
+                Err(PatternError::type_error(
+                    "REPLACE expects (string, from, to)",
+                ))
             }
             "floor" => {
                 if let Some(arg) = args.first() {
@@ -580,7 +623,11 @@ impl<'r> Evaluator<'r> {
 
         match (&a, &b) {
             (Value::Int(av), Value::Int(bv)) => {
-                Ok(Value::Int(if prefer_left(*av as f64, *bv as f64) { *av } else { *bv }))
+                Ok(Value::Int(if prefer_left(*av as f64, *bv as f64) {
+                    *av
+                } else {
+                    *bv
+                }))
             }
             (Value::Float(av), Value::Float(bv)) => {
                 Ok(Value::Float(if prefer_left(*av, *bv) { *av } else { *bv }))
@@ -593,7 +640,9 @@ impl<'r> Evaluator<'r> {
                 let bf = *bv as f64;
                 Ok(Value::Float(if prefer_left(*av, bf) { *av } else { bf }))
             }
-            _ => Err(PatternError::type_error("MIN/MAX expects numeric arguments")),
+            _ => Err(PatternError::type_error(
+                "MIN/MAX expects numeric arguments",
+            )),
         }
     }
 
@@ -721,8 +770,12 @@ impl<'r> Evaluator<'r> {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a == b)),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a == b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Bool((a - b).abs() < f64::EPSILON)),
-            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64 - b).abs() < f64::EPSILON)),
-            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool((a - *b as f64).abs() < f64::EPSILON)),
+            (Value::Int(a), Value::Float(b)) => {
+                Ok(Value::Bool((*a as f64 - b).abs() < f64::EPSILON))
+            }
+            (Value::Float(a), Value::Int(b)) => {
+                Ok(Value::Bool((a - *b as f64).abs() < f64::EPSILON))
+            }
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
             (Value::NodeRef(a), Value::NodeRef(b)) => Ok(Value::Bool(a == b)),
             (Value::EdgeRef(a), Value::EdgeRef(b)) => Ok(Value::Bool(a == b)),
@@ -745,8 +798,12 @@ impl<'r> Evaluator<'r> {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a != b)),
             (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(a != b)),
             (Value::Float(a), Value::Float(b)) => Ok(Value::Bool((a - b).abs() >= f64::EPSILON)),
-            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64 - b).abs() >= f64::EPSILON)),
-            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool((a - *b as f64).abs() >= f64::EPSILON)),
+            (Value::Int(a), Value::Float(b)) => {
+                Ok(Value::Bool((*a as f64 - b).abs() >= f64::EPSILON))
+            }
+            (Value::Float(a), Value::Int(b)) => {
+                Ok(Value::Bool((a - *b as f64).abs() >= f64::EPSILON))
+            }
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
             (Value::NodeRef(a), Value::NodeRef(b)) => Ok(Value::Bool(a != b)),
             (Value::EdgeRef(a), Value::EdgeRef(b)) => Ok(Value::Bool(a != b)),

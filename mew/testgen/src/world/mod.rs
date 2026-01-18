@@ -181,19 +181,18 @@ impl<'a> WorldGenerator<'a> {
             world.add_edge(edge);
 
             // If symmetric, create reverse edge too
-            if edge_info.symmetric && from_idx != to_idx
-                && !created.contains(&(to_idx, from_idx)) {
-                    created.insert((to_idx, from_idx));
-                    let reverse = GeneratedEdge {
-                        var_name: None,
-                        edge_type: edge_name.to_string(),
-                        from_idx: to_idx,
-                        to_idx: from_idx,
-                        attrs,
-                        dynamic_attrs,
-                    };
-                    world.add_edge(reverse);
-                }
+            if edge_info.symmetric && from_idx != to_idx && !created.contains(&(to_idx, from_idx)) {
+                created.insert((to_idx, from_idx));
+                let reverse = GeneratedEdge {
+                    var_name: None,
+                    edge_type: edge_name.to_string(),
+                    from_idx: to_idx,
+                    to_idx: from_idx,
+                    attrs,
+                    dynamic_attrs,
+                };
+                world.add_edge(reverse);
+            }
         }
 
         Ok(())

@@ -16,8 +16,9 @@ use crate::block::{
     should_continue_parse,
 };
 use crate::executor::{
-    execute_explain, execute_inspect, execute_kill, execute_link, execute_match, execute_match_mutate,
-    execute_match_walk, execute_profile, execute_set, execute_spawn, execute_txn, execute_unlink, execute_walk,
+    execute_explain, execute_inspect, execute_kill, execute_link, execute_match,
+    execute_match_mutate, execute_match_walk, execute_profile, execute_set, execute_spawn,
+    execute_txn, execute_unlink, execute_walk,
 };
 use crate::format::print_help;
 
@@ -158,12 +159,9 @@ impl Repl {
                 &mut self.bindings,
                 match_mutate_stmt,
             ),
-            Stmt::MatchWalk(ref match_walk_stmt) => execute_match_walk(
-                &self.registry,
-                &self.graph,
-                &self.bindings,
-                match_walk_stmt,
-            ),
+            Stmt::MatchWalk(ref match_walk_stmt) => {
+                execute_match_walk(&self.registry, &self.graph, &self.bindings, match_walk_stmt)
+            }
             Stmt::Explain(ref explain_stmt) => {
                 execute_explain(&self.registry, &self.graph, explain_stmt)
             }

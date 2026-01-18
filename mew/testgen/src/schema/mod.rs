@@ -350,9 +350,7 @@ impl SchemaAnalyzer {
         let mut parents = Vec::new();
 
         // Find name (before : or {)
-        let name_end = rest
-            .find([':', '{', ' '])
-            .unwrap_or(rest.len());
+        let name_end = rest.find([':', '{', ' ']).unwrap_or(rest.len());
         let name = rest[..name_end].trim().to_string();
 
         // Check for inheritance

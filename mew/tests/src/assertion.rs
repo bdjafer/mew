@@ -59,7 +59,6 @@ pub struct Assertion {
     pub custom: Option<Box<dyn Fn(&StatementResult) -> bool + Send + Sync>>,
 }
 
-
 impl std::fmt::Debug for Assertion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Assertion")
@@ -171,7 +170,10 @@ impl Assertion {
             if result.nodes_created != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected {} created, got {}", expected, result.nodes_created),
+                    format!(
+                        "expected {} created, got {}",
+                        expected, result.nodes_created
+                    ),
                 ));
             }
         }
@@ -179,7 +181,10 @@ impl Assertion {
             if result.nodes_created < min {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected at least {} created, got {}", min, result.nodes_created),
+                    format!(
+                        "expected at least {} created, got {}",
+                        min, result.nodes_created
+                    ),
                 ));
             }
         }
@@ -205,7 +210,10 @@ impl Assertion {
             if result.nodes_deleted != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected {} deleted, got {}", expected, result.nodes_deleted),
+                    format!(
+                        "expected {} deleted, got {}",
+                        expected, result.nodes_deleted
+                    ),
                 ));
             }
         }
@@ -213,7 +221,10 @@ impl Assertion {
             if result.nodes_deleted < min {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected at least {} deleted, got {}", min, result.nodes_deleted),
+                    format!(
+                        "expected at least {} deleted, got {}",
+                        min, result.nodes_deleted
+                    ),
                 ));
             }
         }
@@ -230,7 +241,10 @@ impl Assertion {
             if result.edges_created < min {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected at least {} linked, got {}", min, result.edges_created),
+                    format!(
+                        "expected at least {} linked, got {}",
+                        min, result.edges_created
+                    ),
                 ));
             }
         }
@@ -238,7 +252,10 @@ impl Assertion {
             if result.edges_deleted != expected {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected {} unlinked, got {}", expected, result.edges_deleted),
+                    format!(
+                        "expected {} unlinked, got {}",
+                        expected, result.edges_deleted
+                    ),
                 ));
             }
         }
@@ -246,7 +263,10 @@ impl Assertion {
             if result.edges_deleted < min {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!("expected at least {} unlinked, got {}", min, result.edges_deleted),
+                    format!(
+                        "expected at least {} unlinked, got {}",
+                        min, result.edges_deleted
+                    ),
                 ));
             }
         }
@@ -293,10 +313,7 @@ impl Assertion {
             if result.columns.len() != 1 {
                 return Err(ExampleError::assertion_failed(
                     step,
-                    format!(
-                        "scalar() expects 1 column, got {:?}",
-                        result.columns
-                    ),
+                    format!("scalar() expects 1 column, got {:?}", result.columns),
                 ));
             }
             if result.columns[0] != *expected_column {

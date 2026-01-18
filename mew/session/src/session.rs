@@ -5,7 +5,10 @@ use mew_constraint::ConstraintChecker;
 use mew_core::{messages, EntityId, Value};
 use mew_graph::Graph;
 use mew_mutation::{MutationExecutor, MutationOutcome};
-use mew_parser::{parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt, TargetRef, WalkStmt};
+use mew_parser::{
+    parse_stmt, parse_stmts, InspectStmt, MatchMutateStmt, MatchStmt, MutationAction, Stmt,
+    TargetRef, WalkStmt,
+};
 use mew_pattern::{target, Binding, Bindings};
 use mew_query::QueryExecutor;
 use mew_registry::Registry;
@@ -334,12 +337,11 @@ impl<'r> Session<'r> {
                     MutationAction::Link(link_stmt) => {
                         let mut targets = Vec::new();
                         for target_ref in &link_stmt.targets {
-                            let entity_id = self
-                                .resolve_or_spawn_target_ref_with_bindings(
-                                    target_ref,
-                                    &mut local_bindings,
-                                    &mut nodes_created,
-                                )?;
+                            let entity_id = self.resolve_or_spawn_target_ref_with_bindings(
+                                target_ref,
+                                &mut local_bindings,
+                                &mut nodes_created,
+                            )?;
                             targets.push(entity_id);
                         }
 
@@ -432,7 +434,12 @@ impl<'r> Session<'r> {
         t: &mew_parser::Target,
         bindings: &HashMap<String, EntityId>,
     ) -> SessionResult<EntityId> {
-        Ok(target::resolve_target(t, bindings, self.registry, &self.graph)?)
+        Ok(target::resolve_target(
+            t,
+            bindings,
+            self.registry,
+            &self.graph,
+        )?)
     }
 
     /// Resolve a target reference using provided bindings.
@@ -461,16 +468,12 @@ impl<'r> Session<'r> {
                 let var_name = spawn_stmt.var();
 
                 // Get the node ID from session bindings (spawn stores it with var name)
-                let entity_id = self
-                    .bindings
-                    .get(var_name)
-                    .cloned()
-                    .ok_or_else(|| {
-                        SessionError::invalid_statement_type(format!(
-                            "inline spawn did not create binding for '{}'",
-                            var_name
-                        ))
-                    })?;
+                let entity_id = self.bindings.get(var_name).cloned().ok_or_else(|| {
+                    SessionError::invalid_statement_type(format!(
+                        "inline spawn did not create binding for '{}'",
+                        var_name
+                    ))
+                })?;
 
                 // Also add to local bindings for MATCH context
                 bindings.insert(var_name.to_string(), entity_id);
@@ -488,10 +491,7 @@ impl<'r> Session<'r> {
     }
 
     /// Execute a MATCH...WALK compound statement.
-    fn execute_match_walk(
-        &self,
-        stmt: &mew_parser::MatchWalkStmt,
-    ) -> SessionResult<QueryResult> {
+    fn execute_match_walk(&self, stmt: &mew_parser::MatchWalkStmt) -> SessionResult<QueryResult> {
         let executor = QueryExecutor::new(self.registry, &self.graph);
         let result = executor.execute_match_walk(stmt)?;
         Ok(convert_query_result(&result))
@@ -520,58 +520,53 @@ impl<'r> Session<'r> {
                     .unwrap_or_else(|| "Unknown".to_string());
 
                 // Build columns based on projections or all attributes
-                let (columns, values): (Vec<String>, Vec<Value>) =
-                    if let Some(ref projections) = stmt.projections {
-                        let mut cols = Vec::new();
-                        let mut vals = Vec::new();
-                        for proj in projections {
-                            let col_name = proj.alias.clone().unwrap_or_else(|| {
-                                if let mew_parser::Expr::Var(name, _) = &proj.expr {
-                                    name.clone()
-                                } else if let mew_parser::Expr::AttrAccess(_, attr, _) = &proj.expr {
-                                    attr.clone()
-                                } else {
-                                    "?".to_string()
+                let (columns, values): (Vec<String>, Vec<Value>) = if let Some(ref projections) =
+                    stmt.projections
+                {
+                    let mut cols = Vec::new();
+                    let mut vals = Vec::new();
+                    for proj in projections {
+                        let col_name = proj.alias.clone().unwrap_or_else(|| {
+                            if let mew_parser::Expr::Var(name, _) = &proj.expr {
+                                name.clone()
+                            } else if let mew_parser::Expr::AttrAccess(_, attr, _) = &proj.expr {
+                                attr.clone()
+                            } else {
+                                "?".to_string()
+                            }
+                        });
+
+                        // Handle special columns
+                        let value = match col_name.as_str() {
+                            "_type" => Value::String(type_name.clone()),
+                            "_id" => Value::NodeRef(nid),
+                            "*" => {
+                                // Return all attributes
+                                for (attr_name, attr_val) in node.attributes.iter() {
+                                    cols.push(attr_name.clone());
+                                    vals.push(attr_val.clone());
                                 }
-                            });
+                                continue;
+                            }
+                            attr => node.get_attr(attr).cloned().unwrap_or(Value::Null),
+                        };
 
-                            // Handle special columns
-                            let value = match col_name.as_str() {
-                                "_type" => Value::String(type_name.clone()),
-                                "_id" => Value::NodeRef(nid),
-                                "*" => {
-                                    // Return all attributes
-                                    for (attr_name, attr_val) in node.attributes.iter() {
-                                        cols.push(attr_name.clone());
-                                        vals.push(attr_val.clone());
-                                    }
-                                    continue;
-                                }
-                                attr => node
-                                    .get_attr(attr)
-                                    .cloned()
-                                    .unwrap_or(Value::Null),
-                            };
+                        cols.push(col_name);
+                        vals.push(value);
+                    }
+                    (cols, vals)
+                } else {
+                    // Default: return all attributes plus _type and _id
+                    let mut cols = vec!["_type".to_string(), "_id".to_string()];
+                    let mut vals: Vec<Value> = vec![Value::String(type_name), Value::NodeRef(nid)];
 
-                            cols.push(col_name);
-                            vals.push(value);
-                        }
-                        (cols, vals)
-                    } else {
-                        // Default: return all attributes plus _type and _id
-                        let mut cols = vec!["_type".to_string(), "_id".to_string()];
-                        let mut vals: Vec<Value> = vec![
-                            Value::String(type_name),
-                            Value::NodeRef(nid),
-                        ];
+                    for (attr_name, attr_val) in node.attributes.iter() {
+                        cols.push(attr_name.clone());
+                        vals.push(attr_val.clone());
+                    }
 
-                        for (attr_name, attr_val) in node.attributes.iter() {
-                            cols.push(attr_name.clone());
-                            vals.push(attr_val.clone());
-                        }
-
-                        (cols, vals)
-                    };
+                    (cols, vals)
+                };
 
                 let types = vec!["any".to_string(); columns.len()];
                 return Ok(QueryResult::new(columns, types, vec![values]));
@@ -629,9 +624,9 @@ impl<'r> Session<'r> {
 
         // Resolve the target
         let target_id = self.resolve_target(&stmt.target)?;
-        let node_id = target_id
-            .as_node()
-            .ok_or_else(|| SessionError::invalid_statement_type(messages::ERR_KILL_REQUIRES_NODE))?;
+        let node_id = target_id.as_node().ok_or_else(|| {
+            SessionError::invalid_statement_type(messages::ERR_KILL_REQUIRES_NODE)
+        })?;
 
         let mut executor = MutationExecutor::new(self.registry, &mut self.graph);
         let result = executor.execute_kill(stmt, node_id)?;
@@ -734,16 +729,12 @@ impl<'r> Session<'r> {
                 let var_name = spawn_stmt.var();
 
                 // Get the node ID from bindings (spawn stores it with var name)
-                let entity_id = self
-                    .bindings
-                    .get(var_name)
-                    .cloned()
-                    .ok_or_else(|| {
-                        SessionError::invalid_statement_type(format!(
-                            "inline spawn did not create binding for '{}'",
-                            var_name
-                        ))
-                    })?;
+                let entity_id = self.bindings.get(var_name).cloned().ok_or_else(|| {
+                    SessionError::invalid_statement_type(format!(
+                        "inline spawn did not create binding for '{}'",
+                        var_name
+                    ))
+                })?;
                 Ok(entity_id)
             }
             _ => self.resolve_target_ref(target_ref),
@@ -800,13 +791,20 @@ impl<'r> Session<'r> {
                 ..Default::default()
             })
         } else {
-            Err(SessionError::invalid_statement_type(messages::ERR_SET_REQUIRES_NODE))
+            Err(SessionError::invalid_statement_type(
+                messages::ERR_SET_REQUIRES_NODE,
+            ))
         }
     }
 
     /// Resolve a target to an EntityId.
     fn resolve_target(&self, t: &mew_parser::Target) -> SessionResult<EntityId> {
-        Ok(target::resolve_target(t, &self.bindings, self.registry, &self.graph)?)
+        Ok(target::resolve_target(
+            t,
+            &self.bindings,
+            self.registry,
+            &self.graph,
+        )?)
     }
 
     /// Check edge constraints and rollback if violated.
@@ -890,7 +888,10 @@ impl<'r> Session<'r> {
                     Err(e) => format!("Plan error: {}", e),
                 }
             }
-            other => format!("EXPLAIN not supported for {:?}", std::mem::discriminant(other)),
+            other => format!(
+                "EXPLAIN not supported for {:?}",
+                std::mem::discriminant(other)
+            ),
         };
 
         Ok(QueryResult {
@@ -921,16 +922,13 @@ impl<'r> Session<'r> {
                     rows: vec![],
                 })
             }
-            StatementResult::Transaction(_) | StatementResult::Empty => {
-                Ok(QueryResult {
-                    columns: vec![],
-                    types: vec![],
-                    rows: vec![],
-                })
-            }
+            StatementResult::Transaction(_) | StatementResult::Empty => Ok(QueryResult {
+                columns: vec![],
+                types: vec![],
+                rows: vec![],
+            }),
         }
     }
-
 }
 
 /// Convert a HashMap of entity bindings to pattern Bindings for expression evaluation.
@@ -1250,7 +1248,9 @@ mod tests {
         let mut session = Session::new(1, &registry);
 
         // Create a task
-        let _ = session.execute("SPAWN t: Task { title = \"Test Task\" }").unwrap();
+        let _ = session
+            .execute("SPAWN t: Task { title = \"Test Task\" }")
+            .unwrap();
 
         // WHEN inspecting the node by ID
         let result = session.execute("INSPECT #1");

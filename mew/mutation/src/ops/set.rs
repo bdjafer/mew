@@ -40,13 +40,27 @@ pub fn execute_set(
             let value = evaluator.eval(&assign.value, bindings, graph)?;
 
             // Validate attribute (is_update=true since we're modifying an existing node)
-            validation::validate_attribute(registry, &type_name, type_id, &assign.name, &value, true)?;
+            validation::validate_attribute(
+                registry,
+                &type_name,
+                type_id,
+                &assign.name,
+                &value,
+                true,
+            )?;
 
             new_attrs.insert(assign.name.clone(), value);
         }
 
         // Check uniqueness constraints, excluding the current node
-        validation::check_unique_constraints(registry, graph, &type_name, type_id, &new_attrs, Some(node_id))?;
+        validation::check_unique_constraints(
+            registry,
+            graph,
+            &type_name,
+            type_id,
+            &new_attrs,
+            Some(node_id),
+        )?;
 
         // Apply updates
         for (name, value) in new_attrs.into_iter() {
@@ -58,7 +72,9 @@ pub fn execute_set(
         updated_ids.push(node_id);
     }
 
-    Ok(MutationOutcome::Updated(UpdatedEntities::nodes(updated_ids)))
+    Ok(MutationOutcome::Updated(UpdatedEntities::nodes(
+        updated_ids,
+    )))
 }
 
 /// Execute a SET statement to update edge attributes.
@@ -91,7 +107,14 @@ pub fn execute_set_edge(
             let value = evaluator.eval(&assign.value, bindings, graph)?;
 
             // Validate attribute for edge type (is_update=true since we're modifying an existing edge)
-            validation::validate_edge_attribute(registry, &type_name, type_id, &assign.name, &value, true)?;
+            validation::validate_edge_attribute(
+                registry,
+                &type_name,
+                type_id,
+                &assign.name,
+                &value,
+                true,
+            )?;
 
             new_attrs.push((assign.name.clone(), value));
         }
@@ -106,5 +129,7 @@ pub fn execute_set_edge(
         updated_ids.push(edge_id);
     }
 
-    Ok(MutationOutcome::Updated(UpdatedEntities::edges(updated_ids)))
+    Ok(MutationOutcome::Updated(UpdatedEntities::edges(
+        updated_ids,
+    )))
 }

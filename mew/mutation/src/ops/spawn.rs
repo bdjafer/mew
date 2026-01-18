@@ -38,7 +38,14 @@ fn execute_spawn_item(
         let value = evaluator.eval(&assign.value, bindings, graph)?;
 
         // Validate attribute exists and type matches (is_update=false since this is a new node)
-        validation::validate_attribute(registry, &item.type_name, type_id, &assign.name, &value, false)?;
+        validation::validate_attribute(
+            registry,
+            &item.type_name,
+            type_id,
+            &assign.name,
+            &value,
+            false,
+        )?;
 
         attrs.insert(assign.name.clone(), value);
     }
@@ -76,8 +83,12 @@ pub fn execute_spawn(
 
     // For single spawns, return just the node; for multiple, return all
     if created_nodes.len() == 1 {
-        Ok(MutationOutcome::Created(CreatedEntity::node(created_nodes[0])))
+        Ok(MutationOutcome::Created(CreatedEntity::node(
+            created_nodes[0],
+        )))
     } else {
-        Ok(MutationOutcome::Created(CreatedEntity::nodes(created_nodes)))
+        Ok(MutationOutcome::Created(CreatedEntity::nodes(
+            created_nodes,
+        )))
     }
 }

@@ -10,7 +10,7 @@
 //! - Primary: literals, variables, function calls, EXISTS
 
 use super::Parser;
-use crate::ast::{*, CollectLimit};
+use crate::ast::{CollectLimit, *};
 use crate::error::ParseResult;
 use crate::lexer::TokenKind;
 
@@ -42,7 +42,12 @@ impl Parser {
             self.advance();
             let right = self.parse_and()?;
             let span = self.span_from(start);
-            left = Expr::BinaryOp(BinaryOp::NullCoalesce, Box::new(left), Box::new(right), span);
+            left = Expr::BinaryOp(
+                BinaryOp::NullCoalesce,
+                Box::new(left),
+                Box::new(right),
+                span,
+            );
         }
 
         Ok(left)
@@ -187,7 +192,11 @@ impl Parser {
                 span,
             });
 
-            let op = if is_not { BinaryOp::NotEq } else { BinaryOp::Eq };
+            let op = if is_not {
+                BinaryOp::NotEq
+            } else {
+                BinaryOp::Eq
+            };
             left = Expr::BinaryOp(op, Box::new(left), Box::new(null_expr), span);
         }
 
@@ -487,7 +496,7 @@ impl Parser {
                     // Handle count(*) - treat * as "count all rows" (empty args)
                     if self.check(&TokenKind::Star) {
                         self.advance(); // consume the *
-                        // args remains empty - represents count(*)
+                                        // args remains empty - represents count(*)
                     } else if !self.check(&TokenKind::RParen) {
                         // Parse first argument
                         // For filtered aggregation like COUNT(t WHERE t.status = "done"),
@@ -514,9 +523,7 @@ impl Parser {
                     let limit = if self.check(&TokenKind::LBracket) {
                         self.advance();
                         // "limit" can be either the Limit keyword or an identifier
-                        if self.check(&TokenKind::Limit) {
-                            self.advance();
-                        } else if self.check_ident("limit") {
+                        if self.check(&TokenKind::Limit) || self.check_ident("limit") {
                             self.advance();
                         } else {
                             let token = self.peek();

@@ -86,6 +86,7 @@ impl Parser {
     /// - MATCH ... RETURN ... (query)
     /// - MATCH ... LINK/SET/KILL/UNLINK ... (compound mutation)
     /// - MATCH ... WALK ... (compound walk)
+    ///
     /// Also supports multiple MATCH clauses that combine patterns.
     /// Pattern: MATCH p1 [WHERE ...] [MATCH p2]* [OPTIONAL MATCH ...]* (RETURN|mutation|WALK)
     fn parse_match_or_mutate(&mut self) -> ParseResult<Stmt> {
@@ -307,7 +308,11 @@ impl Parser {
     fn is_mutation_keyword(&self) -> bool {
         matches!(
             &self.peek().kind,
-            TokenKind::Spawn | TokenKind::Link | TokenKind::Set | TokenKind::Kill | TokenKind::Unlink
+            TokenKind::Spawn
+                | TokenKind::Link
+                | TokenKind::Set
+                | TokenKind::Kill
+                | TokenKind::Unlink
         )
     }
 
@@ -966,5 +971,4 @@ impl Parser {
             span,
         })
     }
-
 }

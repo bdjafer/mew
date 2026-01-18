@@ -21,8 +21,12 @@ pub fn compute_aggregate(
         AggregateKind::Count => compute_count(agg, group, evaluator, graph),
         AggregateKind::Sum => compute_sum(agg, group, evaluator, graph),
         AggregateKind::Avg => compute_avg(agg, group, evaluator, graph),
-        AggregateKind::Min => compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Less),
-        AggregateKind::Max => compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Greater),
+        AggregateKind::Min => {
+            compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Less)
+        }
+        AggregateKind::Max => {
+            compute_min_max(agg, group, evaluator, graph, std::cmp::Ordering::Greater)
+        }
         AggregateKind::Collect => compute_collect(agg, group, evaluator, graph),
     }
 }

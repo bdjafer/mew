@@ -76,7 +76,9 @@ pub enum MutationError {
         range_desc: String,
     },
 
-    #[error("unique constraint violated: {attr} value '{value}' already exists on type {type_name}")]
+    #[error(
+        "unique constraint violated: {attr} value '{value}' already exists on type {type_name}"
+    )]
     UniqueConstraintViolation {
         type_name: String,
         attr: String,
@@ -90,7 +92,9 @@ pub enum MutationError {
         format: String,
     },
 
-    #[error("pattern constraint violated: {attr} value '{value}' does not match pattern '{pattern}'")]
+    #[error(
+        "pattern constraint violated: {attr} value '{value}' does not match pattern '{pattern}'"
+    )]
     PatternConstraintViolation {
         attr: String,
         value: String,
@@ -98,10 +102,7 @@ pub enum MutationError {
     },
 
     #[error("constraint violated: {attr} value '{value}' is not one of the allowed values")]
-    AllowedValuesViolation {
-        attr: String,
-        value: String,
-    },
+    AllowedValuesViolation { attr: String, value: String },
 
     #[error("length constraint violated: {attr} length {actual_length} is out of range [{min_length}..{max_length}]")]
     LengthConstraintViolation {
@@ -139,7 +140,10 @@ impl MutationError {
         }
     }
 
-    pub fn readonly_attribute_violation(type_name: impl Into<String>, attr: impl Into<String>) -> Self {
+    pub fn readonly_attribute_violation(
+        type_name: impl Into<String>,
+        attr: impl Into<String>,
+    ) -> Self {
         Self::ReadonlyAttributeViolation {
             type_name: type_name.into(),
             attr: attr.into(),
@@ -257,10 +261,7 @@ impl MutationError {
         }
     }
 
-    pub fn allowed_values_violation(
-        attr: impl Into<String>,
-        value: impl Into<String>,
-    ) -> Self {
+    pub fn allowed_values_violation(attr: impl Into<String>, value: impl Into<String>) -> Self {
         Self::AllowedValuesViolation {
             attr: attr.into(),
             value: value.into(),

@@ -77,7 +77,10 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
                 .map(|(bindings, _)| bindings)
                 .collect()
         } else {
-            pattern_results.into_iter().map(|(bindings, _)| bindings).collect()
+            pattern_results
+                .into_iter()
+                .map(|(bindings, _)| bindings)
+                .collect()
         };
 
         // For each binding, execute the WALK
@@ -427,8 +430,8 @@ mod tests {
         let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
         let carol = graph.create_node(person_type_id, attrs! { "name" => "Carol" });
 
-        graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {});
-        graph.create_edge(knows_type_id, vec![bob.into(), carol.into()], attrs! {});
+        let _ = graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {});
+        let _ = graph.create_edge(knows_type_id, vec![bob.into(), carol.into()], attrs! {});
 
         let executor = QueryExecutor::new(&registry, &graph);
 
@@ -515,8 +518,8 @@ mod tests {
         let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
         let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
 
-        graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {});
-        graph.create_edge(knows_type_id, vec![bob.into(), alice.into()], attrs! {});
+        let _ = graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {});
+        let _ = graph.create_edge(knows_type_id, vec![bob.into(), alice.into()], attrs! {});
 
         let executor = QueryExecutor::new(&registry, &graph);
 
@@ -546,7 +549,7 @@ mod tests {
 
         // THEN - should terminate and find Bob (cycle detection prevents revisiting)
         assert!(
-            results.len() >= 1,
+            !results.is_empty(),
             "Expected at least 1 result, got {}",
             results.len()
         );
@@ -590,10 +593,12 @@ mod tests {
         let owns_type_id = registry.get_edge_type_id("owns").unwrap();
 
         let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
-        let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+        let _bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
         let fluffy = graph.create_node(pet_type_id, attrs! { "name" => "Fluffy" });
 
-        graph.create_edge(owns_type_id, vec![alice.into(), fluffy.into()], attrs! {}).unwrap();
+        graph
+            .create_edge(owns_type_id, vec![alice.into(), fluffy.into()], attrs! {})
+            .unwrap();
 
         let executor = QueryExecutor::new(&registry, &graph);
 
@@ -763,8 +768,12 @@ mod tests {
         let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
         let carol = graph.create_node(person_type_id, attrs! { "name" => "Carol" });
 
-        graph.create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {}).unwrap();
-        graph.create_edge(knows_type_id, vec![bob.into(), carol.into()], attrs! {}).unwrap();
+        graph
+            .create_edge(knows_type_id, vec![alice.into(), bob.into()], attrs! {})
+            .unwrap();
+        graph
+            .create_edge(knows_type_id, vec![bob.into(), carol.into()], attrs! {})
+            .unwrap();
 
         let executor = QueryExecutor::new(&registry, &graph);
 

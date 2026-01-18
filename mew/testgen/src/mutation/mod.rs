@@ -176,7 +176,11 @@ impl<'a> MutationGenerator<'a> {
     /// Check if a type (or type alias) resolves to a numeric type (Int or Float).
     /// Uses a visited set to prevent infinite loops on circular type aliases.
     fn is_numeric_type(&self, type_name: &str) -> bool {
-        Self::is_numeric_type_impl(type_name, &self.schema.type_aliases, &mut std::collections::HashSet::new())
+        Self::is_numeric_type_impl(
+            type_name,
+            &self.schema.type_aliases,
+            &mut std::collections::HashSet::new(),
+        )
     }
 
     /// Static version for use in closures where self is not available.
@@ -184,7 +188,11 @@ impl<'a> MutationGenerator<'a> {
         type_name: &str,
         type_aliases: &std::collections::HashMap<String, crate::types::TypeAliasInfo>,
     ) -> bool {
-        Self::is_numeric_type_impl(type_name, type_aliases, &mut std::collections::HashSet::new())
+        Self::is_numeric_type_impl(
+            type_name,
+            type_aliases,
+            &mut std::collections::HashSet::new(),
+        )
     }
 
     /// Core implementation with cycle detection.
@@ -237,12 +245,10 @@ impl<'a> MutationGenerator<'a> {
         let all_attrs = self.collect_all_attrs(type_info);
 
         // Find a numeric attribute with range constraints
-        let range_attr = all_attrs
-            .iter()
-            .find(|a| {
-                let is_numeric = self.is_numeric_type(&a.type_name);
-                is_numeric && (a.min.is_some() || a.max.is_some())
-            })?;
+        let range_attr = all_attrs.iter().find(|a| {
+            let is_numeric = self.is_numeric_type(&a.type_name);
+            is_numeric && (a.min.is_some() || a.max.is_some())
+        })?;
 
         // Generate an out-of-range value
         let out_of_range = if let Some(Value::Int(max)) = &range_attr.max {

@@ -13,33 +13,33 @@ fn main() {
 
     let mut repl = Repl::new();
 
-    if args.len() > 1 {
-        // Run files from command line
-        for arg in &args[1..] {
-            if arg == "-v" || arg == "--verbose" {
-                repl.set_verbose(true);
-                continue;
-            }
-
-            if let Err(e) = repl.run_file(Path::new(arg)) {
-                eprintln!("Error loading {}: {}", arg, e);
-                std::process::exit(1);
-            }
+    // Load any files passed as arguments
+    for arg in &args[1..] {
+        if arg == "-v" || arg == "--verbose" {
+            repl.set_verbose(true);
+            continue;
         }
-    } else {
-        let stdin = io::stdin();
-        if stdin.is_terminal() {
-            repl.interactive();
-        } else {
-            let mut input = String::new();
-            if let Err(e) = stdin.lock().read_to_string(&mut input) {
-                eprintln!("Error reading stdin: {}", e);
-                std::process::exit(1);
-            }
-            if let Err(e) = repl.run_script(&input) {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
+
+        if let Err(e) = repl.run_file(Path::new(arg)) {
+            eprintln!("Error loading {}: {}", arg, e);
+            std::process::exit(1);
+        }
+    }
+
+    // Enter interactive mode if stdin is a terminal
+    let stdin = io::stdin();
+    if stdin.is_terminal() {
+        repl.interactive();
+    } else if args.len() == 1 {
+        // Only read from stdin pipe if no files were passed
+        let mut input = String::new();
+        if let Err(e) = stdin.lock().read_to_string(&mut input) {
+            eprintln!("Error reading stdin: {}", e);
+            std::process::exit(1);
+        }
+        if let Err(e) = repl.run_script(&input) {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
         }
     }
 }

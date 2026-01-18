@@ -213,9 +213,20 @@ pub struct SpawnStmt {
 
 impl SpawnStmt {
     /// Helper to create a single-item spawn statement (most common case).
-    pub fn single(var: String, type_name: String, attrs: Vec<AttrAssignment>, returning: Option<ReturningClause>, span: Span) -> Self {
+    pub fn single(
+        var: String,
+        type_name: String,
+        attrs: Vec<AttrAssignment>,
+        returning: Option<ReturningClause>,
+        span: Span,
+    ) -> Self {
         Self {
-            items: vec![SpawnItem { var, type_name, attrs, span }],
+            items: vec![SpawnItem {
+                var,
+                type_name,
+                attrs,
+                span,
+            }],
             returning,
             span,
         }
@@ -234,12 +245,18 @@ impl SpawnStmt {
 
     /// Get type_name from single-item spawn (for backward compatibility).
     pub fn type_name(&self) -> &str {
-        self.items.first().map(|i| i.type_name.as_str()).unwrap_or("")
+        self.items
+            .first()
+            .map(|i| i.type_name.as_str())
+            .unwrap_or("")
     }
 
     /// Get attrs from single-item spawn (for backward compatibility).
     pub fn attrs(&self) -> &[AttrAssignment] {
-        self.items.first().map(|i| i.attrs.as_slice()).unwrap_or(&[])
+        self.items
+            .first()
+            .map(|i| i.attrs.as_slice())
+            .unwrap_or(&[])
     }
 }
 
@@ -632,7 +649,10 @@ pub enum AttrModifier {
     /// match: "regex" - regex pattern for validation
     Match(String),
     /// length: N..M - string length constraint
-    Length { min: i64, max: i64 },
+    Length {
+        min: i64,
+        max: i64,
+    },
     /// format: email, url, uuid, etc. - built-in format validation
     Format(String),
 }

@@ -279,19 +279,15 @@ impl Compiler {
                     }
                     AttrModifier::InValues(values) => {
                         // Collect the allowed values
-                        let allowed_values: Vec<Value> = values
-                            .iter()
-                            .filter_map(expr_to_value)
-                            .collect();
+                        let allowed_values: Vec<Value> =
+                            values.iter().filter_map(expr_to_value).collect();
                         // Store allowed values on the attribute
                         if !allowed_values.is_empty() {
                             attr = attr.with_allowed_values(allowed_values.clone());
                         }
                         // Generate enum constraint
-                        let value_strs: Vec<String> = allowed_values
-                            .iter()
-                            .map(|v| format!("{:?}", v))
-                            .collect();
+                        let value_strs: Vec<String> =
+                            allowed_values.iter().map(|v| format!("{:?}", v)).collect();
                         if !value_strs.is_empty() {
                             self.generated_type_constraints.push(GeneratedConstraint {
                                 name: format!("_{}_{}_{}", node_def.name, attr_def.name, "enum"),

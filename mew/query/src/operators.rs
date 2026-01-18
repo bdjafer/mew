@@ -55,7 +55,9 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                 edge_type_id,
                 from_vars,
                 edge_var,
-            } => self.execute_edge_join(input, *edge_type_id, from_vars, edge_var, initial_bindings),
+            } => {
+                self.execute_edge_join(input, *edge_type_id, from_vars, edge_var, initial_bindings)
+            }
 
             PlanOp::Filter { input, condition } => {
                 self.execute_filter(input, condition, initial_bindings)
@@ -159,9 +161,7 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
         initial_bindings: Option<&Bindings>,
     ) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
         // Evaluate the search value
-        let search_val = self
-            .evaluator
-            .eval(value, &Bindings::new(), self.graph)?;
+        let search_val = self.evaluator.eval(value, &Bindings::new(), self.graph)?;
 
         let mut results = Vec::new();
 
@@ -272,8 +272,7 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                         if all_match {
                             let mut new_bindings = bindings.clone();
                             if let Some(alias) = edge_var {
-                                new_bindings
-                                    .insert(alias, mew_pattern::Binding::Edge(edge_id));
+                                new_bindings.insert(alias, mew_pattern::Binding::Edge(edge_id));
                             }
                             results.push((new_bindings, Vec::new()));
                         }

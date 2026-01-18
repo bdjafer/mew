@@ -245,8 +245,8 @@ impl<'r> QueryPlanner<'r> {
         projections
             .iter()
             .filter_map(|proj| {
-                self.get_aggregate(&proj.expr).map(|(kind, expr, distinct)| {
-                    AggregateSpec {
+                self.get_aggregate(&proj.expr)
+                    .map(|(kind, expr, distinct)| AggregateSpec {
                         name: proj
                             .alias
                             .clone()
@@ -254,8 +254,7 @@ impl<'r> QueryPlanner<'r> {
                         kind,
                         expr,
                         distinct,
-                    }
-                })
+                    })
             })
             .collect()
     }
@@ -472,11 +471,10 @@ impl<'r> QueryPlanner<'r> {
                 let col = alias.clone().unwrap_or_else(|| "terminal".to_string());
                 vec![col]
             }
-            mew_parser::WalkReturnType::Projections(projs) => {
-                projs.iter().map(|p| {
-                    p.alias.clone().unwrap_or_else(|| "expr".to_string())
-                }).collect()
-            }
+            mew_parser::WalkReturnType::Projections(projs) => projs
+                .iter()
+                .map(|p| p.alias.clone().unwrap_or_else(|| "expr".to_string()))
+                .collect(),
         };
 
         Ok(QueryPlan {

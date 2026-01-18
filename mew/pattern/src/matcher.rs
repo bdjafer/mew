@@ -152,9 +152,9 @@ impl<'r, 'g> Matcher<'r, 'g> {
                         let binding = bindings
                             .get(var)
                             .ok_or_else(|| crate::PatternError::unbound_variable(var))?;
-                        let node_id = binding
-                            .as_node()
-                            .ok_or_else(|| crate::PatternError::type_error("expected node binding"))?;
+                        let node_id = binding.as_node().ok_or_else(|| {
+                            crate::PatternError::type_error("expected node binding")
+                        })?;
                         target_ids.push(Some(node_id));
                     }
                 }
@@ -167,7 +167,9 @@ impl<'r, 'g> Matcher<'r, 'g> {
                     // If bound node is at position 0, use edges_from (it's the source)
                     // Otherwise use edges_to (it's a target)
                     let edges: Vec<_> = if idx == 0 {
-                        self.graph.edges_from(bound_id, Some(*edge_type_id)).collect()
+                        self.graph
+                            .edges_from(bound_id, Some(*edge_type_id))
+                            .collect()
                     } else {
                         self.graph.edges_to(bound_id, Some(*edge_type_id)).collect()
                     };

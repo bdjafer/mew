@@ -305,7 +305,7 @@ mod tests {
         assert!(Value::Null.is_null());
         assert!(Value::Bool(true).is_bool());
         assert!(Value::Int(42).is_int());
-        assert!(Value::Float(3.14).is_float());
+        assert!(Value::Float(3.15).is_float());
         assert!(Value::String("hello".into()).is_string());
         assert!(Value::Timestamp(1234567890).is_timestamp());
         assert!(Value::Duration(1000).is_duration());
@@ -317,7 +317,7 @@ mod tests {
     fn test_value_accessors() {
         assert_eq!(Value::Bool(true).as_bool(), Some(true));
         assert_eq!(Value::Int(42).as_int(), Some(42));
-        assert_eq!(Value::Float(3.14).as_float(), Some(3.14));
+        assert_eq!(Value::Float(3.15).as_float(), Some(3.15));
         assert_eq!(Value::String("hello".into()).as_str(), Some("hello"));
     }
 

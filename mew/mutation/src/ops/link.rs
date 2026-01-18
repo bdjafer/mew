@@ -24,11 +24,9 @@ pub fn execute_link(
         .ok_or_else(|| MutationError::unknown_edge_type(&stmt.edge_type))?;
 
     // If IF NOT EXISTS, check if edge already exists
-    if stmt.if_not_exists {
-        if find_existing_edge(graph, edge_type_id, &target_ids).is_some() {
-            // Edge already exists - no new edge created
-            return Ok(MutationOutcome::Empty);
-        }
+    if stmt.if_not_exists && find_existing_edge(graph, edge_type_id, &target_ids).is_some() {
+        // Edge already exists - no new edge created
+        return Ok(MutationOutcome::Empty);
     }
 
     // Validate arity and target types
@@ -95,7 +93,12 @@ pub fn execute_link(
     }
 
     // Check that all required edge attributes are present
-    crate::validation::check_required_edge_attributes(registry, &stmt.edge_type, edge_type_id, &attrs)?;
+    crate::validation::check_required_edge_attributes(
+        registry,
+        &stmt.edge_type,
+        edge_type_id,
+        &attrs,
+    )?;
 
     // Apply default values for missing edge attributes
     crate::validation::apply_edge_defaults(registry, edge_type_id, &mut attrs)?;
@@ -141,7 +144,11 @@ fn ensure_acyclic(
 
 /// Find an existing edge with the given type and exact targets.
 /// Returns the edge ID if found, None otherwise.
-fn find_existing_edge(graph: &Graph, edge_type_id: EdgeTypeId, target_ids: &[EntityId]) -> Option<EdgeId> {
+fn find_existing_edge(
+    graph: &Graph,
+    edge_type_id: EdgeTypeId,
+    target_ids: &[EntityId],
+) -> Option<EdgeId> {
     // Get candidate edges based on first target type
     let candidate_edges: Vec<_> = match target_ids.first() {
         Some(EntityId::Node(source_id)) => {

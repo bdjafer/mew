@@ -39,7 +39,9 @@ pub fn validate_attribute(
     if let Some(attr_def) = registry.get_type_attr(type_id, attr_name) {
         // Check if trying to modify a readonly attribute during SET
         if is_update && attr_def.readonly {
-            return Err(MutationError::readonly_attribute_violation(type_name, attr_name));
+            return Err(MutationError::readonly_attribute_violation(
+                type_name, attr_name,
+            ));
         }
 
         // Check if trying to set a required attribute to null
@@ -107,12 +109,18 @@ pub fn validate_edge_attribute(
     if let Some(attr_def) = edge_type.attributes.get(attr_name) {
         // Check if trying to modify a readonly attribute during SET
         if is_update && attr_def.readonly {
-            return Err(MutationError::readonly_attribute_violation(edge_type_name, attr_name));
+            return Err(MutationError::readonly_attribute_violation(
+                edge_type_name,
+                attr_name,
+            ));
         }
 
         // Check if trying to set a required attribute to null
         if attr_def.required && matches!(value, Value::Null) {
-            return Err(MutationError::required_null_violation(edge_type_name, attr_name));
+            return Err(MutationError::required_null_violation(
+                edge_type_name,
+                attr_name,
+            ));
         }
 
         // Check type compatibility
@@ -447,7 +455,8 @@ fn is_valid_slug(s: &str) -> bool {
     if s.contains("--") {
         return false;
     }
-    s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    s.chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// Check if a string looks like a valid email (simple validation).
@@ -457,7 +466,10 @@ fn is_valid_email(s: &str) -> bool {
     if parts.len() != 2 {
         return false;
     }
-    !parts[0].is_empty() && parts[1].contains('.') && !parts[1].starts_with('.') && !parts[1].ends_with('.')
+    !parts[0].is_empty()
+        && parts[1].contains('.')
+        && !parts[1].starts_with('.')
+        && !parts[1].ends_with('.')
 }
 
 /// Check if a string looks like a valid URL.
@@ -468,12 +480,18 @@ fn is_valid_url(s: &str) -> bool {
 /// Check if a string is a valid UUID format.
 fn is_valid_uuid(s: &str) -> bool {
     // UUID format: 8-4-4-4-12 hex digits
-    let pattern = regex_lite::Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+    let pattern = regex_lite::Regex::new(
+        r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    );
     pattern.map(|re| re.is_match(s)).unwrap_or(false)
 }
 
 /// Validate a value against allowed values constraint (in: [...]).
-pub fn validate_allowed_values(attr_name: &str, value: &Value, allowed_values: &[Value]) -> MutationResult<()> {
+pub fn validate_allowed_values(
+    attr_name: &str,
+    value: &Value,
+    allowed_values: &[Value],
+) -> MutationResult<()> {
     // Skip null values
     if matches!(value, Value::Null) {
         return Ok(());
@@ -522,4 +540,3 @@ pub fn validate_length(
 
     Ok(())
 }
-

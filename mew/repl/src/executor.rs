@@ -5,7 +5,10 @@ use std::collections::HashMap;
 use mew_core::{messages, EntityId};
 use mew_graph::Graph;
 use mew_mutation::MutationExecutor;
-use mew_parser::{ExplainStmt, InspectStmt, MatchMutateStmt, MatchStmt, MatchWalkStmt, MutationAction, ProfileStmt, Stmt, Target, TargetRef, TxnStmt, WalkStmt};
+use mew_parser::{
+    ExplainStmt, InspectStmt, MatchMutateStmt, MatchStmt, MatchWalkStmt, MutationAction,
+    ProfileStmt, Stmt, Target, TargetRef, TxnStmt, WalkStmt,
+};
 use mew_pattern::{target, Binding, Bindings};
 use mew_query::{QueryExecutor, QueryResults};
 use mew_registry::Registry;
@@ -137,7 +140,11 @@ pub fn execute_inspect(
                         "_id" => Value::NodeRef(nid),
                         "*" => {
                             for (attr_name, attr_val) in node.attributes.iter() {
-                                output.push_str(&format!("{}: {}\n", attr_name, format_value(attr_val)));
+                                output.push_str(&format!(
+                                    "{}: {}\n",
+                                    attr_name,
+                                    format_value(attr_val)
+                                ));
                             }
                             continue;
                         }
@@ -339,8 +346,7 @@ pub fn resolve_target(
     t: &Target,
     bindings: &HashMap<String, EntityId>,
 ) -> Result<EntityId, String> {
-    target::resolve_var_target(t, bindings)
-        .map_err(|e| e.to_string())
+    target::resolve_var_target(t, bindings).map_err(|e| e.to_string())
 }
 
 /// Resolve a target reference to an entity ID.
@@ -348,8 +354,7 @@ pub fn resolve_target_ref(
     target_ref: &TargetRef,
     bindings: &HashMap<String, EntityId>,
 ) -> Result<EntityId, String> {
-    target::resolve_target_ref(target_ref, bindings)
-        .map_err(|e| e.to_string())
+    target::resolve_target_ref(target_ref, bindings).map_err(|e| e.to_string())
 }
 
 /// Resolve a target reference, handling inline spawns by executing them.
@@ -369,9 +374,9 @@ pub fn resolve_or_spawn_target_ref(
                 .map_err(|e| format!("Inline spawn error: {}", e))?;
 
             // Get the created node ID and add to bindings (first item for inline spawn)
-            let node_id = result.created_node().ok_or_else(|| {
-                "Inline spawn did not create a node".to_string()
-            })?;
+            let node_id = result
+                .created_node()
+                .ok_or_else(|| "Inline spawn did not create a node".to_string())?;
             let var_name = spawn_stmt.var();
             bindings.insert(var_name.to_string(), node_id.into());
             Ok(node_id.into())
@@ -580,7 +585,10 @@ pub fn execute_explain(
                 Err(e) => format!("Plan error: {}", e),
             }
         }
-        other => format!("EXPLAIN not supported for {:?}", std::mem::discriminant(other)),
+        other => format!(
+            "EXPLAIN not supported for {:?}",
+            std::mem::discriminant(other)
+        ),
     };
 
     Ok(format!("plan\n---\n{}", plan_str))
@@ -608,6 +616,9 @@ pub fn execute_profile(
                 .map_err(|e| format!("Walk error: {}", e))?;
             Ok(format_results(&results, "no paths found", "paths"))
         }
-        other => Ok(format!("PROFILE not supported for {:?}", std::mem::discriminant(other))),
+        other => Ok(format!(
+            "PROFILE not supported for {:?}",
+            std::mem::discriminant(other)
+        )),
     }
 }

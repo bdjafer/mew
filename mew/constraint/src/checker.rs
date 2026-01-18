@@ -475,7 +475,7 @@ mod tests {
         // THEN we get constraint checks (exact count depends on registered constraints)
         // The checker is invoked after mutation for immediate constraints
         // In real usage, this would detect violations
-        assert!(true); // Checker runs without error
+        // If we get here without error, the checker ran successfully
     }
 
     #[test]
@@ -525,7 +525,7 @@ mod tests {
         // THEN deferred constraints are checked
         // (Our "required:owner" constraint pattern isn't fully implemented,
         // but the infrastructure for deferred checking is in place)
-        assert!(true); // Deferred check runs without error
+        // If we get here without error, the deferred check ran successfully
     }
 
     #[test]

@@ -75,35 +75,35 @@ pub enum TokenKind {
     Timestamp(i64),
 
     // Symbols
-    LParen,     // (
-    RParen,     // )
-    LBrace,     // {
-    RBrace,     // }
-    LBracket,   // [
-    RBracket,   // ]
-    Comma,      // ,
-    Colon,      // :
-    Dot,        // .
-    Eq,         // =
-    NotEq,      // !=
-    Lt,         // <
-    LtEq,       // <=
-    Gt,         // >
-    GtEq,       // >=
-    Plus,       // +
-    Minus,      // -
-    Star,       // *
-    Slash,      // /
-    Percent,    // %
-    Pipe,       // |
-    Hash,       // #
-    Dollar,     // $
-    Concat,     // ++
-    Range,      // ..
-    Question,      // ?
-    NullCoalesce,  // ??
-    Arrow,         // =>
-    RightArrow,    // ->
+    LParen,       // (
+    RParen,       // )
+    LBrace,       // {
+    RBrace,       // }
+    LBracket,     // [
+    RBracket,     // ]
+    Comma,        // ,
+    Colon,        // :
+    Dot,          // .
+    Eq,           // =
+    NotEq,        // !=
+    Lt,           // <
+    LtEq,         // <=
+    Gt,           // >
+    GtEq,         // >=
+    Plus,         // +
+    Minus,        // -
+    Star,         // *
+    Slash,        // /
+    Percent,      // %
+    Pipe,         // |
+    Hash,         // #
+    Dollar,       // $
+    Concat,       // ++
+    Range,        // ..
+    Question,     // ?
+    NullCoalesce, // ??
+    Arrow,        // =>
+    RightArrow,   // ->
 
     // End of file
     Eof,
@@ -796,9 +796,9 @@ impl<'a> Lexer<'a> {
             let (dt, tz) = s.split_at(pos);
             let offset = self.parse_tz_offset(tz)?;
             (dt, offset)
-        } else if s.ends_with('Z') {
+        } else if let Some(stripped) = s.strip_suffix('Z') {
             // UTC
-            (&s[..s.len() - 1], 0i64)
+            (stripped, 0i64)
         } else if let Some(pos) = s.rfind('-') {
             // Could be negative offset or just date separator
             // Check if it's after 'T' (time section)
@@ -834,10 +834,10 @@ impl<'a> Lexer<'a> {
             .parse()
             .map_err(|_| format!("invalid day: {}", date_parts[2]))?;
 
-        if month < 1 || month > 12 {
+        if !(1..=12).contains(&month) {
             return Err(format!("month out of range: {}", month));
         }
-        if day < 1 || day > 31 {
+        if !(1..=31).contains(&day) {
             return Err(format!("day out of range: {}", day));
         }
 
@@ -847,10 +847,24 @@ impl<'a> Lexer<'a> {
                 let ms_str = &time[dot_pos + 1..];
                 // Normalize fractional seconds to 3 digits (milliseconds)
                 let ms: i64 = match ms_str.len() {
-                    1 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))? * 100,
-                    2 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))? * 10,
-                    3 => ms_str.parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
-                    _ => ms_str[..3].parse::<i64>().map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
+                    1 => {
+                        ms_str
+                            .parse::<i64>()
+                            .map_err(|_| format!("invalid milliseconds: {}", ms_str))?
+                            * 100
+                    }
+                    2 => {
+                        ms_str
+                            .parse::<i64>()
+                            .map_err(|_| format!("invalid milliseconds: {}", ms_str))?
+                            * 10
+                    }
+                    3 => ms_str
+                        .parse::<i64>()
+                        .map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
+                    _ => ms_str[..3]
+                        .parse::<i64>()
+                        .map_err(|_| format!("invalid milliseconds: {}", ms_str))?,
                 };
                 (&time[..dot_pos], ms)
             } else {
@@ -883,12 +897,12 @@ impl<'a> Lexer<'a> {
         let days = self.days_since_epoch(year, month, day);
 
         // Convert to milliseconds
-        let total_ms = (days as i64) * 86_400_000 // days to ms
+        let total_ms = days * 86_400_000 // days to ms
             + (hour as i64) * 3_600_000          // hours to ms
             + (minute as i64) * 60_000           // minutes to ms
             + (second as i64) * 1_000            // seconds to ms
             + millis                              // milliseconds
-            - tz_offset_ms;                       // subtract timezone offset
+            - tz_offset_ms; // subtract timezone offset
 
         Ok(total_ms)
     }
