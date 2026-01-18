@@ -36,9 +36,9 @@ SPAWN t4: TimeRecord {
   start_time = @2024-01-01T14:00:00Z,
   end_time = @2024-01-01T18:30:00Z
 }
--- Future timestamp
+-- Past timestamp with year >= 2025 (for query_year_comparison test)
 SPAWN t5: TimeRecord {
-  label = "future",
+  label = "last_year",
   start_time = @2025-07-04T15:00:00Z,
   scheduled_at = @2025-07-04T15:00:00Z
 }
