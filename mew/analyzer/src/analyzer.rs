@@ -654,9 +654,63 @@ impl<'r> Analyzer<'r> {
 
     /// Analyze a function call.
     fn analyze_fn_call(&mut self, fc: &FnCall) -> AnalyzerResult<Type> {
-        // Analyze all arguments
+        // Check if this is a pattern-based aggregation (e.g., count(a: Author, written_by(b, a)))
+        // Pattern-based aggregations use TypeCheck expressions to declare scoped variables
+        let is_aggregate = matches!(
+            fc.name.to_lowercase().as_str(),
+            "count" | "sum" | "avg" | "min" | "max" | "collect"
+        );
+
+        if is_aggregate && !fc.args.is_empty() {
+            // Check if first arg looks like a pattern declaration (TypeCheck = var:Type)
+            if let Some(Expr::TypeCheck(base_expr, type_name, _)) = fc.args.first() {
+                if let Expr::Var(var_name, _) = base_expr.as_ref() {
+                    // This looks like pattern syntax: count(a: Author, ...)
+                    // Push a new scope and register the variable
+                    self.scope.push();
+
+                    // Look up the type to get the TypeId
+                    if let Some(type_id) = self.registry.get_type_id(type_name) {
+                        let binding = VarBinding::new(var_name, Type::NodeRef(type_id));
+                        self.scope.define(binding);
+                    } else {
+                        // Unknown type - still register with Any type to allow analysis to continue
+                        let binding = VarBinding::new(var_name, Type::Any);
+                        self.scope.define(binding);
+                    }
+
+                    // Analyze remaining arguments with the scoped variable
+                    for arg in fc.args.iter().skip(1) {
+                        self.analyze_expr(arg)?;
+                    }
+
+                    // Analyze filter if present
+                    if let Some(filter) = &fc.filter {
+                        self.analyze_expr(filter)?;
+                    }
+
+                    // Pop the scope
+                    self.scope.pop();
+
+                    // Return the appropriate type for the aggregate
+                    return Ok(match fc.name.to_lowercase().as_str() {
+                        "count" => Type::Int,
+                        "sum" | "avg" | "min" | "max" => Type::Float,
+                        "collect" => Type::Any,
+                        _ => Type::Any,
+                    });
+                }
+            }
+        }
+
+        // Standard function call analysis
         for arg in &fc.args {
             self.analyze_expr(arg)?;
+        }
+
+        // Analyze filter if present
+        if let Some(filter) = &fc.filter {
+            self.analyze_expr(filter)?;
         }
 
         // Return type depends on function - simplified for now
