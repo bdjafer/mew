@@ -31,11 +31,11 @@ SPAWN t3: TimeRecord {
 }
 SPAWN t4: TimeRecord {
   label = "with_end",
-  start_time = @2024-01-01T10:00:00Z,
-  end_time = @2024-01-01T14:30:00Z
+  start_time = @2024-01-01T14:00:00Z,
+  end_time = @2024-01-01T18:30:00Z
 }
 SPAWN t5: TimeRecord {
-  label = "future",
+  label = "last_year",
   start_time = @2025-07-04T15:00:00Z,
   scheduled_at = @2025-07-04T15:00:00Z
 }
