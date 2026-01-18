@@ -14,18 +14,18 @@ jobs:
   # ============================================================================
   # BLOCKING: These must pass for CI to be green
   # ============================================================================
-  
+
   build:
     name: Build & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      
+
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -36,15 +36,15 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      
+
       - name: Check formatting
         working-directory: mew
         run: cargo fmt --all -- --check
-      
+
       - name: Clippy
         working-directory: mew
         run: cargo clippy --workspace --all-targets -- -D warnings
-      
+
       - name: Build
         working-directory: mew
         run: cargo build --workspace --all-targets
@@ -52,7 +52,7 @@ jobs:
   # ============================================================================
   # INFORMATIONAL: Test results - TDD mode means failures are expected
   # ============================================================================
-  
+
   test:
     name: Tests
     runs-on: ubuntu-latest
@@ -65,10 +65,10 @@ jobs:
       integration_failed: ${{ steps.integration.outputs.failed }}
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -77,7 +77,7 @@ jobs:
             ~/.cargo/git
             mew/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Run unit tests
         id: unit
         working-directory: mew
@@ -87,17 +87,17 @@ jobs:
           output=$(cargo test --workspace --lib 2>&1)
           exit_code=$?
           echo "$output"
-          
+
           passed=$(echo "$output" | grep -oE '[0-9]+ passed' | awk '{sum+=$1} END {print sum+0}')
           failed=$(echo "$output" | grep -oE '[0-9]+ failed' | awk '{sum+=$1} END {print sum+0}')
-          
+
           echo "passed=$passed" >> $GITHUB_OUTPUT
           echo "failed=$failed" >> $GITHUB_OUTPUT
           echo "### Unit Tests" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Passed: $passed" >> $GITHUB_STEP_SUMMARY
           echo "- ❌ Failed: $failed" >> $GITHUB_STEP_SUMMARY
           exit 0
-      
+
       - name: Run integration tests
         id: integration
         working-directory: mew
@@ -107,17 +107,17 @@ jobs:
           output=$(cargo test -p mew-tests --no-fail-fast 2>&1)
           exit_code=$?
           echo "$output"
-          
+
           passed=$(echo "$output" | grep -oE '[0-9]+ passed' | awk '{sum+=$1} END {print sum+0}')
           failed=$(echo "$output" | grep -oE '[0-9]+ failed' | awk '{sum+=$1} END {print sum+0}')
-          
+
           echo "passed=$passed" >> $GITHUB_OUTPUT
           echo "failed=$failed" >> $GITHUB_OUTPUT
           echo "### Integration Tests" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Passed: $passed" >> $GITHUB_STEP_SUMMARY
           echo "- ❌ Failed: $failed" >> $GITHUB_STEP_SUMMARY
           exit 0
-      
+
       - name: Test summary
         run: |
           echo "## 📊 Test Results Summary" >> $GITHUB_STEP_SUMMARY
@@ -133,7 +133,7 @@ jobs:
   # ============================================================================
   # CROSS-PLATFORM: Build verification on other platforms
   # ============================================================================
-  
+
   build-platforms:
     if: false  # Disabled during development
     name: Build (${{ matrix.os }})
@@ -145,10 +145,10 @@ jobs:
         os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Build
         working-directory: mew
         run: cargo build --workspace
@@ -156,7 +156,7 @@ jobs:
   # ============================================================================
   # SUMMARY: Post overall status
   # ============================================================================
-  
+
   status:
     name: CI Status
     runs-on: ubuntu-latest
