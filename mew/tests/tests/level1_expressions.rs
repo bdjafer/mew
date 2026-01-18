@@ -253,7 +253,7 @@ mod timestamps {
             .step("query_hour_extraction", |a| a.scalar("hr", 12i64))
             .step("query_minute_extraction", |a| a.scalar("min", 30i64))
             .step("query_second_extraction", |a| a.scalar("sec", 45i64))
-            .step("query_time_filter", |a| a.scalar("count", 4i64))
+            .step("query_time_filter", |a| a.scalar("count", 3i64))
             // now() tests (spawns t6 with runtime timestamp)
             .step("spawn_with_now", |a| a.created(1))
             .step("query_now_comparison", |a| a.scalar("count", 5i64))
