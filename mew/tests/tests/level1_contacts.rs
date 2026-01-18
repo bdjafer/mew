@@ -150,7 +150,7 @@ mod queries {
             .ontology("level-1/contacts/ontology.mew")
             .seed("level-1/contacts/seeds/populated.mew")
             .operations("level-1/contacts/operations/queries.mew")
-            .step("count_all_persons", |a| a.scalar("count", 99i64)) // WRONG: should be 4
+            .step("count_all_persons", |a| a.scalar("count", 4i64))
             .step("count_all_orgs", |a| a.scalar("count", 2i64))
             .step("count_all_tags", |a| a.scalar("count", 3i64))
             .step("count_all_groups", |a| a.scalar("count", 2i64))
