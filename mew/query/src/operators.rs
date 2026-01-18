@@ -223,6 +223,13 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
         let input_results = self.execute_op(input, initial_bindings)?;
         let mut results = Vec::new();
 
+        // Check if this edge type is symmetric
+        let is_symmetric = self
+            .registry
+            .get_edge_type(edge_type_id)
+            .map(|et| et.symmetric)
+            .unwrap_or(false);
+
         for (bindings, _) in input_results {
             if from_vars.is_empty() {
                 results.push((bindings, Vec::new()));
@@ -279,6 +286,57 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                                 new_bindings.insert(alias, mew_pattern::Binding::Edge(edge_id));
                             }
                             results.push((new_bindings, Vec::new()));
+                        }
+                    }
+                }
+
+                // For symmetric edges, also search edges where the bound node is at the other position
+                // This handles: friend_of(alice, bob) stored, query friend_of(bob, x) should find it
+                if is_symmetric && from_vars.len() == 2 && idx == 0 {
+                    // We already searched edges_from (bound node at pos 0)
+                    // Now search edges_to (bound node at pos 1 in stored edge)
+                    let reverse_edge_ids: Vec<_> =
+                        self.graph.edges_to(node_id, Some(edge_type_id)).collect();
+
+                    for edge_id in reverse_edge_ids {
+                        if let Some(edge) = self.graph.get_edge(edge_id) {
+                            // For symmetric edge, query pattern edge(a, b) should match
+                            // stored edge(x, y) when a=y (position 1 in stored edge)
+                            // So: from_vars[0] should match edge.targets[1]
+                            //     from_vars[1] should match edge.targets[0]
+                            let mut all_match = true;
+
+                            // Check from_vars[0] against edge.targets[1]
+                            if let Some(binding) = bindings.get(&from_vars[0]) {
+                                if let Some(expected_id) = binding.as_node() {
+                                    if edge.targets.len() > 1 {
+                                        if edge.targets[1].as_node() != Some(expected_id) {
+                                            all_match = false;
+                                        }
+                                    } else {
+                                        all_match = false;
+                                    }
+                                }
+                            }
+
+                            // Check from_vars[1] against edge.targets[0] (if bound)
+                            if all_match && from_vars[1] != "_" {
+                                if let Some(binding) = bindings.get(&from_vars[1]) {
+                                    if let Some(expected_id) = binding.as_node() {
+                                        if edge.targets[0].as_node() != Some(expected_id) {
+                                            all_match = false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if all_match {
+                                let mut new_bindings = bindings.clone();
+                                if let Some(alias) = edge_var {
+                                    new_bindings.insert(alias, mew_pattern::Binding::Edge(edge_id));
+                                }
+                                results.push((new_bindings, Vec::new()));
+                            }
                         }
                     }
                 }

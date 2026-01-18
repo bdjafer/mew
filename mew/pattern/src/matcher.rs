@@ -98,6 +98,13 @@ impl<'r, 'g> Matcher<'r, 'g> {
                     .as_node()
                     .ok_or_else(|| crate::PatternError::type_error("expected node binding"))?;
 
+                // Check if this edge type is symmetric
+                let is_symmetric = self
+                    .registry
+                    .get_edge_type(*edge_type_id)
+                    .map(|et| et.symmetric)
+                    .unwrap_or(false);
+
                 // Find edges from this node with matching type
                 let edges: Vec<_> = self
                     .graph
@@ -130,6 +137,57 @@ impl<'r, 'g> Matcher<'r, 'g> {
                                 new_bindings.insert(alias, Binding::Edge(edge_id));
                             }
                             matches.push(new_bindings);
+                        }
+                    }
+                }
+
+                // For symmetric edges, also search edges where source_id is at position 1
+                // This handles the case: friend_of(alice, bob) stored, query friend_of(bob, x)
+                if is_symmetric && from_vars.len() == 2 {
+                    let reverse_edges: Vec<_> = self
+                        .graph
+                        .edges_to(source_id, Some(*edge_type_id))
+                        .collect();
+
+                    for edge_id in reverse_edges {
+                        if let Some(edge) = self.graph.get_edge(edge_id) {
+                            // For symmetric edge, the query pattern edge(a, b) should match
+                            // stored edge(x, y) when a=y (position 1).
+                            // So we need to check: from_vars[0] matches edge.targets[1]
+                            //                      from_vars[1] matches edge.targets[0]
+                            let mut all_match = true;
+
+                            // Check first variable against position 1
+                            if let Some(binding) = bindings.get(&from_vars[0]) {
+                                if let Some(expected_id) = binding.as_node() {
+                                    if edge.targets.len() > 1 {
+                                        let actual_id = edge.targets[1].as_node();
+                                        if actual_id != Some(expected_id) {
+                                            all_match = false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Check second variable against position 0 (if bound)
+                            if all_match {
+                                if let Some(binding) = bindings.get(&from_vars[1]) {
+                                    if let Some(expected_id) = binding.as_node() {
+                                        let actual_id = edge.targets[0].as_node();
+                                        if actual_id != Some(expected_id) {
+                                            all_match = false;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if all_match {
+                                let mut new_bindings = bindings.clone();
+                                if let Some(alias) = edge_var {
+                                    new_bindings.insert(alias, Binding::Edge(edge_id));
+                                }
+                                matches.push(new_bindings);
+                            }
                         }
                     }
                 }
@@ -384,5 +442,83 @@ mod tests {
             .collect();
         assert!(node_ids.contains(&task_b));
         assert!(node_ids.contains(&task_c));
+    }
+
+    #[test]
+    fn test_match_symmetric_edge_reverse() {
+        // GIVEN registry with symmetric edge friend_of(Person, Person)
+        let mut builder = RegistryBuilder::new();
+        builder
+            .add_type("Person")
+            .attr(AttrDef::new("name", "String"))
+            .done()
+            .unwrap();
+        builder
+            .add_edge_type("friend_of")
+            .param("a", "Person")
+            .param("b", "Person")
+            .symmetric()
+            .done()
+            .unwrap();
+        let registry = builder.build().unwrap();
+
+        // GIVEN graph with alice, bob and friend_of(alice, bob)
+        let mut graph = Graph::new();
+        let person_type_id = registry.get_type_id("Person").unwrap();
+        let friend_of_type_id = registry.get_edge_type_id("friend_of").unwrap();
+
+        let alice = graph.create_node(person_type_id, attrs! { "name" => "Alice" });
+        let bob = graph.create_node(person_type_id, attrs! { "name" => "Bob" });
+
+        graph
+            .create_edge(friend_of_type_id, vec![alice.into(), bob.into()], attrs! {})
+            .unwrap();
+
+        // PATTERN: a: Person, b: Person, friend_of(a, b)
+        let elements = vec![
+            PatternElem::Node(NodePattern {
+                var: "a".to_string(),
+                type_name: "Person".to_string(),
+                span: Default::default(),
+            }),
+            PatternElem::Node(NodePattern {
+                var: "b".to_string(),
+                type_name: "Person".to_string(),
+                span: Default::default(),
+            }),
+            PatternElem::Edge(EdgePattern {
+                edge_type: "friend_of".to_string(),
+                targets: vec!["a".to_string(), "b".to_string()],
+                alias: None,
+                transitive: None,
+                span: Default::default(),
+            }),
+        ];
+        let pattern = CompiledPattern::compile(&elements, &registry).unwrap();
+
+        // WHEN
+        let matcher = Matcher::new(&registry, &graph);
+        let matches = matcher.find_all(&pattern).unwrap();
+
+        // THEN: For symmetric edge, should match both (alice, bob) AND (bob, alice)
+        // So we expect 2 matches
+        assert_eq!(
+            matches.len(),
+            2,
+            "Symmetric edge should match in both directions"
+        );
+
+        // Verify we have both orderings
+        let pairs: Vec<(NodeId, NodeId)> = matches
+            .iter()
+            .map(|b| {
+                (
+                    b.get("a").unwrap().as_node().unwrap(),
+                    b.get("b").unwrap().as_node().unwrap(),
+                )
+            })
+            .collect();
+        assert!(pairs.contains(&(alice, bob)), "Should have (alice, bob)");
+        assert!(pairs.contains(&(bob, alice)), "Should have (bob, alice)");
     }
 }
