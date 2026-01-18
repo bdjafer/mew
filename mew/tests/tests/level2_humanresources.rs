@@ -542,27 +542,29 @@ mod cardinality {
             .step("test_setup_cardinality_manager_2", |a| a.created(1))
             // Maximum cardinality [0..1]: employee on at most one team
             .step("test_member_of_first_team", |a| a.linked(1))
-            .step("test_member_of_second_team_fails", |a| a.linked(1)) // Cardinality constraints not enforced
-            .step("test_verify_employee_on_one_team", |a| a.rows(2)) // Employee now on 2 teams
+            .step("test_member_of_second_team_fails", |a| {
+                a.error("cardinality")
+            }) // Cardinality enforced
+            .step("test_verify_employee_on_one_team", |a| a.rows(1)) // Employee on 1 team
             .step("test_member_of_different_employee_succeeds", |a| {
                 a.linked(1)
             })
-            .step("test_verify_both_employees_on_teams", |a| a.rows(3))
-            // Exact cardinality [1]: team has exactly one leader (cardinality not enforced)
+            .step("test_verify_both_employees_on_teams", |a| a.rows(2))
+            // Exact cardinality [1]: team has exactly one leader
             .step("test_team_leader_assigned", |a| a.linked(1))
-            .step("test_team_leader_second_fails", |a| a.linked(1)) // Cardinality not enforced
-            .step("test_verify_team_has_one_leader", |a| a.rows(2)) // Team now has 2 leaders
+            .step("test_team_leader_second_fails", |a| a.error("cardinality")) // Cardinality enforced
+            .step("test_verify_team_has_one_leader", |a| a.rows(1)) // Team has 1 leader
             .step("test_team_beta_needs_leader_at_commit", |a| a.linked(1))
             // Minimum cardinality [2..*]: project needs at least 2 members
             .step("test_setup_cardinality_project", |a| a.created(1))
             .step("test_project_first_member", |a| a.linked(1))
             .step("test_project_second_member", |a| a.linked(1))
             .step("test_verify_project_has_min_members", |a| a.rows(1))
-            // Bidirectional cardinality [0..1, 0..1]: buddy system (cardinality not enforced)
+            // Bidirectional cardinality [0..1, 0..1]: buddy system
             .step("test_buddy_assignment", |a| a.linked(1))
             .step("test_buddy_reverse_check", |a| a.rows(1))
-            .step("test_buddy_second_fails", |a| a.linked(1)) // Cardinality not enforced
-            .step("test_buddy_as_target_fails", |a| a.linked(1)) // Cardinality not enforced
+            .step("test_buddy_second_fails", |a| a.error("cardinality")) // Cardinality enforced
+            .step("test_buddy_as_target_fails", |a| a.error("cardinality")) // Cardinality enforced
             // Range cardinality [1..3]: document needs 1-3 approvers
             .step("test_setup_approval_doc", |a| a.created(1))
             .step("test_first_approver", |a| a.linked(1))
@@ -573,13 +575,13 @@ mod cardinality {
             .step("test_third_approver", |a| a.linked(1))
             .step("test_verify_three_approvers", |a| a.rows(1))
             .step("test_setup_fourth_manager", |a| a.created(1))
-            .step("test_fourth_approver_fails", |a| a.linked(1)) // Cardinality not enforced
-            // Cleanup (more edges since cardinality not enforced)
-            .step("test_cleanup_member_of_edges", |a| a.unlinked(3))
-            .step("test_cleanup_team_leader_edges", |a| a.unlinked(3))
+            .step("test_fourth_approver_fails", |a| a.error("cardinality")) // Cardinality enforced
+            // Cleanup (fewer edges since cardinality is enforced)
+            .step("test_cleanup_member_of_edges", |a| a.unlinked(2))
+            .step("test_cleanup_team_leader_edges", |a| a.unlinked(2))
             .step("test_cleanup_project_member_edges", |a| a.unlinked(2))
-            .step("test_cleanup_buddy_edges", |a| a.unlinked(3))
-            .step("test_cleanup_approved_by_edges", |a| a.unlinked(4))
+            .step("test_cleanup_buddy_edges", |a| a.unlinked(1))
+            .step("test_cleanup_approved_by_edges", |a| a.unlinked(3))
             .step("test_cleanup_teams", |a| a.deleted(2))
             // 3 employees + 4 managers (managers inherit from Employee)
             .step("test_cleanup_employees", |a| a.deleted(7))

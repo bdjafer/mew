@@ -1,8 +1,8 @@
 //! RegistryBuilder for constructing an immutable Registry.
 
 use crate::{
-    AttrDef, ConstraintDef, EdgeParam, EdgeTypeDef, OnKillAction, Registry, RuleDef, SubtypeIndex,
-    TypeDef,
+    AttrDef, Cardinality, ConstraintDef, EdgeParam, EdgeTypeDef, OnKillAction, Registry, RuleDef,
+    SubtypeIndex, TypeDef,
 };
 use mew_core::{EdgeTypeId, TypeId};
 use std::collections::HashMap;
@@ -291,7 +291,20 @@ impl<'a> EdgeTypeBuilder<'a> {
         self.params.push(EdgeParam {
             name: name.into(),
             type_constraint: type_constraint.into(),
+            cardinality: Cardinality::default(),
         });
+        self
+    }
+
+    /// Set cardinality constraint for a parameter by name.
+    /// `min` and `max` define the allowed range; `max = None` means unbounded.
+    pub fn with_cardinality(mut self, param_name: &str, min: u32, max: Option<u32>) -> Self {
+        for param in &mut self.params {
+            if param.name == param_name {
+                param.cardinality = Cardinality::new(min, max);
+                break;
+            }
+        }
         self
     }
 
@@ -316,9 +329,9 @@ impl<'a> EdgeTypeBuilder<'a> {
     /// Set on-kill action for a specific parameter by index.
     /// Index 0 = source (first param), Index 1 = target (second param), etc.
     pub fn on_kill_at(mut self, param_index: usize, action: OnKillAction) -> Self {
-        // Extend the vector if needed, filling with default (no action)
+        // Extend the vector if needed, filling with default (Delete = unlink per spec)
         while self.on_kill.len() <= param_index {
-            self.on_kill.push(OnKillAction::Restrict); // Default: prevent deletion
+            self.on_kill.push(OnKillAction::Delete); // Default: unlink (remove edge)
         }
         self.on_kill[param_index] = action;
         self

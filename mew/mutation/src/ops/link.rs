@@ -4,7 +4,7 @@ use mew_core::{EdgeId, EdgeTypeId, EntityId, NodeId};
 use mew_graph::Graph;
 use mew_parser::LinkStmt;
 use mew_pattern::{Bindings, Evaluator};
-use mew_registry::Registry;
+use mew_registry::{EdgeTypeDef, Registry};
 use std::collections::{HashSet, VecDeque};
 
 use crate::error::{MutationError, MutationResult};
@@ -70,6 +70,9 @@ pub fn execute_link(
         if edge_type.acyclic {
             ensure_acyclic(graph, edge_type_id, &stmt.edge_type, &target_ids)?;
         }
+
+        // Check cardinality constraints (maximum)
+        ensure_cardinality(graph, edge_type, &stmt.edge_type, &target_ids)?;
     }
 
     // Build attributes
@@ -212,4 +215,87 @@ fn path_exists(graph: &Graph, edge_type_id: EdgeTypeId, start: NodeId, goal: Nod
     }
 
     false
+}
+
+/// Ensure creating this edge wouldn't violate cardinality constraints.
+/// Only checks maximum cardinality (enforced immediately on LINK).
+/// Minimum cardinality is checked at transaction COMMIT.
+fn ensure_cardinality(
+    graph: &Graph,
+    edge_type: &EdgeTypeDef,
+    edge_type_name: &str,
+    target_ids: &[EntityId],
+) -> MutationResult<()> {
+    for (i, (param, target_id)) in edge_type.params.iter().zip(target_ids.iter()).enumerate() {
+        // Skip if no max cardinality constraint
+        if param.cardinality.max.is_none() {
+            continue;
+        }
+
+        // Count existing edges from this node/entity of this type at this position
+        let current_count = count_edges_at_position(graph, edge_type.id, target_id, i);
+
+        // Check if adding one more would violate the max
+        if param.cardinality.exceeds_max(current_count + 1) {
+            return Err(MutationError::cardinality_violation(
+                edge_type_name,
+                &param.name,
+                current_count,
+                param.cardinality.max.unwrap(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Count how many edges of the given type have the given entity at the given position.
+fn count_edges_at_position(
+    graph: &Graph,
+    edge_type_id: EdgeTypeId,
+    entity_id: &EntityId,
+    position: usize,
+) -> u32 {
+    match entity_id {
+        EntityId::Node(node_id) => {
+            // For nodes, we need to check edges where this node is at the given position
+            // Position 0 = source (edges_from), Position 1+ = target
+            if position == 0 {
+                // Source position: count edges from this node
+                graph.edges_from(*node_id, Some(edge_type_id)).count() as u32
+            } else {
+                // Target position: count edges to this node and filter by position
+                graph
+                    .edges_to(*node_id, Some(edge_type_id))
+                    .filter(|edge_id| {
+                        if let Some(edge) = graph.get_edge(*edge_id) {
+                            edge.targets
+                                .get(position)
+                                .map(|t| t == entity_id)
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    })
+                    .count() as u32
+            }
+        }
+        EntityId::Edge(edge_id) => {
+            // For higher-order edges, count edges about this edge
+            graph
+                .edges_about(*edge_id)
+                .filter(|e_id| {
+                    if let Some(edge) = graph.get_edge(*e_id) {
+                        edge.type_id == edge_type_id
+                            && edge
+                                .targets
+                                .get(position)
+                                .map(|t| t == entity_id)
+                                .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                })
+                .count() as u32
+        }
+    }
 }
