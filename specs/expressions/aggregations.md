@@ -25,12 +25,13 @@ AggregateFunc     = "COUNT" | "SUM" | "AVG" | "MIN" | "MAX" | "COLLECT"
 
 AggregateArg      = "DISTINCT"? Expr
                   | "*"
-                  | Pattern                    (* for WHERE clause aggregates *)
+                  | Pattern                    (* pattern-based aggregation *)
 
 CollectLimit      = "[" "limit" ":" (IntLiteral | "none") "]"
 
-(* In WHERE clause *)
-AggregateInWhere  = AggregateFunc "(" Pattern ")"
+Pattern           = VarDecl ("," (VarDecl | EdgePattern))+
+VarDecl           = Identifier ":" TypeName
+EdgePattern       = EdgeName "(" Identifier "," Identifier ")"
 ```
 
 ### Keywords
@@ -136,7 +137,29 @@ ERROR [E5003]: COLLECT exceeded size limit
         or COLLECT(t) [limit: none] to allow unlimited.
 ```
 
-### Aggregates in WHERE Clause
+### Pattern-Based Aggregation
+
+Pattern-based aggregation allows counting or aggregating related entities inline, without requiring them to be matched in the main MATCH clause. This syntax works in both RETURN and WHERE contexts.
+
+**Syntax:** `AGGREGATE(var: Type, edge_pattern(a, b))`
+
+The pattern declares a scoped variable that:
+- Is only visible within the aggregate expression
+- Can reference outer variables from the MATCH clause (correlated)
+- Is computed per row of the outer query
+
+**In RETURN clause:**
+```
+-- Count copies per book
+MATCH b: Book
+RETURN b.title, COUNT(c: Copy, copy_of(c, b))
+
+-- Count authors per book with grouping
+MATCH b: Book
+RETURN b.title, COUNT(a: Author, written_by(b, a)) AS author_count
+```
+
+**In WHERE clause:**
 
 Unlike SQL, MEW allows aggregate functions directly in WHERE clauses:
 
@@ -157,10 +180,11 @@ WHERE COUNT(f: Person, follows(p, f)) > COUNT(f: Person, follows(f, p))
 RETURN p
 ```
 
-**Semantics for WHERE aggregates:**
+**Semantics for pattern-based aggregates:**
 - The aggregate is computed for each candidate row
 - Pattern variables are scoped to the aggregate expression
 - Outer variables can be referenced (correlated subquery)
+- Works identically in WHERE and RETURN contexts
 
 **Comparison with SQL:**
 ```sql
@@ -257,10 +281,20 @@ MATCH t: Task, p: Project, belongs_to(t, p)
 RETURN p.name, COLLECT(t.title) AS task_titles
 ```
 
-### Aggregates in WHERE
+### Pattern-Based Aggregation Examples
 
 ```
--- Projects with more than 10 tasks
+-- Count related entities per row (in RETURN)
+MATCH b: Book
+RETURN b.title, COUNT(c: Copy, copy_of(c, b)) AS copy_count
+
+-- Multiple pattern aggregates
+MATCH b: Book
+RETURN b.title,
+       COUNT(a: Author, written_by(b, a)) AS author_count,
+       COUNT(g: Genre, in_genre(b, g)) AS genre_count
+
+-- Filter by pattern aggregate (in WHERE)
 MATCH p: Project
 WHERE COUNT(t: Task, belongs_to(t, p)) > 10
 RETURN p
