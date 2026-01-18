@@ -225,9 +225,9 @@ mod errors_comprehensive {
             .step("copy_missing_barcode", |a| a.error("required"))
             .step("copy_invalid_available", |a| a.error("type"))
             // Edge errors
-            .step("borrowed_missing_dates", |a| a.created(2).linked(1)) // Required edge attrs not enforced
+            .step("borrowed_missing_dates", |a| a.created(2).error("required"))
             .step("borrowed_invalid_date_type", |a| a.created(2).error("type"))
-            .step("returned_missing_dates", |a| a.created(2).linked(1)) // Required edge attrs not enforced
+            .step("returned_missing_dates", |a| a.created(2).error("required"))
             .step("wrong_edge_types", |a| a.created(2).error("type"))
             .step("copy_of_wrong_types", |a| a.created(2).error("type"))
             // Query errors
