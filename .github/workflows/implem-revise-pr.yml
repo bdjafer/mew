@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   revise:
-    if: contains(github.event.pull_request.labels.*.name, 'agent/needs-revision')
+    # Only run if the specific label just added was agent/needs-revision
+    if: github.event.label.name == 'agent/needs-revision'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

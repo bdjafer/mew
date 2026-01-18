@@ -76,7 +76,8 @@ jobs:
           echo "Created PR #$PR_NUMBER"
 
   verify:
-    if: github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'scenarios/needs-verify')
+    # Only run if the specific label just added was scenarios/needs-verify
+    if: github.event_name == 'pull_request_target' && github.event.label.name == 'scenarios/needs-verify'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -192,7 +193,8 @@ jobs:
             }
 
   confirm:
-    if: github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'scenarios/needs-confirm')
+    # Only run if the specific label just added was scenarios/needs-confirm
+    if: github.event_name == 'pull_request_target' && github.event.label.name == 'scenarios/needs-confirm'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

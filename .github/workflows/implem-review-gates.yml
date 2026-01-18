@@ -17,9 +17,14 @@ permissions:
 
 jobs:
   quality-review:
+    # For labeled events: only run if 'agent/needs-review' was the label added
+    # For PR events (opened/synchronize): run if PR has the label
     if: |
       !github.event.pull_request.draft &&
-      contains(github.event.pull_request.labels.*.name, 'agent/needs-review')
+      (
+        (github.event_name == 'pull_request_target' && github.event.label.name == 'agent/needs-review') ||
+        (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'agent/needs-review'))
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -49,9 +54,14 @@ jobs:
             --allowedTools Bash,Read,Glob,Grep
 
   spec-compliance:
+    # For labeled events: only run if 'agent/needs-review' was the label added
+    # For PR events (opened/synchronize): run if PR has the label
     if: |
       !github.event.pull_request.draft &&
-      contains(github.event.pull_request.labels.*.name, 'agent/needs-review')
+      (
+        (github.event_name == 'pull_request_target' && github.event.label.name == 'agent/needs-review') ||
+        (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'agent/needs-review'))
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

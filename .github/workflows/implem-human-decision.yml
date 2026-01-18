@@ -16,9 +16,10 @@ permissions:
 
 jobs:
   handle-decision:
+    # Only run if the specific label just added was human/approved or human/rejected
     if: |
-      contains(github.event.pull_request.labels.*.name, 'human/approved') ||
-      contains(github.event.pull_request.labels.*.name, 'human/rejected')
+      github.event.label.name == 'human/approved' ||
+      github.event.label.name == 'human/rejected'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
