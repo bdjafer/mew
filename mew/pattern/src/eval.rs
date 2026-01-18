@@ -32,7 +32,10 @@ impl<'r> Evaluator<'r> {
             }
             Expr::UnaryOp(op, operand, _) => self.eval_unary_op(*op, operand, bindings, graph),
             Expr::FnCall(fc) => self.eval_fn_call(&fc.name, &fc.args, bindings, graph),
-            Expr::IdRef(_, _) => Ok(Value::Null), // TODO: resolve ID refs
+            Expr::IdRef(id, _) => {
+                // Look up the ID in bindings - ID refs use session-stored names from SPAWN
+                self.eval_var(id, bindings)
+            }
             Expr::Param(name, _) => Err(PatternError::missing_parameter(name)),
             Expr::Exists(pattern_elems, where_clause, _) => {
                 // Compile the subpattern and check if any matches exist

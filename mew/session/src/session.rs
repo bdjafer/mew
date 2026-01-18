@@ -485,8 +485,10 @@ impl<'r> Session<'r> {
 
     /// Execute a WALK statement.
     fn execute_walk(&self, stmt: &WalkStmt) -> SessionResult<QueryResult> {
+        // Convert session bindings to pattern bindings so ID refs can be resolved
+        let pattern_bindings = to_pattern_bindings(&self.bindings);
         let executor = QueryExecutor::new(self.registry, &self.graph);
-        let result = executor.execute_walk(stmt)?;
+        let result = executor.execute_walk_with_bindings(stmt, Some(&pattern_bindings))?;
         Ok(convert_query_result(&result))
     }
 
