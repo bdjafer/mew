@@ -91,6 +91,10 @@ pub enum PlanOp {
         min_depth: i64,
         max_depth: Option<i64>,
         direction: WalkDirection,
+        /// UNTIL condition that stops traversal when true
+        until_condition: Option<Expr>,
+        /// Return type to determine output format
+        return_terminal: bool,
     },
 
     /// Remove duplicate rows.
@@ -434,6 +438,10 @@ impl<'r> QueryPlanner<'r> {
             };
         }
 
+        // Check if we're returning TERMINAL (need to stop at first node matching UNTIL)
+        let return_terminal =
+            matches!(stmt.return_type, mew_parser::WalkReturnType::Terminal { .. });
+
         let plan = PlanOp::TransitiveClosure {
             start_var: "start".to_string(),
             start_expr: stmt.from.clone(),
@@ -441,16 +449,8 @@ impl<'r> QueryPlanner<'r> {
             min_depth,
             max_depth,
             direction,
-        };
-
-        // Add UNTIL filter
-        let plan = if let Some(ref until) = stmt.until {
-            PlanOp::Filter {
-                input: Box::new(plan),
-                condition: until.clone(),
-            }
-        } else {
-            plan
+            until_condition: stmt.until.clone(),
+            return_terminal,
         };
 
         // Determine column names based on return type and alias

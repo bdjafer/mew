@@ -101,12 +101,16 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                 min_depth,
                 max_depth,
                 direction,
+                until_condition,
+                return_terminal,
             } => self.execute_transitive_closure(
                 start_expr,
                 edge_types,
                 *min_depth,
                 *max_depth,
                 direction,
+                until_condition.as_ref(),
+                *return_terminal,
                 initial_bindings,
             ),
 
@@ -513,6 +517,8 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
         min_depth: i64,
         max_depth: Option<i64>,
         direction: &WalkDirection,
+        until_condition: Option<&Expr>,
+        return_terminal: bool,
         initial_bindings: Option<&Bindings>,
     ) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
         // Evaluate the start expression to get the starting node(s)
@@ -551,29 +557,61 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
                 continue;
             }
 
+            // Create bindings for the current node to evaluate UNTIL condition
+            let mut bindings = init_bindings.clone();
+            // Use "node" as the output variable to avoid overwriting the input "start" binding
+            bindings.insert("node", mew_pattern::Binding::Node(current_id));
+
+            // Check if UNTIL condition is satisfied at this node
+            let until_matched = if let Some(until_cond) = until_condition {
+                self.evaluator
+                    .eval_bool(until_cond, &bindings, self.graph)
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
             // Check if we should yield this node
             if depth >= min_depth && depth <= max_d {
-                let mut bindings = init_bindings.clone();
-                // Use "node" as the output variable to avoid overwriting the input "start" binding
-                bindings.insert("node", mew_pattern::Binding::Node(current_id));
+                // For RETURN TERMINAL: only return nodes where UNTIL condition first becomes true
+                // For other return types: return all nodes (filter UNTIL matches if present)
+                let should_yield = if return_terminal {
+                    // TERMINAL: only return nodes where UNTIL is true
+                    until_matched
+                } else if until_condition.is_some() {
+                    // Non-TERMINAL with UNTIL: return all nodes, but the UNTIL condition
+                    // is used to stop traversal, not to filter results
+                    true
+                } else {
+                    // No UNTIL: return all nodes in range
+                    true
+                };
 
-                // Add path as a value (list of node refs)
-                let path_values: Vec<Value> = path
-                    .iter()
-                    .map(|id| match id {
-                        mew_core::EntityId::Node(n) => Value::NodeRef(*n),
-                        mew_core::EntityId::Edge(e) => Value::EdgeRef(*e),
-                    })
-                    .collect();
+                if should_yield {
+                    // Add path as a value (list of node refs)
+                    let path_values: Vec<Value> = path
+                        .iter()
+                        .map(|id| match id {
+                            mew_core::EntityId::Node(n) => Value::NodeRef(*n),
+                            mew_core::EntityId::Edge(e) => Value::EdgeRef(*e),
+                        })
+                        .collect();
 
-                // Output: node (the current node), path (the path taken)
-                results.push((
-                    bindings,
-                    vec![
-                        Value::NodeRef(current_id),
-                        Value::String(format!("{:?}", path_values)),
-                    ],
-                ));
+                    // Output: node (the current node), path (the path taken)
+                    results.push((
+                        bindings.clone(),
+                        vec![
+                            Value::NodeRef(current_id),
+                            Value::String(format!("{:?}", path_values)),
+                        ],
+                    ));
+                }
+            }
+
+            // If UNTIL condition is met, don't expand beyond this node
+            // (per spec: "Stops at terminal nodes, doesn't traverse beyond")
+            if until_matched {
+                continue;
             }
 
             // Stop expanding if at max depth
