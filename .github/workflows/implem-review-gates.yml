@@ -32,7 +32,7 @@ jobs:
         run: |
           {
             echo "prompt<<SKILL_EOF"
-            cat ".claude/skills/scenarios->implem/review-pr.md"
+            cat ".claude/skills/scenarios-to-implem/review-pr.md"
             echo "SKILL_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -65,7 +65,7 @@ jobs:
         run: |
           {
             echo "prompt<<SKILL_EOF"
-            cat ".claude/skills/scenarios->implem/compare-spec.md"
+            cat ".claude/skills/scenarios-to-implem/compare-spec.md"
             echo "SKILL_EOF"
           } >> "$GITHUB_OUTPUT"
 

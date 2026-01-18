@@ -32,7 +32,7 @@ jobs:
         run: |
           {
             echo "prompt<<SKILL_EOF"
-            cat ".claude/skills/scenarios->implem/handle-human-decision.md"
+            cat ".claude/skills/scenarios-to-implem/handle-human-decision.md"
             echo "SKILL_EOF"
           } >> "$GITHUB_OUTPUT"
 

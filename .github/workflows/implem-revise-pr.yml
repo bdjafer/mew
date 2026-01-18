@@ -23,6 +23,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -32,7 +33,7 @@ jobs:
         run: |
           {
             echo "prompt<<SKILL_EOF"
-            cat ".claude/skills/scenarios->implem/revise-pr.md"
+            cat ".claude/skills/scenarios-to-implem/revise-pr.md"
             echo "SKILL_EOF"
           } >> "$GITHUB_OUTPUT"
 

@@ -38,32 +38,30 @@ You must independently verify those fixes are correct.
 ### If ALL fixes are verified correct:
 
 ```bash
-gh pr comment --body "## Confirm: Verified
+gh pr comment --body "## ✅ Confirmed
 
-Independent verification confirms all assertion changes are correct.
+Independent verification confirms all fixes are correct.
 
 Derivations checked:
 - [operation1]: ✓ Correct
 - [operation2]: ✓ Correct"
 
-gh pr edit --add-label "scenarios/verified"
-gh pr edit --remove-label "scenarios/needs-confirm"
+gh pr edit --add-label "scenarios/verified" --remove-label "scenarios/needs-confirm"
 ```
 
 ### If ANY fix is incorrect:
 
 ```bash
-gh pr comment --body "## Confirm: Issues Found
+gh pr comment --body "## ❌ Issues Found
 
 Independent verification found problems:
 
 **[operation_name]:**
-- PR asserts: [what the PR says]
+- PR asserts: [value]
 - Should be: [your derivation]
-- Reasoning: [your step-by-step]"
+- Reasoning: [step-by-step]"
 
-gh pr edit --add-label "scenarios/awaiting-human"
-gh pr edit --remove-label "scenarios/needs-confirm"
+gh pr edit --add-label "scenarios/awaiting-human" --remove-label "scenarios/needs-confirm"
 ```
 
 ## Important
