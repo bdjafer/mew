@@ -145,6 +145,23 @@ impl Registry {
         self.get_type_attr(type_id, attr_name).is_some()
     }
 
+    /// Check if an attribute exists on a type or any of its subtypes (for polymorphic access).
+    /// This enables queries like `MATCH p: Product WHERE p.weight_kg < 1.0` where
+    /// weight_kg is defined on PhysicalProduct (a subtype of Product).
+    pub fn polymorphic_has_attr(&self, type_id: TypeId, attr_name: &str) -> bool {
+        // Check the type itself (including inherited attrs)
+        if self.type_has_attr(type_id, attr_name) {
+            return true;
+        }
+        // Check all subtypes
+        for subtype_id in self.get_subtypes(type_id) {
+            if self.type_has_attr(subtype_id, attr_name) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Get all attributes for a type including inherited ones.
     pub fn get_all_type_attrs(&self, type_id: TypeId) -> Vec<&crate::AttrDef> {
         let mut result = Vec::new();

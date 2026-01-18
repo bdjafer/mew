@@ -290,10 +290,9 @@ impl<'r> Analyzer<'r> {
         attr: &AttrAssignment,
         type_name: &str,
     ) -> AnalyzerResult<Type> {
-        // Check that the attribute exists on the type
-        let type_def = self.registry.get_type_by_name(type_name);
-        if let Some(td) = type_def {
-            if !td.has_attr(&attr.name) {
+        // Check that the attribute exists on the type (including inherited attrs)
+        if let Some(type_id) = self.registry.get_type_id(type_name) {
+            if !self.registry.type_has_attr(type_id, &attr.name) {
                 return Err(AnalyzerError::unknown_attribute(
                     &attr.name, type_name, attr.span,
                 ));
@@ -364,11 +363,11 @@ impl<'r> Analyzer<'r> {
         // Analyze the target to get its type
         let target_type = self.analyze_target(&stmt.target, stmt.span)?;
 
-        // Get the type name for attribute checking
+        // Get the type name for attribute checking (including inherited attrs)
         if let Type::NodeRef(type_id) = &target_type {
             if let Some(type_def) = self.registry.get_type(*type_id) {
                 for attr in &stmt.assignments {
-                    if !type_def.has_attr(&attr.name) {
+                    if !self.registry.type_has_attr(*type_id, &attr.name) {
                         return Err(AnalyzerError::unknown_attribute(
                             &attr.name,
                             &type_def.name,
@@ -528,13 +527,21 @@ impl<'r> Analyzer<'r> {
         match &base_type {
             Type::NodeRef(type_id) => {
                 // Look up the type and check if it has the attribute
+                // First try the type itself (including inherited attrs)
+                if let Some(attr_def) = self.registry.get_type_attr(*type_id, attr) {
+                    // Convert attribute type name to Type
+                    return Ok(self.type_name_to_type(&attr_def.type_name));
+                }
+                // For polymorphic queries, also check if any subtype has the attribute
+                // This enables: MATCH p: Product WHERE p.weight_kg < 1.0
+                // where weight_kg is defined on PhysicalProduct (a subtype)
+                if self.registry.polymorphic_has_attr(*type_id, attr) {
+                    // Attribute exists on a subtype - return Any since we can't know the exact type
+                    return Ok(Type::Any);
+                }
+                // Attribute not found on type or any subtype
                 if let Some(type_def) = self.registry.get_type(*type_id) {
-                    if let Some(attr_def) = type_def.get_attr(attr) {
-                        // Convert attribute type name to Type
-                        Ok(self.type_name_to_type(&attr_def.type_name))
-                    } else {
-                        Err(AnalyzerError::unknown_attribute(attr, &type_def.name, span))
-                    }
+                    Err(AnalyzerError::unknown_attribute(attr, &type_def.name, span))
                 } else {
                     // Type not found - return Any
                     Ok(Type::Any)
