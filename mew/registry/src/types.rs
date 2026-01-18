@@ -159,6 +159,38 @@ impl TypeDef {
     }
 }
 
+/// Cardinality constraint for an edge parameter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cardinality {
+    /// Minimum count (default 0).
+    pub min: u32,
+    /// Maximum count (None means unbounded).
+    pub max: Option<u32>,
+}
+
+impl Default for Cardinality {
+    fn default() -> Self {
+        // Default is 0..* (no constraint)
+        Self { min: 0, max: None }
+    }
+}
+
+impl Cardinality {
+    /// Create a cardinality constraint.
+    pub fn new(min: u32, max: Option<u32>) -> Self {
+        Self { min, max }
+    }
+
+    /// Check if a count exceeds the maximum cardinality.
+    /// Returns true if count is strictly greater than the max.
+    pub fn exceeds_max(&self, count: u32) -> bool {
+        match self.max {
+            Some(max) => count > max,
+            None => false,
+        }
+    }
+}
+
 /// Edge type parameter.
 #[derive(Debug, Clone)]
 pub struct EdgeParam {
@@ -166,6 +198,8 @@ pub struct EdgeParam {
     pub name: String,
     /// Type constraint (e.g., "Person", "Task", or "any").
     pub type_constraint: String,
+    /// Cardinality constraint for this parameter.
+    pub cardinality: Cardinality,
 }
 
 /// Edge type definition.

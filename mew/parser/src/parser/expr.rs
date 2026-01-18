@@ -405,10 +405,29 @@ impl Parser {
                 }))
             }
 
-            // ID reference: #id
+            // ID reference: #id or #"quoted-id"
             TokenKind::Hash => {
                 self.advance();
-                let id = self.expect_ident()?;
+                let id = match &self.peek().kind {
+                    TokenKind::Ident(name) => {
+                        let name = name.clone();
+                        self.advance();
+                        name
+                    }
+                    TokenKind::String(s) => {
+                        let s = s.clone();
+                        self.advance();
+                        s
+                    }
+                    _ => {
+                        let token = self.peek();
+                        return Err(crate::ParseError::unexpected_token(
+                            token.span,
+                            "identifier or string",
+                            token.kind.name(),
+                        ));
+                    }
+                };
                 let span = self.span_from(token.span);
                 Ok(Expr::IdRef(id, span))
             }

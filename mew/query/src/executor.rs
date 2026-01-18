@@ -44,12 +44,21 @@ impl<'r, 'g> QueryExecutor<'r, 'g> {
 
     /// Execute a WALK statement.
     pub fn execute_walk(&self, stmt: &WalkStmt) -> QueryResult<QueryResults> {
+        self.execute_walk_with_bindings(stmt, None)
+    }
+
+    /// Execute a WALK statement with initial bindings (for resolving ID refs).
+    pub fn execute_walk_with_bindings(
+        &self,
+        stmt: &WalkStmt,
+        initial_bindings: Option<&Bindings>,
+    ) -> QueryResult<QueryResults> {
         // Plan the walk
         let planner = QueryPlanner::new(self.registry);
         let plan = planner.plan_walk(stmt)?;
 
         // Execute the plan
-        self.execute_plan(&plan, None)
+        self.execute_plan(&plan, initial_bindings)
     }
 
     /// Execute a MATCH...WALK compound statement.

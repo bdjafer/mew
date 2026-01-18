@@ -467,8 +467,14 @@ impl Compiler {
                         edge_builder.on_kill_at(1, Self::convert_referential_action(*action));
                 }
                 EdgeModifier::Cardinality { param, min, max } => {
-                    // Cardinality constraints generate runtime constraints
-                    // For now, just record them as generated constraints
+                    // Set cardinality on the edge type for immediate enforcement
+                    let max_val = match max {
+                        mew_parser::CardinalityMax::Value(v) => Some(*v as u32),
+                        mew_parser::CardinalityMax::Unbounded => None,
+                    };
+                    edge_builder = edge_builder.with_cardinality(param, *min as u32, max_val);
+
+                    // Also record as generated constraint for documentation
                     let max_str = match max {
                         mew_parser::CardinalityMax::Value(v) => v.to_string(),
                         mew_parser::CardinalityMax::Unbounded => "*".to_string(),
@@ -698,9 +704,9 @@ mod tests {
 
         // THEN
         let edge_type = registry.get_edge_type_by_name("owns").unwrap();
-        // on_kill[0] is source (default Restrict), on_kill[1] is target (Cascade)
+        // on_kill[0] is source (default Delete/unlink per spec), on_kill[1] is target (Cascade)
         assert_eq!(edge_type.on_kill.len(), 2);
-        assert_eq!(edge_type.on_kill[0], OnKillAction::Restrict); // source default
+        assert_eq!(edge_type.on_kill[0], OnKillAction::Delete); // source default (unlink)
         assert_eq!(edge_type.on_kill[1], OnKillAction::Cascade); // target explicit
     }
 
