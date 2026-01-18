@@ -46,8 +46,8 @@ Derivations checked:
 - [operation1]: ✓ Correct
 - [operation2]: ✓ Correct"
 
-gh pr edit --add-label "verified"
-gh pr edit --remove-label "needs-confirmation"
+gh pr edit --add-label "scenarios/verified"
+gh pr edit --remove-label "scenarios/needs-confirm"
 ```
 
 ### If ANY fix is incorrect:
@@ -62,8 +62,8 @@ Independent verification found problems:
 - Should be: [your derivation]
 - Reasoning: [your step-by-step]"
 
-gh pr edit --add-label "awaiting-human"
-gh pr edit --remove-label "needs-confirmation"
+gh pr edit --add-label "scenarios/awaiting-human"
+gh pr edit --remove-label "scenarios/needs-confirm"
 ```
 
 ## Important

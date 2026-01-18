@@ -357,7 +357,7 @@ jobs:
 
             const labels = pr.labels.map(l => l.name);
 
-            if (labels.includes('verified')) {
+            if (labels.includes('verified') || labels.includes('scenarios/verified')) {
               // Auto-merge
               try {
                 await github.rest.pulls.merge({
@@ -379,7 +379,7 @@ jobs:
               } catch (e) {
                 console.log('Merge failed:', e.message);
               }
-            } else if (labels.includes('awaiting-human')) {
+            } else if (labels.includes('awaiting-human') || labels.includes('scenarios/awaiting-human')) {
               console.log('PR requires human review');
             } else {
               console.log('Confirmation incomplete - labels:', labels);
