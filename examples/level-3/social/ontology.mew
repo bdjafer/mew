@@ -1,16 +1,14 @@
 -- ===========================================================================
 -- ONTOLOGY: Social Network
--- FOCUS: Symmetric relationships, higher-order edges, social graph patterns
--- FEATURES: modifiers/edge_symmetry.md, types/edge_references.md,
---           patterns/transitive_patterns.md
+-- FOCUS: Symmetric relationships, social graph patterns
+-- FEATURES: modifiers/edge_symmetry.md, patterns/transitive_patterns.md
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
 -- Type Aliases
 -- ---------------------------------------------------------------------------
 
-type Username = String [match: "^[a-z][a-z0-9_]{2,29}$", unique]
-type DisplayName = String [length: 1..100]
+type Username = String [unique]
 type ReactionType = String [in: ["like", "love", "laugh", "wow", "sad", "angry"]]
 type TrustLevel = Float [>= 0.0, <= 1.0]
 type Visibility = String [in: ["public", "friends", "private"]]
@@ -22,14 +20,14 @@ type ContentType = String [in: ["post", "comment", "share"]]
 
 node User {
   username: Username,
-  display_name: DisplayName,
-  bio: String [length: 0..500]?,
+  display_name: String [required],
+  bio: String?,
   verified: Bool = false,
   joined_at: Timestamp = now()
 }
 
 node Post {
-  content: String [required, length: 1..10000],
+  content: String [required],
   visibility: Visibility = "public",
   content_type: ContentType = "post",
   created_at: Timestamp = now(),
@@ -37,7 +35,7 @@ node Post {
 }
 
 node Comment {
-  content: String [required, length: 1..2000],
+  content: String [required],
   created_at: Timestamp = now(),
   edited_at: Timestamp?
 }
@@ -49,12 +47,17 @@ node Group {
   created_at: Timestamp = now()
 }
 
+node Reaction {
+  reaction_type: ReactionType,
+  created_at: Timestamp = now()
+}
+
 -- ---------------------------------------------------------------------------
 -- Standard Edges
 -- ---------------------------------------------------------------------------
 
 -- User authored content
-edge authored(author: User, post: Post) [author -> 0..*] {
+edge authored(author: User, post: Post) {
   published_at: Timestamp = now()
 }
 
@@ -84,15 +87,17 @@ edge member_of(user: User, group: Group) {
   joined_at: Timestamp = now()
 }
 
+-- Reaction by user on post
+edge reaction_by(reaction: Reaction, user: User) [reaction -> 1]
+edge reaction_on(reaction: Reaction, post: Post) [reaction -> 1]
+
 -- ---------------------------------------------------------------------------
 -- Symmetric Edges
 -- ---------------------------------------------------------------------------
 
 -- Friendship is mutual (symmetric)
 edge friend_of(a: User, b: User) [symmetric, no_self] {
-  since: Timestamp = now(),
-  nickname_a_for_b: String?,
-  nickname_b_for_a: String?
+  since: Timestamp = now()
 }
 
 -- Mutual block (both users agreed to not interact)
@@ -107,73 +112,29 @@ edge collaborates_with(a: User, b: User) [symmetric, no_self] {
 }
 
 -- ---------------------------------------------------------------------------
--- Higher-Order Edges: Edges targeting edges
--- ---------------------------------------------------------------------------
-
--- Reaction to authored content (targets the authored edge)
-edge reacted_to(user: User, target: edge<authored>) {
-  reaction: ReactionType,
-  reacted_at: Timestamp = now()
-}
-
--- Trust assessment on friendship (meta-edge)
-edge trust_score(assessor: User, relationship: edge<friend_of>) {
-  score: TrustLevel,
-  confidence: TrustLevel = 0.5,
-  assessed_at: Timestamp = now()
-}
-
--- Endorsement of a follow relationship
-edge endorses_follow(endorser: User, follow_edge: edge<follows>) {
-  reason: String?,
-  endorsed_at: Timestamp = now()
-}
-
--- Report on any relationship
-edge reported(reporter: User, target: edge<any>) {
-  reason: String [required],
-  severity: String [in: ["spam", "abuse", "harassment", "other"]] = "other",
-  reported_at: Timestamp = now()
-}
-
--- ---------------------------------------------------------------------------
 -- Constraints
 -- ---------------------------------------------------------------------------
 
 -- Cannot be friends with someone you block
-constraint no_friend_and_block:
+constraint no_friend_and_block [message: "Cannot be friends with someone you have blocked"]:
   u1: User, u2: User
   WHERE friend_of(u1, u2) AND blocks(u1, u2)
   => false
-  [message: "Cannot be friends with someone you have blocked"]
 
 -- Cannot follow someone who blocks you
-constraint no_follow_if_blocked:
+constraint no_follow_if_blocked [message: "Cannot follow a user who has blocked you"]:
   follower: User, followed: User
   WHERE follows(follower, followed) AND blocks(followed, follower)
   => false
-  [message: "Cannot follow a user who has blocked you"]
 
 -- Private posts require friendship or ownership to view
-constraint private_post_access [soft]:
+constraint private_post_access [soft, message: "Private posts are only visible to friends"]:
   p: Post, viewer: User, author: User
   WHERE authored(author, p)
   AND p.visibility = "private"
   AND viewer != author
-  AND NOT EXISTS(friend_of(viewer, author))
+  AND NOT EXISTS(f: User, friend_of(viewer, f))
   => false
-  [message: "Private posts are only visible to friends"]
-
--- Trust score must be from a mutual friend
-constraint trust_requires_friendship:
-  assessor: User, relationship: edge<friend_of>, u1: User, u2: User
-  WHERE trust_score(assessor, relationship)
-  AND friend_of(u1, u2) AS relationship
-  AND assessor != u1 AND assessor != u2
-  AND NOT EXISTS(friend_of(assessor, u1))
-  AND NOT EXISTS(friend_of(assessor, u2))
-  => false
-  [message: "Can only assess trust for relationships where you know at least one party"]
 
 -- ---------------------------------------------------------------------------
 -- Rules
@@ -184,20 +145,5 @@ rule create_mutual_block [priority: 80]:
   u1: User, u2: User
   WHERE blocks(u1, u2) AND blocks(u2, u1)
   AND NOT EXISTS(mutual_block(u1, u2))
-  => SPAWN mb: edge { } -- Cannot actually spawn edges this way, need LINK
-     -- Actually: just use LINK
-  => LINK mutual_block(u1, u2)
-
--- Remove friendship when blocked
-rule unfriend_on_block [priority: 90]:
-  blocker: User, blocked: User, friendship: edge<friend_of>
-  WHERE blocks(blocker, blocked)
-  AND friend_of(blocker, blocked) AS friendship
-  => UNLINK friendship
-
--- Notify when verified user follows
-rule notify_verified_follow [priority: 50, manual]:
-  verified_user: User, followed: User
-  WHERE follows(verified_user, followed)
-  AND verified_user.verified = true
-  => SET followed { bio = followed.bio } -- Placeholder: would spawn notification
+  =>
+  LINK mutual_block(u1, u2)

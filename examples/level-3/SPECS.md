@@ -57,10 +57,10 @@ Specification coverage for Level 3: Dynamics features.
 | `[on_kill_source: cascade]` | modifiers/referential_actions.md | ✓ | workflow/ontology |
 | `[on_kill_source: unlink]` | modifiers/referential_actions.md | ✓ | (default behavior) |
 | `[on_kill_source: prevent]` | modifiers/referential_actions.md | ✗ | — |
-| Cascade behavior (tested) | modifiers/referential_actions.md | ✗ | — |
-| Prevent behavior (tested) | modifiers/referential_actions.md | ✗ | — |
-| Cardinality violation (tested) | modifiers/cardinality.md | ✗ | — |
-| Acyclic violation (tested) | modifiers/acyclic_edges.md | ✗ | — |
+| Cascade behavior (tested) | modifiers/referential_actions.md | ✓ | projectmanagement/cascade_behavior |
+| Prevent behavior (tested) | modifiers/referential_actions.md | ✓ | workflow/prevent_behavior |
+| Cardinality violation (tested) | modifiers/cardinality.md | ✓ | projectmanagement/cardinality_violation |
+| Acyclic violation (tested) | modifiers/acyclic_edges.md | ✓ | projectmanagement/acyclic_violation |
 
 ---
 
@@ -170,7 +170,7 @@ Specification coverage for Level 3: Dynamics features.
 |----------|---------|-------|----------|
 | Constraints | 9 | 9 | 100% |
 | Rules | 15 | 16 | 94% |
-| Edge Modifiers | 10 | 14 | 71% |
+| Edge Modifiers | 13 | 14 | 93% |
 | Transitive Patterns | 6 | 6 | 100% |
 | Negative Patterns | 3 | 4 | 75% |
 | Higher-Order Edges | 5 | 5 | 100% |
@@ -178,7 +178,7 @@ Specification coverage for Level 3: Dynamics features.
 | Versioning | 7 | 7 | 100% |
 | Policy & Authorization | 11 | 11 | 100% |
 | Transactions | 6 | 6 | 100% |
-| **Total** | **84** | **90** | **93%** |
+| **Total** | **87** | **90** | **97%** |
 
 ---
 
@@ -189,10 +189,6 @@ Specification coverage for Level 3: Dynamics features.
 
 ### Edge Modifiers
 - `[on_kill_source: prevent]` - Not demonstrated
-- Cascade behavior (tested) - Need operational tests
-- Prevent behavior (tested) - Need operational tests
-- Cardinality violation (tested) - Need error scenario
-- Acyclic violation (tested) - Need error scenario
 
 ### Negative Patterns
 - Nested NOT EXISTS - Not demonstrated

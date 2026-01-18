@@ -1,0 +1,75 @@
+-- ===========================================================================
+-- SCENARIO: Cascade Behavior
+-- DESCRIPTION: Tests on_kill_target: cascade referential action
+-- FEATURES: modifiers/referential_actions.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create a project with tasks and milestones
+-- ---------------------------------------------------------------------------
+
+--# test_setup_project
+SPAWN proj: Project {
+  name = "Cascade Test Project",
+  status = "active"
+}
+
+--# test_setup_milestone
+SPAWN ms: Milestone {
+  name = "Release v1.0",
+  description = "First major release"
+}
+LINK milestone_of(#ms, #proj)
+
+--# test_setup_tasks
+SPAWN t1: Task {
+  title = "Design system architecture",
+  priority = 8
+}
+SPAWN t2: Task {
+  title = "Implement core features",
+  priority = 7
+}
+SPAWN t3: Task {
+  title = "Write documentation",
+  priority = 5
+}
+LINK belongs_to(#t1, #proj)
+LINK belongs_to(#t2, #proj)
+LINK belongs_to(#t3, #proj)
+
+-- ---------------------------------------------------------------------------
+-- Verify: Initial state
+-- ---------------------------------------------------------------------------
+
+--# test_verify_tasks_exist
+MATCH t: Task RETURN count(t)
+
+--# test_verify_milestones_exist
+MATCH m: Milestone RETURN count(m)
+
+--# test_verify_project_links
+MATCH t: Task, p: Project, belongs_to(t, p)
+WHERE p.name = "Cascade Test Project"
+RETURN count(t)
+
+-- ---------------------------------------------------------------------------
+-- Action: Kill the project (should cascade to tasks and milestones)
+-- ---------------------------------------------------------------------------
+
+--# test_kill_project
+KILL #proj
+
+-- ---------------------------------------------------------------------------
+-- Verify: Cascade deleted tasks and milestones
+-- ---------------------------------------------------------------------------
+
+--# test_verify_tasks_cascaded
+MATCH t: Task RETURN count(t)
+
+--# test_verify_milestones_cascaded
+MATCH m: Milestone RETURN count(m)
+
+--# test_verify_project_gone
+MATCH p: Project WHERE p.name = "Cascade Test Project"
+RETURN count(p)

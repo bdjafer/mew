@@ -31,7 +31,9 @@ mod symmetric {
             .step("test_access_nickname_reverse", |a| a.rows(1))
             // Another symmetric edge
             .step("test_create_collaboration", |a| a.linked(1))
-            .step("test_query_collaboration_charlie_perspective", |a| a.rows(1)) // Symmetric: (charlie, alice) should find the edge
+            .step("test_query_collaboration_charlie_perspective", |a| {
+                a.rows(1)
+            }) // Symmetric: (charlie, alice) should find the edge
             .step("test_query_all_collaborations", |a| a.rows(1))
             // Mutual block
             .step("test_create_mutual_block", |a| a.linked(1))

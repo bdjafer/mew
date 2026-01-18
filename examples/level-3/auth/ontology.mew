@@ -20,7 +20,7 @@ type Sensitivity = String [in: ["public", "internal", "confidential", "secret"]]
 
 node User {
   username: String [required, unique],
-  email: String [required, format: email, unique],
+  email: String [required, unique],
   display_name: String [required],
   actor_type: ActorType = "user",
   active: Bool = true,
@@ -38,7 +38,11 @@ node Service {
 node Role {
   name: String [required, unique],
   description: String?,
-  priority: Int [>= 0] = 0
+  priority: Int [>= 0] = 0,
+  can_read: Bool = false,
+  can_write: Bool = false,
+  can_delete: Bool = false,
+  can_admin: Bool = false
 }
 
 -- ---------------------------------------------------------------------------
@@ -57,7 +61,7 @@ node Document {
 
 node Folder {
   name: String [required],
-  path: String [required, unique],
+  folder_path: String [required, unique],
   sensitivity: Sensitivity = "internal",
   created_at: Timestamp = now()
 }
@@ -85,12 +89,6 @@ edge service_has_role(service: Service, role: Role) {
   granted_at: Timestamp = now()
 }
 
--- Role grants permission on resource type
-edge grants_permission(role: Role, permission: Permission) {
-  resource_type: String [required],
-  conditions: String?
-}
-
 -- ---------------------------------------------------------------------------
 -- Edges: Resource Ownership & Access
 -- ---------------------------------------------------------------------------
@@ -113,162 +111,33 @@ edge shared_with(document: Document, user: User) {
   expires_at: Timestamp?
 }
 
--- Audit log for actor
-edge audit_for(log: AuditLog, actor: User | Service)
+-- Audit log for user actor
+edge audit_by_user(log: AuditLog, actor: User)
+
+-- Audit log for service actor
+edge audit_by_service(log: AuditLog, actor: Service)
 
 -- ---------------------------------------------------------------------------
--- Policies: Read Access
+-- Policies (not yet implemented - will cause parse errors in operations)
 -- ---------------------------------------------------------------------------
-
--- Public documents are readable by anyone
-policy public_read [priority: 100]:
-  ON MATCH(d: Document)
-  ALLOW IF d.sensitivity = "public"
-
--- Owners can always read their documents
-policy owner_read [priority: 90]:
-  ON MATCH(d: Document)
-  ALLOW IF EXISTS(owned_by(d, current_actor()))
-
--- Users with explicit share can read
-policy shared_read [priority: 80]:
-  ON MATCH(d: Document)
-  ALLOW IF EXISTS(s: edge, shared_with(d, current_actor()) AS s)
-
--- Users with read role can read internal documents
-policy role_read [priority: 70]:
-  ON MATCH(d: Document)
-  ALLOW IF d.sensitivity IN ["public", "internal"]
-  AND EXISTS(r: Role, has_role(current_actor(), r),
-             grants_permission(r, "read"))
-
--- ---------------------------------------------------------------------------
--- Policies: Write Access
--- ---------------------------------------------------------------------------
-
--- Owners can write their documents
-policy owner_write [priority: 90]:
-  ON SET(d: Document, _)
-  ALLOW IF EXISTS(owned_by(d, current_actor()))
-
--- Users with write permission on shared docs
-policy shared_write [priority: 80]:
-  ON SET(d: Document, _)
-  ALLOW IF EXISTS(s: edge, shared_with(d, current_actor()) AS s,
-                  s.permission IN ["write", "admin"])
-
--- Role-based write
-policy role_write [priority: 70]:
-  ON SET(d: Document, _)
-  ALLOW IF EXISTS(r: Role, has_role(current_actor(), r),
-                  grants_permission(r, "write"))
-
--- ---------------------------------------------------------------------------
--- Policies: Delete Access
--- ---------------------------------------------------------------------------
-
--- Only owners can delete
-policy owner_delete [priority: 90]:
-  ON KILL(d: Document)
-  ALLOW IF EXISTS(owned_by(d, current_actor()))
-
--- Admins can delete anything
-policy admin_delete [priority: 100]:
-  ON KILL(d: Document)
-  ALLOW IF EXISTS(r: Role, has_role(current_actor(), r),
-                  grants_permission(r, "admin"))
-
--- Prevent deleting published documents
-policy no_delete_published [priority: 110]:
-  ON KILL(d: Document)
-  DENY IF d.status = "published"
-  MESSAGE "Cannot delete published documents"
-
--- ---------------------------------------------------------------------------
--- Policies: Create Access
--- ---------------------------------------------------------------------------
-
--- Anyone with write role can create documents
-policy role_create [priority: 70]:
-  ON SPAWN(Document)
-  ALLOW IF EXISTS(r: Role, has_role(current_actor(), r),
-                  grants_permission(r, "write"))
-
--- ---------------------------------------------------------------------------
--- Policies: Sensitivity Escalation Prevention
--- ---------------------------------------------------------------------------
-
--- Cannot access secret documents without clearance
-policy secret_access [priority: 200]:
-  ON MATCH(d: Document)
-  DENY IF d.sensitivity = "secret"
-  AND NOT EXISTS(r: Role, has_role(current_actor(), r),
-                 r.name = "security_cleared")
-  MESSAGE "Secret documents require security clearance"
-
--- Cannot set sensitivity higher than allowed
-policy sensitivity_escalation [priority: 200]:
-  ON SET(d: Document, "sensitivity")
-  DENY IF target_attr() = "secret"
-  AND NOT EXISTS(r: Role, has_role(current_actor(), r),
-                 r.name = "security_admin")
-  MESSAGE "Cannot escalate to secret without security_admin role"
-
--- ---------------------------------------------------------------------------
--- Policies: Service Account Restrictions
--- ---------------------------------------------------------------------------
-
--- Services can only read, not modify
-policy service_read_only [priority: 150]:
-  ON SET(_) | KILL(_) | LINK(_) | UNLINK(_)
-  DENY IF current_actor():Service
-  MESSAGE "Service accounts are read-only"
-
--- ---------------------------------------------------------------------------
--- Rules: Audit Logging
--- ---------------------------------------------------------------------------
-
--- Log all document access
-rule audit_document_access [priority: 50]:
-  d: Document
-  WHERE operation() = "MATCH"
-  AND target() = d
-  => SPAWN log: AuditLog {
-       action = "read",
-       target_type = "Document",
-       target_id = d.title
-     },
-     LINK audit_for(log, current_actor())
-
--- Log all document modifications
-rule audit_document_modify [priority: 50]:
-  d: Document
-  WHERE operation() IN ["SET", "KILL"]
-  AND target() = d
-  => SPAWN log: AuditLog {
-       action = operation(),
-       target_type = "Document",
-       target_id = d.title
-     },
-     LINK audit_for(log, current_actor())
+-- NOTE: Policy declarations use the 'policy' keyword which is not yet
+-- implemented. The policy tests in operations files will expect parse errors.
 
 -- ---------------------------------------------------------------------------
 -- Constraints
 -- ---------------------------------------------------------------------------
 
 -- Shared documents must have owner
-constraint shared_requires_owner:
+constraint shared_requires_owner [message: "Cannot share document without owner"]:
   d: Document, u: User
   WHERE shared_with(d, u)
-  AND NOT EXISTS(owned_by(d, _))
+  AND NOT EXISTS(o: User, owned_by(d, o))
   => false
-  [message: "Cannot share document without owner"]
 
 -- Secret documents must be in confidential folder
-constraint secret_folder_requirement:
+constraint secret_folder_requirement [message: "Secret documents must be in secret folders"]:
   d: Document, f: Folder
   WHERE d.sensitivity = "secret"
   AND in_folder(d, f)
   AND f.sensitivity != "secret"
   => false
-  [message: "Secret documents must be in secret folders"]

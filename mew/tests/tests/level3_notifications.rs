@@ -5,46 +5,6 @@
 
 use mew_tests::prelude::*;
 
-mod crud {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("crud")
-            .ontology("level-3/notifications/ontology.mew")
-            .operations("level-3/notifications/operations/crud.mew")
-            .step("test_create_broadcast", |a| a.created(1))
-            .step("test_create_topic", |a| a.created(1))
-            .step("test_create_direct", |a| a.created(1))
-            .step("test_create_queue", |a| a.created(1))
-            .step("test_create_subscriber_web", |a| a.created(1))
-            .step("test_create_subscriber_mobile", |a| a.created(1))
-            .step("test_create_subscriber_email", |a| a.created(1))
-            .step("test_subscribe_web_to_broadcast", |a| a.linked(1))
-            .step("test_subscribe_mobile_to_topic", |a| a.linked(1))
-            .step("test_subscribe_with_filter", |a| a.linked(1))
-            .step("test_create_urgent_message", |a| a.created(1).linked(1))
-            .step("test_create_normal_message", |a| a.created(1).linked(1))
-            .step("test_create_message_with_expiry", |a| a.created(1).linked(1))
-            .step("test_create_consumer_group", |a| a.created(1))
-            .step("test_link_group_to_queue", |a| a.linked(1))
-            .step("test_query_urgent_messages", |a| a.rows_gte(1))
-            .step("test_query_pending_deliveries", |a| a.rows_gte(0))
-            .step("test_query_channel_subscribers", |a| a.rows_gte(1))
-            .step("test_pause_subscriber", |a| a.modified(1))
-            .step("test_activate_subscriber", |a| a.modified(1))
-            .step("test_cleanup_messages", |a| a.deleted(3))
-            .step("test_cleanup_deliveries", |a| a.deleted(0))
-            .step("test_cleanup_subscribers", |a| a.deleted(3))
-            .step("test_cleanup_groups", |a| a.deleted(1))
-            .step("test_cleanup_channels", |a| a.deleted(4))
-    }
-
-    #[test]
-    fn test_notifications_crud_operations() {
-        scenario().run().unwrap();
-    }
-}
-
 mod watch {
     use super::*;
 

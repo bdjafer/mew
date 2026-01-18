@@ -1,0 +1,91 @@
+-- ===========================================================================
+-- SCENARIO: Acyclic Violation
+-- DESCRIPTION: Tests acyclic constraint on dependency edges
+-- FEATURES: modifiers/acyclic_edges.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create tasks for dependency chain
+-- ---------------------------------------------------------------------------
+
+--# test_setup_tasks
+SPAWN task_a: Task {
+  title = "Task A",
+  priority = 5
+}
+SPAWN task_b: Task {
+  title = "Task B",
+  priority = 5
+}
+SPAWN task_c: Task {
+  title = "Task C",
+  priority = 5
+}
+
+-- ---------------------------------------------------------------------------
+-- Valid: Create linear dependency chain (A -> B -> C)
+-- ---------------------------------------------------------------------------
+
+--# test_valid_dependency_chain
+LINK depends_on(#task_a, #task_b)
+LINK depends_on(#task_b, #task_c)
+
+--# test_verify_chain
+MATCH t1: Task, t2: Task, depends_on(t1, t2)
+RETURN t1.title, t2.title
+
+-- ---------------------------------------------------------------------------
+-- Violation: Direct self-loop (no_self modifier)
+-- ---------------------------------------------------------------------------
+
+--# test_self_dependency_violation
+LINK depends_on(#task_a, #task_a)
+
+-- ---------------------------------------------------------------------------
+-- Verify: Task A has no self-dependency
+-- ---------------------------------------------------------------------------
+
+--# test_verify_no_self_loop
+MATCH t: Task, depends_on(t, t)
+RETURN count(t)
+
+-- ---------------------------------------------------------------------------
+-- Violation: Create cycle (C -> A would create A -> B -> C -> A)
+-- ---------------------------------------------------------------------------
+
+--# test_cycle_violation
+LINK depends_on(#task_c, #task_a)
+
+-- ---------------------------------------------------------------------------
+-- Verify: No cycle exists
+-- ---------------------------------------------------------------------------
+
+--# test_verify_no_cycle
+MATCH t1: Task, t2: Task, depends_on(t1, t2)
+WHERE t1.title = "Task C" AND t2.title = "Task A"
+RETURN count(t2)
+
+-- ---------------------------------------------------------------------------
+-- Valid: Add a fourth task with valid dependencies
+-- ---------------------------------------------------------------------------
+
+--# test_setup_task_d
+SPAWN task_d: Task {
+  title = "Task D",
+  priority = 5
+}
+
+--# test_valid_branching_dependency
+LINK depends_on(#task_d, #task_b)
+
+--# test_verify_branching
+MATCH t1: Task, t2: Task, depends_on(t1, t2)
+WHERE t2.title = "Task B"
+RETURN count(t1)
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup
+MATCH t: Task KILL t

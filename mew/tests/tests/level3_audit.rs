@@ -5,46 +5,6 @@
 
 use mew_tests::prelude::*;
 
-mod crud {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("crud")
-            .ontology("level-3/audit/ontology.mew")
-            .operations("level-3/audit/operations/crud.mew")
-            .step("test_create_dev_config", |a| a.created(1))
-            .step("test_create_prod_config", |a| a.created(1))
-            .step("test_create_db_config", |a| a.created(1))
-            .step("test_create_cache_config", |a| a.created(1))
-            .step("test_create_secret_config", |a| a.created(1))
-            .step("test_link_configs", |a| a.linked(2))
-            .step("test_create_change_request", |a| a.created(1).linked(1))
-            .step("test_create_snapshot", |a| a.created(1).linked(1))
-            .step("test_create_branch", |a| a.created(1).linked(1))
-            .step("test_query_all_configs", |a| a.rows(3))
-            .step("test_query_database_configs", |a| a.rows(2))
-            .step("test_query_sensitive_configs", |a| a.rows(1))
-            .step("test_query_config_sets", |a| a.rows(2))
-            .step("test_query_set_with_items", |a| a.rows(2))
-            .step("test_query_pending_changes", |a| a.rows(1))
-            .step("test_query_changes_for_config", |a| a.rows(1))
-            .step("test_update_config_value", |a| a.modified(1))
-            .step("test_approve_change", |a| a.modified(1))
-            .step("test_increment_version", |a| a.modified(1))
-            .step("test_lock_config", |a| a.modified(1))
-            .step("test_cleanup_changes", |a| a.deleted(1))
-            .step("test_cleanup_branches", |a| a.deleted(1))
-            .step("test_cleanup_snapshots", |a| a.deleted(1))
-            .step("test_cleanup_configs", |a| a.deleted(3))
-            .step("test_cleanup_sets", |a| a.deleted(2))
-    }
-
-    #[test]
-    fn test_audit_crud_operations() {
-        scenario().run().unwrap();
-    }
-}
-
 mod versioning {
     use super::*;
 

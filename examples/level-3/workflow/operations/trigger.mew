@@ -131,9 +131,22 @@ TRIGGER start_workflow
 -- Cleanup
 -- ---------------------------------------------------------------------------
 
---# test_cleanup
+--# test_cleanup_history
 MATCH h: StateHistory KILL h
+
+--# test_cleanup_workitems
 MATCH w: WorkItem KILL w
+
+--# test_cleanup_transitions
 MATCH t: Transition KILL t
+
+--# test_unlink_state_of
+-- Must unlink state_of before killing states (on_kill_target: prevent)
+MATCH s: State, w: WorkflowDef, state_of(s, w) AS e
+UNLINK e
+
+--# test_cleanup_states
 MATCH s: State KILL s
+
+--# test_cleanup_workflows
 MATCH wf: WorkflowDef KILL wf

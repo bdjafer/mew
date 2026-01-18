@@ -13,36 +13,40 @@
 Declare an ontology — types, relations, constraints, rules — compile it, then query and mutate a typed higher-order hypergraph where constraints hold and rules fire automatically.
 
 ```mew
--- Schema: types and relations
-node Task { 
-  title: String [required],
-  status: String = "todo"
+ontology TasksManagement {
+
+  -- Schema: types and relations
+  node Task { 
+    title: String [required],
+    status: String = "todo"
+  }
+  node Person { 
+    name: String [required] 
+  }
+  edge assigned(task: Task, person: Person)
+
+  -- Hyperedge: n-ary relation
+  edge reviewed(task: Task, reviewer: Person, approver: Person) {
+    approved: Bool = false
+  }
+
+  -- Higher-order edge: edge about an edge
+  edge confidence(about: edge<assigned>) {
+    level: Float [>= 0.0, <= 1.0]
+  }
+
+  -- Constraint, Rule, Policy
+  constraint done_needs_timestamp:
+    t: Task WHERE t.status = "done" AND t.completed_at = null
+    => FAIL "Completed tasks need completed_at"
+
+  rule auto_archive:
+    t: Task WHERE t.status = "done" => SET t.archived = true
+
+  policy assignee_only:
+    ON SET(t: Task, "status") ALLOW IF assigned(t, current_actor())
+
 }
-node Person { 
-  name: String [required] 
-}
-edge assigned(task: Task, person: Person)
-
--- Hyperedge: n-ary relation
-edge reviewed(task: Task, reviewer: Person, approver: Person) {
-  approved: Bool = false
-}
-
--- Higher-order edge: edge about an edge
-edge confidence(about: edge<assigned>) {
-  level: Float [>= 0.0, <= 1.0]
-}
-
--- Constraint, Rule, Policy
-constraint done_needs_timestamp:
-  t: Task WHERE t.status = "done" AND t.completed_at = null
-  => FAIL "Completed tasks need completed_at"
-
-rule auto_archive:
-  t: Task WHERE t.status = "done" => SET t.archived = true
-
-policy assignee_only:
-  ON SET(t: Task, "status") ALLOW IF assigned(t, current_actor())
 ```
 
 ```mew

@@ -64,6 +64,7 @@ ontology Workflow {
 
   --- An instance of a workflow being executed
   node WorkItem {
+    name: String?,
     external_id: String?,
     status: WorkItemStatus = "draft",
     data: String?,

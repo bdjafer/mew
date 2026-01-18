@@ -1,0 +1,104 @@
+-- ===========================================================================
+-- SCENARIO: Cardinality Violation
+-- DESCRIPTION: Tests cardinality constraint enforcement
+-- FEATURES: modifiers/cardinality.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create projects, tasks, and members
+-- ---------------------------------------------------------------------------
+
+--# test_setup_projects
+SPAWN proj1: Project {
+  name = "Project Alpha"
+}
+SPAWN proj2: Project {
+  name = "Project Beta"
+}
+
+--# test_setup_task
+SPAWN task: Task {
+  title = "Shared Task",
+  priority = 5
+}
+
+--# test_setup_members
+SPAWN alice: TeamMember {
+  name = "Alice",
+  email = "alice@example.com"
+}
+SPAWN bob: TeamMember {
+  name = "Bob",
+  email = "bob@example.com"
+}
+
+-- ---------------------------------------------------------------------------
+-- Valid: Link task to first project (cardinality: task -> 1)
+-- ---------------------------------------------------------------------------
+
+--# test_link_task_to_project1
+LINK belongs_to(#task, #proj1)
+
+--# test_verify_task_belongs
+MATCH t: Task, p: Project, belongs_to(t, p)
+WHERE t.title = "Shared Task"
+RETURN p.name
+
+-- ---------------------------------------------------------------------------
+-- Violation: Try to link same task to second project
+-- (task -> 1 means task can only belong to ONE project)
+-- ---------------------------------------------------------------------------
+
+--# test_cardinality_violation_belongs_to
+LINK belongs_to(#task, #proj2)
+
+-- ---------------------------------------------------------------------------
+-- Verify: Task still only belongs to first project
+-- ---------------------------------------------------------------------------
+
+--# test_verify_still_one_project
+MATCH t: Task, p: Project, belongs_to(t, p)
+WHERE t.title = "Shared Task"
+RETURN count(p)
+
+-- ---------------------------------------------------------------------------
+-- Valid: Assign task to first member (cardinality: task -> 0..1)
+-- ---------------------------------------------------------------------------
+
+--# test_assign_to_alice
+LINK assigned_to(#task, #alice)
+
+--# test_verify_assignment
+MATCH t: Task, m: TeamMember, assigned_to(t, m)
+WHERE t.title = "Shared Task"
+RETURN m.name
+
+-- ---------------------------------------------------------------------------
+-- Violation: Try to assign same task to second member
+-- (task -> 0..1 means task can be assigned to at most ONE member)
+-- ---------------------------------------------------------------------------
+
+--# test_cardinality_violation_assigned_to
+LINK assigned_to(#task, #bob)
+
+-- ---------------------------------------------------------------------------
+-- Verify: Task still only assigned to first member
+-- ---------------------------------------------------------------------------
+
+--# test_verify_still_one_assignee
+MATCH t: Task, m: TeamMember, assigned_to(t, m)
+WHERE t.title = "Shared Task"
+RETURN count(m)
+
+-- ---------------------------------------------------------------------------
+-- Cleanup
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_tasks
+MATCH t: Task KILL t
+
+--# test_cleanup_members
+MATCH m: TeamMember KILL m
+
+--# test_cleanup_projects
+MATCH p: Project KILL p

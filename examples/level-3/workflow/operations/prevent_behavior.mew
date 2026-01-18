@@ -1,0 +1,82 @@
+-- ===========================================================================
+-- SCENARIO: Prevent Behavior
+-- DESCRIPTION: Tests on_kill_target: prevent referential action
+-- FEATURES: modifiers/referential_actions.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Setup: Create a workflow with states
+-- ---------------------------------------------------------------------------
+
+--# test_setup_workflow
+SPAWN wf: WorkflowDef {
+  name = "Prevent Test Workflow",
+  is_active = true
+}
+
+--# test_setup_states
+SPAWN start_state: State {
+  name = "Start",
+  is_initial = true
+}
+SPAWN end_state: State {
+  name = "End",
+  is_final = true
+}
+LINK state_of(#start_state, #wf)
+LINK state_of(#end_state, #wf)
+
+-- ---------------------------------------------------------------------------
+-- Verify: Initial state
+-- ---------------------------------------------------------------------------
+
+--# test_verify_workflow_exists
+MATCH w: WorkflowDef WHERE w.name = "Prevent Test Workflow"
+RETURN count(w)
+
+--# test_verify_states_linked
+MATCH s: State, w: WorkflowDef, state_of(s, w)
+WHERE w.name = "Prevent Test Workflow"
+RETURN count(s)
+
+-- ---------------------------------------------------------------------------
+-- Action: Try to kill workflow (should be prevented)
+-- ---------------------------------------------------------------------------
+
+--# test_kill_workflow_prevented
+KILL #wf
+
+-- ---------------------------------------------------------------------------
+-- Verify: Workflow and states still exist
+-- ---------------------------------------------------------------------------
+
+--# test_verify_workflow_still_exists
+MATCH w: WorkflowDef WHERE w.name = "Prevent Test Workflow"
+RETURN count(w)
+
+--# test_verify_states_still_exist
+MATCH s: State, w: WorkflowDef, state_of(s, w)
+RETURN count(s)
+
+-- ---------------------------------------------------------------------------
+-- Action: Proper cleanup (unlink states first, then kill)
+-- ---------------------------------------------------------------------------
+
+--# test_unlink_states
+MATCH s: State, w: WorkflowDef, state_of(s, w) AS e
+WHERE w.name = "Prevent Test Workflow"
+UNLINK e
+
+--# test_kill_workflow_now_allowed
+KILL #wf
+
+--# test_verify_workflow_killed
+MATCH w: WorkflowDef WHERE w.name = "Prevent Test Workflow"
+RETURN count(w)
+
+-- ---------------------------------------------------------------------------
+-- Cleanup: Remove remaining states
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_states
+MATCH s: State KILL s

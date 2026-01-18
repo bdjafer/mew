@@ -12,28 +12,36 @@
 SPAWN admin_role: Role {
   name = "admin",
   description = "Full access to all resources",
-  priority = 100
+  priority = 100,
+  can_read = true,
+  can_write = true,
+  can_delete = true,
+  can_admin = true
 }
 
 --# test_setup_editor_role
 SPAWN editor_role: Role {
   name = "editor",
   description = "Can read and write documents",
-  priority = 50
+  priority = 50,
+  can_read = true,
+  can_write = true
 }
 
 --# test_setup_viewer_role
 SPAWN viewer_role: Role {
   name = "viewer",
   description = "Read-only access",
-  priority = 10
+  priority = 10,
+  can_read = true
 }
 
 --# test_setup_security_role
 SPAWN security_role: Role {
   name = "security_cleared",
   description = "Access to secret documents",
-  priority = 200
+  priority = 200,
+  can_read = true
 }
 
 --# test_setup_admin_user
@@ -59,15 +67,6 @@ SPAWN viewer: User {
   display_name = "Reader"
 }
 LINK has_role(#viewer, #viewer_role)
-
---# test_setup_permissions
-LINK grants_permission(#admin_role, "admin") { resource_type = "Document" }
-LINK grants_permission(#admin_role, "read") { resource_type = "Document" }
-LINK grants_permission(#admin_role, "write") { resource_type = "Document" }
-LINK grants_permission(#admin_role, "delete") { resource_type = "Document" }
-LINK grants_permission(#editor_role, "read") { resource_type = "Document" }
-LINK grants_permission(#editor_role, "write") { resource_type = "Document" }
-LINK grants_permission(#viewer_role, "read") { resource_type = "Document" }
 
 -- ---------------------------------------------------------------------------
 -- Setup: Create documents with different sensitivities
@@ -132,7 +131,7 @@ END SESSION
 
 --# test_owner_can_write
 BEGIN SESSION AS #editor
-SET #internal_doc { content = "Updated by owner" }
+SET #internal_doc.content = "Updated by owner"
 END SESSION
 
 -- ---------------------------------------------------------------------------
@@ -147,7 +146,7 @@ END SESSION
 
 --# test_viewer_cannot_write
 BEGIN SESSION AS #viewer
-SET #public_doc { content = "Attempted modification" }
+SET #public_doc.content = "Attempted modification"
 END SESSION
 
 -- ---------------------------------------------------------------------------
@@ -167,7 +166,7 @@ END SESSION
 
 --# test_viewer_cannot_write_shared
 BEGIN SESSION AS #viewer
-SET #confidential_doc { content = "Attempted write" }
+SET #confidential_doc.content = "Attempted write"
 END SESSION
 
 -- ---------------------------------------------------------------------------
@@ -203,7 +202,7 @@ END SESSION
 
 --# test_cannot_escalate_sensitivity
 BEGIN SESSION AS #editor
-SET #internal_doc { sensitivity = "secret" }
+SET #internal_doc.sensitivity = "secret"
 END SESSION
 
 --# test_security_cleared_can_access
@@ -225,7 +224,7 @@ SPAWN api_service: Service {
 
 --# test_service_read_only
 BEGIN SESSION AS #api_service
-SET #public_doc { content = "Service modification" }
+SET #public_doc.content = "Service modification"
 END SESSION
 
 -- ---------------------------------------------------------------------------
