@@ -4,16 +4,34 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "vite",
+    "dev:server": "tsx watch server/index.ts",
     "build": "tsc && vite build",
+    "build:specs-index": "tsx scripts/build-specs-index.ts",
     "preview": "vite preview",
     "wasm": "wasm-pack build ../. --target web --out-dir web/pkg"
   },
   "dependencies": {
-    "monaco-editor": "^0.47.0"
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "ai": "^4.0.0",
+    "express": "^4.21.0",
+    "monaco-editor": "^0.47.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "zod": "^3.23.0",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/node": "^20.11.0",
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
+    "concurrently": "^9.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.3.3",
     "vite": "^5.4.0",
     "vite-plugin-wasm": "^3.3.0"

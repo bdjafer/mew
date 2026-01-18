@@ -7,53 +7,7 @@
     <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
   <body>
-    <div id="app">
-      <header id="header">
-        <h1>MEW Playground</h1>
-        <div id="session-info"></div>
-      </header>
-      <main id="main">
-        <aside id="sidebar">
-          <div id="editor-panel">
-            <h2>Ontology</h2>
-            <div id="editor-container"></div>
-            <button id="load-ontology">Load Ontology</button>
-          </div>
-          <div id="query-panel">
-            <h2>Query</h2>
-            <div id="query-container"></div>
-            <button id="execute-query">Execute</button>
-          </div>
-        </aside>
-        <div id="resize-handle"></div>
-        <section id="visualization">
-          <canvas id="graph-canvas"></canvas>
-          <div id="minimap"></div>
-          <div id="results-panel"></div>
-          <div id="status-bar">
-            <div class="status-left">
-              <span id="graph-stats"></span>
-              <span id="selection-info"></span>
-            </div>
-            <div class="status-right">
-              <div id="zoom-controls">
-                <button id="zoom-out">-</button>
-                <span id="zoom-level">100%</span>
-                <button id="zoom-in">+</button>
-                <button id="zoom-fit">Fit</button>
-              </div>
-            </div>
-          </div>
-        </section>
-        <aside id="detail-panel">
-          <h2>Details</h2>
-          <div id="detail-content"></div>
-        </aside>
-      </main>
-      <footer id="footer">
-        <div id="result-output"></div>
-      </footer>
-    </div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
