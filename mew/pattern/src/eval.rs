@@ -143,9 +143,10 @@ impl<'r> Evaluator<'r> {
             Value::NodeRef(node_id) => {
                 // Get the attribute from the node
                 if let Some(node) = graph.get_node(node_id) {
-                    // Validate that the attribute exists on the type schema
+                    // Validate that the attribute exists on the type schema (including inherited)
+                    // Only validate if the type is registered; unregistered types skip validation
                     if let Some(type_def) = self.registry.get_type(node.type_id) {
-                        if !type_def.has_attr(attr) {
+                        if !self.registry.type_has_attr(node.type_id, attr) {
                             return Err(PatternError::unknown_attribute(attr, &type_def.name));
                         }
                     }

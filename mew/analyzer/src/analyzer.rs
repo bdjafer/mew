@@ -290,10 +290,9 @@ impl<'r> Analyzer<'r> {
         attr: &AttrAssignment,
         type_name: &str,
     ) -> AnalyzerResult<Type> {
-        // Check that the attribute exists on the type
-        let type_def = self.registry.get_type_by_name(type_name);
-        if let Some(td) = type_def {
-            if !td.has_attr(&attr.name) {
+        // Check that the attribute exists on the type (including inherited)
+        if let Some(type_id) = self.registry.get_type_id(type_name) {
+            if !self.registry.type_has_attr(type_id, &attr.name) {
                 return Err(AnalyzerError::unknown_attribute(
                     &attr.name, type_name, attr.span,
                 ));
@@ -364,11 +363,11 @@ impl<'r> Analyzer<'r> {
         // Analyze the target to get its type
         let target_type = self.analyze_target(&stmt.target, stmt.span)?;
 
-        // Get the type name for attribute checking
+        // Get the type name for attribute checking (including inherited)
         if let Type::NodeRef(type_id) = &target_type {
             if let Some(type_def) = self.registry.get_type(*type_id) {
                 for attr in &stmt.assignments {
-                    if !type_def.has_attr(&attr.name) {
+                    if !self.registry.type_has_attr(*type_id, &attr.name) {
                         return Err(AnalyzerError::unknown_attribute(
                             &attr.name,
                             &type_def.name,
@@ -527,17 +526,17 @@ impl<'r> Analyzer<'r> {
 
         match &base_type {
             Type::NodeRef(type_id) => {
-                // Look up the type and check if it has the attribute
-                if let Some(type_def) = self.registry.get_type(*type_id) {
-                    if let Some(attr_def) = type_def.get_attr(attr) {
-                        // Convert attribute type name to Type
-                        Ok(self.type_name_to_type(&attr_def.type_name))
-                    } else {
-                        Err(AnalyzerError::unknown_attribute(attr, &type_def.name, span))
-                    }
+                // Look up the type and check if it has the attribute (including inherited)
+                if let Some(attr_def) = self.registry.get_type_attr(*type_id, attr) {
+                    // Convert attribute type name to Type
+                    Ok(self.type_name_to_type(&attr_def.type_name))
                 } else {
-                    // Type not found - return Any
-                    Ok(Type::Any)
+                    let type_name = self
+                        .registry
+                        .get_type(*type_id)
+                        .map(|t| t.name.as_str())
+                        .unwrap_or("unknown");
+                    Err(AnalyzerError::unknown_attribute(attr, type_name, span))
                 }
             }
             Type::AnyNodeRef => {
