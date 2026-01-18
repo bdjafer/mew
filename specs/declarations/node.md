@@ -166,6 +166,30 @@ node Document : Named, Timestamped {
 
 If the same attribute is inherited through multiple paths from the same origin, it appears once. If different parents define the same attribute name with incompatible types, the ontology is invalid and produces a compile-time error.
 
+**Polymorphic Attribute Access:**
+
+When matching a base type, subtype-specific attributes are accessible with null-safe semantics:
+
+```mew
+node Product { name: String }
+node PhysicalProduct : Product { weight_kg: Float }
+node DigitalProduct : Product { file_size_mb: Float }
+
+-- Query matching base type can access subtype attributes
+MATCH p: Product
+WHERE p.weight_kg != null AND p.weight_kg < 1.0
+RETURN p.name, p.weight_kg
+-- Returns only PhysicalProduct instances with weight_kg < 1.0
+```
+
+**Semantics:**
+- Accessing a subtype attribute on the base type compiles successfully if the attribute exists on any subtype
+- At runtime, accessing the attribute returns `null` if the actual instance doesn't have it
+- Use null checks (`!= null`) to filter to instances that have the attribute
+- Alternative: use type checking (`p:PhysicalProduct`) for explicit type narrowing
+
+This enables flexible polymorphic queries while maintaining type safety through null handling.
+
 ### Abstract and Sealed Modifiers
 
 **Abstract:** An abstract node type cannot be instantiated directly. It serves as a base type for inheritance only.

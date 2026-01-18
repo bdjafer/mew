@@ -143,13 +143,13 @@ impl<'r> Evaluator<'r> {
             Value::NodeRef(node_id) => {
                 // Get the attribute from the node
                 if let Some(node) = graph.get_node(node_id) {
-                    // Validate that the attribute exists on the type schema (including inherited)
-                    // Only validate if the type is registered; unregistered types skip validation
-                    if let Some(type_def) = self.registry.get_type(node.type_id) {
-                        if !self.registry.type_has_attr(node.type_id, attr) {
-                            return Err(PatternError::unknown_attribute(attr, &type_def.name));
-                        }
-                    }
+                    // For polymorphic queries (e.g., MATCH p: Product WHERE p.weight_kg < 1.0),
+                    // accessing an attribute that exists on a subtype but not this specific
+                    // instance should return null, not error. This allows WHERE clauses to
+                    // filter by null checks (e.g., WHERE p.weight_kg != null).
+                    //
+                    // We don't validate here since the analyzer already validated that the
+                    // attribute exists on the type or one of its subtypes.
                     Ok(node.get_attr(attr).cloned().unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
