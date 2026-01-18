@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   release-please:
+    if: false  # Disabled during development
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4

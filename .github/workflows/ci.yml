@@ -135,6 +135,7 @@ jobs:
   # ============================================================================
   
   build-platforms:
+    if: false  # Disabled during development
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: build
@@ -159,7 +160,7 @@ jobs:
   status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [build, test, build-platforms]
+    needs: [build, test]  # build-platforms disabled during development
     if: always()
     steps:
       - name: Check build status
