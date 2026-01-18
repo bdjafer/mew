@@ -31,6 +31,7 @@ permissions:
 
 jobs:
   write-pr:
+    if: false  # Disabled - remove this line to re-enable
     runs-on: ubuntu-latest
     # Single agent for now - expand to matrix later once working
     # strategy:

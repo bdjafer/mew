@@ -16,6 +16,7 @@
   --node-selected: #22c55e;
   --edge-color: #555;
   --edge-focal: #6366f1;
+  --sidebar-width: 450px;
 }
 
 * {
@@ -59,7 +60,7 @@ body {
 
 #main {
   display: grid;
-  grid-template-columns: 320px 1fr 280px;
+  grid-template-columns: var(--sidebar-width) auto 1fr 280px;
   flex: 1;
   overflow: hidden;
 }
@@ -70,6 +71,36 @@ body {
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   overflow: hidden;
+  min-width: 280px;
+  max-width: 800px;
+}
+
+#resize-handle {
+  width: 5px;
+  background: var(--bg-secondary);
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+}
+
+#resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--border);
+}
+
+#resize-handle:hover,
+#resize-handle.dragging {
+  background: var(--accent);
+}
+
+#resize-handle:hover::after,
+#resize-handle.dragging::after {
+  background: var(--accent);
 }
 
 #editor-panel, #query-panel {
@@ -316,8 +347,11 @@ button:hover {
 }
 
 @media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 320px;
+  }
   #main {
-    grid-template-columns: 260px 1fr 0;
+    grid-template-columns: var(--sidebar-width) auto 1fr 0;
   }
   #detail-panel {
     display: none;

@@ -71,6 +71,42 @@ function setupEventListeners() {
   document.getElementById('zoom-out')!.addEventListener('click', () => renderer?.zoomOut());
   document.getElementById('zoom-fit')!.addEventListener('click', () => renderer?.fitToView());
   window.addEventListener('resize', () => renderer?.resize());
+  setupSidebarResize();
+}
+
+function setupSidebarResize() {
+  const handle = document.getElementById('resize-handle')!;
+  const sidebar = document.getElementById('sidebar')!;
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  handle.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startX = e.clientX;
+    startWidth = sidebar.offsetWidth;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const delta = e.clientX - startX;
+    const newWidth = Math.min(800, Math.max(280, startWidth + delta));
+    document.documentElement.style.setProperty('--sidebar-width', `${newWidth}px`);
+    renderer?.resize();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
 }
 
 function loadOntology() {
