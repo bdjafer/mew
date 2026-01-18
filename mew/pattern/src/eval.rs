@@ -34,7 +34,11 @@ impl<'r> Evaluator<'r> {
             Expr::FnCall(fc) => self.eval_fn_call(&fc.name, &fc.args, bindings, graph),
             Expr::IdRef(id, _) => {
                 // Look up the ID in bindings - ID refs use session-stored names from SPAWN
-                self.eval_var(id, bindings)
+                // For ID refs, we return NodeNotFound instead of UnboundVariable when not found
+                bindings
+                    .get(id)
+                    .map(|b| b.to_value())
+                    .ok_or_else(|| PatternError::node_not_found(id))
             }
             Expr::Param(name, _) => Err(PatternError::missing_parameter(name)),
             Expr::Exists(pattern_elems, where_clause, _) => {
