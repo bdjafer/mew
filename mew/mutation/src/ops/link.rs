@@ -23,8 +23,20 @@ pub fn execute_link(
         .get_edge_type_id(&stmt.edge_type)
         .ok_or_else(|| MutationError::unknown_edge_type(&stmt.edge_type))?;
 
-    // If IF NOT EXISTS, check if edge already exists
-    if stmt.if_not_exists && find_existing_edge(graph, edge_type_id, &target_ids).is_some() {
+    // Check if this is a symmetric edge type
+    let is_symmetric = registry
+        .get_edge_type(edge_type_id)
+        .map(|et| et.symmetric)
+        .unwrap_or(false);
+
+    // For symmetric edges, always check for existing edge (in either order) - spec: Creation Deduplication
+    // For non-symmetric edges, only check if IF NOT EXISTS is specified
+    if is_symmetric {
+        if find_existing_edge_symmetric(graph, edge_type_id, &target_ids).is_some() {
+            // Edge already exists - no new edge created (symmetric deduplication)
+            return Ok(MutationOutcome::Empty);
+        }
+    } else if stmt.if_not_exists && find_existing_edge(graph, edge_type_id, &target_ids).is_some() {
         // Edge already exists - no new edge created
         return Ok(MutationOutcome::Empty);
     }
@@ -187,6 +199,30 @@ fn find_existing_edge(
             }
         }
     }
+    None
+}
+
+/// Find an existing symmetric edge with the given type and targets (in either order).
+/// For symmetric edges, edge(a, b) == edge(b, a), so we check both orderings.
+/// Returns the edge ID if found, None otherwise.
+fn find_existing_edge_symmetric(
+    graph: &Graph,
+    edge_type_id: EdgeTypeId,
+    target_ids: &[EntityId],
+) -> Option<EdgeId> {
+    // First check for exact match
+    if let Some(edge_id) = find_existing_edge(graph, edge_type_id, target_ids) {
+        return Some(edge_id);
+    }
+
+    // For binary symmetric edges, also check reversed order
+    if target_ids.len() == 2 {
+        let reversed = vec![target_ids[1].clone(), target_ids[0].clone()];
+        if let Some(edge_id) = find_existing_edge(graph, edge_type_id, &reversed) {
+            return Some(edge_id);
+        }
+    }
+
     None
 }
 
