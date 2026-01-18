@@ -119,7 +119,8 @@ SPAWN t6: TimeRecord {
 }
 
 --# query_now_comparison
-MATCH t: TimeRecord WHERE t.start_time < now()
+-- Use <= for determinism: t6.start_time equals spawn's now(), query's now() >= spawn's now()
+MATCH t: TimeRecord WHERE t.start_time <= now()
 RETURN COUNT(t) AS count
 
 -- ---------------------------------------------------------------------------
