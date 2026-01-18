@@ -44,6 +44,9 @@ impl<'r, 'g> Matcher<'r, 'g> {
         // Start with the initial bindings
         let mut candidates = vec![initial];
 
+        // Track edge variables that need deduplication (for symmetric edges)
+        let mut edge_vars_for_dedup: Vec<String> = Vec::new();
+
         // Process each operation
         for op in &pattern.ops {
             let mut new_candidates = Vec::new();
@@ -54,6 +57,74 @@ impl<'r, 'g> Matcher<'r, 'g> {
             }
 
             candidates = new_candidates;
+
+            // Track edge variables from symmetric edge FollowEdge operations
+            if let PatternOp::FollowEdge {
+                edge_type_id,
+                edge_var,
+                ..
+            } = op
+            {
+                if let Some(ref var) = edge_var {
+                    if let Some(edge_type) = self.registry.get_edge_type(*edge_type_id) {
+                        if edge_type.symmetric {
+                            edge_vars_for_dedup.push(var.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Deduplicate by edge_id for symmetric edges
+        // This ensures each physical edge appears only once in results
+        // We prefer forward (stored-order) matches over reverse matches
+        for edge_var in &edge_vars_for_dedup {
+            // First pass: collect all matches, grouping by edge_id
+            let mut edge_matches: std::collections::HashMap<
+                mew_core::EdgeId,
+                Vec<Bindings>,
+            > = std::collections::HashMap::new();
+            let mut non_edge_bindings = Vec::new();
+
+            for bindings in candidates {
+                if let Some(binding) = bindings.get(edge_var) {
+                    if let Some(edge_id) = binding.as_edge() {
+                        edge_matches.entry(edge_id).or_default().push(bindings);
+                    } else {
+                        non_edge_bindings.push(bindings);
+                    }
+                } else {
+                    non_edge_bindings.push(bindings);
+                }
+            }
+
+            // Second pass: for each edge_id, prefer forward match over reverse match
+            let reverse_marker = format!("_reverse_{}", edge_var);
+            let mut deduped = non_edge_bindings;
+            for (_edge_id, matches) in edge_matches {
+                if matches.len() == 1 {
+                    // Only one match, use it
+                    deduped.push(matches.into_iter().next().unwrap());
+                } else {
+                    // Multiple matches - prefer the one WITHOUT reverse marker
+                    let mut forward = None;
+                    let mut reverse = None;
+                    for m in matches {
+                        if m.get(&reverse_marker).is_some() {
+                            reverse = Some(m);
+                        } else {
+                            forward = Some(m);
+                        }
+                    }
+                    // Prefer forward, fall back to reverse
+                    if let Some(m) = forward {
+                        deduped.push(m);
+                    } else if let Some(m) = reverse {
+                        deduped.push(m);
+                    }
+                }
+            }
+            candidates = deduped;
         }
 
         Ok(candidates)
@@ -143,6 +214,11 @@ impl<'r, 'g> Matcher<'r, 'g> {
 
                 // For symmetric edges, also search edges where source_id is at position 1
                 // This handles the case: friend_of(alice, bob) stored, query friend_of(bob, x)
+                //
+                // Note: This does NOT cause duplicates because:
+                // - Forward search uses edges_from(source_id) - finds edges where source_id is at pos 0
+                // - Reverse search uses edges_to(source_id) - finds edges where source_id is at pos > 0
+                // For a given candidate, only ONE of these will match, never both.
                 if is_symmetric && from_vars.len() == 2 {
                     let reverse_edges: Vec<_> = self
                         .graph
@@ -185,6 +261,11 @@ impl<'r, 'g> Matcher<'r, 'g> {
                                 let mut new_bindings = bindings.clone();
                                 if let Some(alias) = edge_var {
                                     new_bindings.insert(alias, Binding::Edge(edge_id));
+                                    // Mark as reverse match for deduplication preference
+                                    new_bindings.insert(
+                                        &format!("_reverse_{}", alias),
+                                        Binding::Value(mew_core::Value::Bool(true)),
+                                    );
                                 }
                                 matches.push(new_bindings);
                             }
@@ -500,25 +581,17 @@ mod tests {
         let matcher = Matcher::new(&registry, &graph);
         let matches = matcher.find_all(&pattern).unwrap();
 
-        // THEN: For symmetric edge, should match both (alice, bob) AND (bob, alice)
-        // So we expect 2 matches
+        // THEN: For symmetric edge with cross-join, should return 1 match (not 2).
+        // Per spec: "Only one edge is stored" - queries should return each edge once.
         assert_eq!(
             matches.len(),
-            2,
-            "Symmetric edge should match in both directions"
+            1,
+            "Symmetric edge cross-join should return one row per physical edge"
         );
 
-        // Verify we have both orderings
-        let pairs: Vec<(NodeId, NodeId)> = matches
-            .iter()
-            .map(|b| {
-                (
-                    b.get("a").unwrap().as_node().unwrap(),
-                    b.get("b").unwrap().as_node().unwrap(),
-                )
-            })
-            .collect();
-        assert!(pairs.contains(&(alice, bob)), "Should have (alice, bob)");
-        assert!(pairs.contains(&(bob, alice)), "Should have (bob, alice)");
+        // Verify the match contains the edge in stored order (alice, bob)
+        let binding = &matches[0];
+        assert_eq!(binding.get("a").unwrap().as_node(), Some(alice));
+        assert_eq!(binding.get("b").unwrap().as_node(), Some(bob));
     }
 }

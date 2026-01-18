@@ -116,6 +116,10 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
 
             PlanOp::Distinct { input } => self.execute_distinct(input, initial_bindings),
 
+            PlanOp::EdgeDedup { input, edge_var } => {
+                self.execute_edge_dedup(input, edge_var, initial_bindings)
+            }
+
             PlanOp::Empty => {
                 if let Some(initial) = initial_bindings {
                     Ok(vec![(initial.clone(), Vec::new())])
@@ -778,6 +782,41 @@ impl<'r, 'g> OperatorContext<'r, 'g> {
         }
 
         Ok(distinct_results)
+    }
+
+    /// Deduplicate results by edge_id.
+    /// For symmetric edges, a single physical edge can match multiple times (forward and reverse).
+    /// This operator keeps only one row per unique edge_id.
+    fn execute_edge_dedup(
+        &self,
+        input: &PlanOp,
+        edge_var: &str,
+        initial_bindings: Option<&Bindings>,
+    ) -> QueryResult<Vec<(Bindings, Vec<Value>)>> {
+        let results = self.execute_op(input, initial_bindings)?;
+        let mut seen: std::collections::HashSet<mew_core::EdgeId> =
+            std::collections::HashSet::new();
+        let mut deduped_results = Vec::new();
+
+        for (bindings, values) in results {
+            // Get the edge_id from the edge variable binding
+            if let Some(binding) = bindings.get(edge_var) {
+                if let Some(edge_id) = binding.as_edge() {
+                    // Only keep first occurrence of each edge_id
+                    if seen.insert(edge_id) {
+                        deduped_results.push((bindings, values));
+                    }
+                } else {
+                    // Not an edge binding, pass through
+                    deduped_results.push((bindings, values));
+                }
+            } else {
+                // Variable not found, pass through
+                deduped_results.push((bindings, values));
+            }
+        }
+
+        Ok(deduped_results)
     }
 }
 
