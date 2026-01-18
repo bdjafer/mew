@@ -203,9 +203,9 @@ mod errors_comprehensive {
             })
             // Query errors
             .step("query_invalid_edge_attribute", |a| {
-                a.created(2).linked(1).rows_gte(0) // Nonexistent edge attributes return null
+                a.created(2).linked(1).error("attribute")
             })
-            .step("query_type_mismatch", |a| a.rows_gte(0)) // Type coercion handles mismatches
+            .step("query_type_mismatch", |a| a.error("type"))
     }
 
     #[test]

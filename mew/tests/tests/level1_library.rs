@@ -231,11 +231,11 @@ mod errors_comprehensive {
             .step("wrong_edge_types", |a| a.created(2).error("type"))
             .step("copy_of_wrong_types", |a| a.created(2).error("type"))
             // Query errors
-            .step("query_invalid_book_attribute", |a| a.rows_gte(0)) // Nonexistent attrs return null
+            .step("query_invalid_book_attribute", |a| a.error("attribute"))
             .step("query_invalid_edge_attribute", |a| {
-                a.created(2).linked(1).rows_gte(0) // Nonexistent edge attrs return null
+                a.created(2).linked(1).error("attribute")
             })
-            .step("query_type_mismatch_year", |a| a.rows_gte(0)) // Type coercion handles mismatches
+            .step("query_type_mismatch_year", |a| a.error("type"))
     }
 
     #[test]

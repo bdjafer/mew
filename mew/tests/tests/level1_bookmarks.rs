@@ -369,9 +369,9 @@ mod errors_comprehensive {
             })
             // QUERY errors
             .step("query_invalid_type", |a| a.error("type"))
-            .step("query_invalid_attribute", |a| a.rows_gte(0)) // Nonexistent fields return null instead of error
+            .step("query_invalid_attribute", |a| a.error("attribute"))
             .step("query_invalid_edge", |a| a.error("type"))
-            .step("query_type_mismatch_comparison", |a| a.rows_gte(0)) // Type coercion handles mismatches
+            .step("query_type_mismatch_comparison", |a| a.error("type"))
     }
 
     #[test]
