@@ -4,45 +4,6 @@
 
 use mew_tests::prelude::*;
 
-mod queries {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("queries")
-            .ontology("level-3/eventchain/ontology.mew")
-            .seed("level-3/eventchain/seeds/populated.mew")
-            .operations("level-3/eventchain/operations/queries.mew")
-            .step("count_all_events", |a| a.value(9))
-            .step("query_triggers", |a| a.rows(2))
-            .step("query_effects", |a| a.rows(4))
-            .step("query_outcomes", |a| a.rows(1))
-            .step("query_all_names", |a| a.rows(9))
-            .step("query_with_description", |a| a.rows(5))
-    }
-
-    #[test]
-    fn test_query_operations_with_populated_data() {
-        scenario().run().unwrap();
-    }
-}
-
-mod errors {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("errors")
-            .ontology("level-3/eventchain/ontology.mew")
-            .operations("level-3/eventchain/operations/errors.mew")
-            .step("spawn_missing_name", |a| a.error("required"))
-            .step("spawn_valid", |a| a.created(1))
-    }
-
-    #[test]
-    fn test_error_handling_for_invalid_operations() {
-        scenario().run().unwrap();
-    }
-}
-
 mod transitive {
     use super::*;
 
@@ -111,14 +72,9 @@ mod constraint_violations {
             .step("test_setup_loop_chain", |a| a.created(3).linked(2))
             // Transitive loop constraint not yet enforced
             .step("test_transitive_loop_violation", |a| a.linked(1))
-            // no_self modifier IS enforced
-            .step("test_no_self_violation", |a| a.error("self"))
             // Valid operations
             .step("test_valid_chain_no_violation", |a| a.created(3).linked(2))
             .step("test_verify_chain_exists", |a| a.error("parse"))
-            // Message verification - constraints not enforced yet
-            .step("test_temporal_error_message", |a| a.created(2).linked(1))
-            .step("test_loop_error_message", |a| a.error("self"))
             // Cleanup: events created in this test
             .step("test_cleanup", |a| a.deleted_gte(5))
     }

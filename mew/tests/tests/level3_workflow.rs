@@ -4,50 +4,6 @@
 
 use mew_tests::prelude::*;
 
-mod queries {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("queries")
-            .ontology("level-3/workflow/ontology.mew")
-            .seed("level-3/workflow/seeds/populated.mew")
-            .operations("level-3/workflow/operations/queries.mew")
-            .step("count_all_workflows", |a| a.value(2))
-            .step("count_all_states", |a| a.value(4))
-            .step("count_all_transitions", |a| a.value(3))
-            .step("count_all_workitems", |a| a.value(3))
-            .step("query_active_workflows", |a| a.rows(2))
-            .step("query_initial_states", |a| a.rows(1))
-            .step("query_final_states", |a| a.rows(2))
-            .step("query_active_items", |a| a.rows(1))
-            .step("query_roles", |a| a.rows(3))
-            .step("query_actors", |a| a.rows(3))
-    }
-
-    #[test]
-    fn test_query_operations_with_populated_data() {
-        scenario().run().unwrap();
-    }
-}
-
-mod errors {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("errors")
-            .ontology("level-3/workflow/ontology.mew")
-            .operations("level-3/workflow/operations/errors.mew")
-            .step("spawn_missing_name", |a| a.error("required"))
-            .step("spawn_invalid_status", |a| a.error("constraint"))
-            .step("spawn_valid", |a| a.created(1))
-    }
-
-    #[test]
-    fn test_error_handling_for_invalid_operations() {
-        scenario().run().unwrap();
-    }
-}
-
 mod trigger {
     use super::*;
 

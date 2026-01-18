@@ -165,6 +165,7 @@ Specification coverage for Level 2: Structure features.
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
 | now() function | expressions/timestamp_functions.md | ✓ | tasks/bulk_mutations |
+| wall_time() function | expressions/time_functions.md | ✗ | — |
 | Duration type | types/duration_type.md | ✓ | (level-1: expressions/types) |
 
 ---
@@ -242,20 +243,21 @@ Specification coverage for Level 2: Structure features.
 | LINK Variants | 7 | 7 | 100% |
 | UNLINK | 4 | 4 | 100% |
 | Parameters | 9 | 10 | 90% |
-| Time | 2 | 2 | 100% |
+| Time | 2 | 3 | 67% |
 | Type System | 3 | 3 | 100% |
 | ID Refs & Inspection | 4 | 4 | 100% |
 | Administration | 5 | 5 | 100% |
 | Policy/Authorization | 4 | 4 | 100% |
 | Errors | 8 | 8 | 100% |
-| **Total** | **111** | **112** | **99%** |
+| **Total** | **111** | **113** | **98%** |
 
 ---
 
 ## Gaps to Address
 
-### Remaining Gap
+### Remaining Gaps
 - `$param` type inference (1 item in Parameters category)
+- `wall_time()` function (1 item in Time category)
 
 ### Completed This Session
 - Administration commands (SHOW, CREATE INDEX, DROP INDEX)

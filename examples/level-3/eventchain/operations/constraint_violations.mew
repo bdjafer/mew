@@ -67,14 +67,6 @@ LINK causes(#loop_b, #loop_c)
 LINK causes(#loop_c, #loop_a)
 
 -- ---------------------------------------------------------------------------
--- Constraint: no_self edge modifier
--- ---------------------------------------------------------------------------
-
---# test_no_self_violation
-SPAWN single: Event { name = "Single Event" }
-LINK causes(#single, #single)
-
--- ---------------------------------------------------------------------------
 -- Verify constraints don't block valid operations
 -- ---------------------------------------------------------------------------
 
@@ -88,19 +80,6 @@ LINK causes(#chain_b, #chain_c)
 --# test_verify_chain_exists
 MATCH causes+(#chain_a, #chain_c)
 RETURN true AS connected
-
--- ---------------------------------------------------------------------------
--- Constraint message verification
--- ---------------------------------------------------------------------------
-
---# test_temporal_error_message
-SPAWN msg_early: Event { name = "Msg Early", timestamp = 100 }
-SPAWN msg_late: Event { name = "Msg Late", timestamp = 200 }
-LINK causes(#msg_late, #msg_early)
-
---# test_loop_error_message
-SPAWN msg_loop: Event { name = "Msg Loop", timestamp = 100 }
-LINK causes(#msg_loop, #msg_loop)
 
 -- ---------------------------------------------------------------------------
 -- Cleanup

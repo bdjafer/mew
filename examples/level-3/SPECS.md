@@ -9,14 +9,14 @@ Specification coverage for Level 3: Dynamics features.
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
 | Hard constraint declaration | declarations/constraint.md | ✓ | eventchain/ontology |
-| Soft constraint `[soft]` | modifiers/soft_constraints.md | ✓ | projectmanagement/ontology, auth/ontology |
+| Soft constraint `[soft]` | modifiers/soft_constraints.md | ✓ | projectmanagement/ontology |
 | Constraint with `[message:]` | declarations/constraint.md | ✓ | eventchain/ontology |
 | Constraint pattern matching | declarations/constraint.md | ✓ | eventchain/ontology |
 | Constraint with WHERE | declarations/constraint.md | ✓ | eventchain/ontology |
 | Constraint `=> false` (prohibition) | declarations/constraint.md | ✓ | eventchain/ontology |
 | Constraint `=> condition` | declarations/constraint.md | ✓ | eventchain/ontology |
 | Constraint violation error | declarations/constraint.md | ✓ | eventchain/constraint_violations |
-| Soft constraint warning | modifiers/soft_constraints.md | ✓ | auth/ontology |
+| Soft constraint warning | modifiers/soft_constraints.md | ✓ | projectmanagement/ontology |
 
 ---
 
@@ -69,7 +69,7 @@ Specification coverage for Level 3: Dynamics features.
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
 | `edge+` (one or more hops) | patterns/transitive_patterns.md | ✓ | eventchain/transitive |
-| `edge*` (zero or more hops) | patterns/transitive_patterns.md | ✓ | eventchain/transitive, social/transitive |
+| `edge*` (zero or more hops) | patterns/transitive_patterns.md | ✓ | eventchain/transitive |
 | Transitive with `[depth: N]` | patterns/transitive_patterns.md | ✓ | eventchain/transitive |
 | Transitive with `[depth: N..M]` | patterns/transitive_patterns.md | ✓ | eventchain/transitive |
 | Transitive query (tested) | patterns/transitive_patterns.md | ✓ | eventchain/transitive |
@@ -77,13 +77,17 @@ Specification coverage for Level 3: Dynamics features.
 
 ---
 
-## Negative Patterns
+## Existence Patterns
 
 | Feature | Spec | Covered | Scenario |
 |---------|------|:-------:|----------|
-| NOT EXISTS in constraint | patterns/negative_patterns.md | ✓ | projectmanagement/ontology |
+| EXISTS in constraint | expressions/exists.md | ✓ | workflow/ontology |
+| EXISTS in rule | expressions/exists.md | ✓ | projectmanagement/ontology |
+| EXISTS with WHERE | expressions/exists.md | ✓ | projectmanagement/ontology |
+| NOT EXISTS in constraint | patterns/negative_patterns.md | ✓ | auth/ontology |
 | NOT EXISTS in rule | patterns/negative_patterns.md | ✓ | projectmanagement/ontology |
 | NOT EXISTS with WHERE | patterns/negative_patterns.md | ✓ | projectmanagement/ontology |
+| Nested EXISTS | expressions/exists.md | ✗ | — |
 | Nested NOT EXISTS | patterns/negative_patterns.md | ✗ | — |
 
 ---
@@ -96,7 +100,18 @@ Specification coverage for Level 3: Dynamics features.
 | Edge targeting edge | types/edge_references.md | ✓ | social/higher_order |
 | Higher-order in LINK | types/edge_references.md | ✓ | social/higher_order |
 | Query edges about edges | types/edge_references.md | ✓ | social/higher_order |
-| Confidence/meta edge pattern | types/edge_references.md | ✓ | social/ontology (trust_score) |
+| Confidence/meta edge pattern | types/edge_references.md | ✓ | social/ontology |
+
+---
+
+## Logical Time
+
+| Feature | Spec | Covered | Scenario |
+|---------|------|:-------:|----------|
+| `logical_time()` function | statements/tick.md | ✗ | — |
+| TICK statement | statements/tick.md | ✗ | — |
+| TICK N (advance by N) | statements/tick.md | ✗ | — |
+| Tick-based rule execution | statements/tick.md | ✗ | — |
 
 ---
 
@@ -108,6 +123,7 @@ Specification coverage for Level 3: Dynamics features.
 | WATCH watch mode | statements/watch.md | ✓ | notifications/watch |
 | WATCH consume mode | statements/watch.md | ✓ | notifications/consume |
 | Competing consumers (group) | statements/watch.md | ✓ | notifications/consume |
+| Ordering options | statements/watch.md | ✓ | notifications/watch |
 | Windowing | statements/watch.md | ✓ | notifications/watch |
 | Buffering | statements/watch.md | ✓ | notifications/watch |
 | PAUSE watch | statements/watch_management.md | ✓ | notifications/management |
@@ -147,6 +163,7 @@ Specification coverage for Level 3: Dynamics features.
 | `target_attr()` | expressions/context_functions.md | ✓ | auth/context_functions |
 | BEGIN SESSION AS | statements/session.md | ✓ | auth/session |
 | END SESSION | statements/session.md | ✓ | auth/session |
+| Session nesting | statements/session.md | ✗ | — |
 | RBAC pattern | declarations/policy.md | ✓ | auth/ontology |
 
 ---
@@ -172,26 +189,37 @@ Specification coverage for Level 3: Dynamics features.
 | Rules | 15 | 16 | 94% |
 | Edge Modifiers | 13 | 14 | 93% |
 | Transitive Patterns | 6 | 6 | 100% |
-| Negative Patterns | 3 | 4 | 75% |
+| Existence Patterns | 6 | 8 | 75% |
 | Higher-Order Edges | 5 | 5 | 100% |
-| Watch & Subscriptions | 12 | 12 | 100% |
+| Logical Time | 0 | 4 | 0% |
+| Watch & Subscriptions | 13 | 13 | 100% |
 | Versioning | 7 | 7 | 100% |
-| Policy & Authorization | 11 | 11 | 100% |
+| Policy & Authorization | 11 | 12 | 92% |
 | Transactions | 6 | 6 | 100% |
-| **Total** | **87** | **90** | **97%** |
+| **Total** | **91** | **100** | **91%** |
 
 ---
 
 ## Remaining Gaps
 
 ### Rules
-- Rule `=> KILL` action (not demonstrated in any ontology)
+- Rule `=> KILL` action — Not demonstrated in any ontology
 
 ### Edge Modifiers
-- `[on_kill_source: prevent]` - Not demonstrated
+- `[on_kill_source: prevent]` — Not demonstrated
 
-### Negative Patterns
-- Nested NOT EXISTS - Not demonstrated
+### Existence Patterns
+- Nested EXISTS — Not demonstrated
+- Nested NOT EXISTS — Not demonstrated
+
+### Logical Time
+- `logical_time()` function — No scenario
+- TICK statement — No scenario
+- TICK N (advance by N) — No scenario
+- Tick-based rule execution — No scenario
+
+### Policy & Authorization
+- Session nesting — Not demonstrated
 
 ---
 
@@ -200,9 +228,9 @@ Specification coverage for Level 3: Dynamics features.
 | Ontology | Primary Focus | Unique Features |
 |----------|---------------|-----------------|
 | eventchain | Causation, temporal constraints | transitive patterns, auto rules, constraint violations |
-| projectmanagement | Dependencies, cardinality | cascade behavior, soft constraints |
+| projectmanagement | Dependencies, cardinality | cascade behavior, soft constraints, acyclic edges |
 | workflow | State machines, RBAC | manual rules, prevent actions, TRIGGER |
-| notifications | Real-time subscriptions | WATCH, ACK/NACK, consumer groups |
+| notifications | Real-time subscriptions | WATCH, ACK/NACK, consumer groups, windowing |
 | social | Symmetric relationships | [symmetric] edges, higher-order edges, transitive social |
 | auth | Policy & Authorization | ALLOW/DENY rules, sessions, context functions |
 | audit | Versioning & Time-Travel | SNAPSHOT, CHECKOUT, BRANCH, MERGE, transactions |

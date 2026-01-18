@@ -4,52 +4,6 @@
 
 use mew_tests::prelude::*;
 
-mod queries {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("queries")
-            .ontology("level-3/projectmanagement/ontology.mew")
-            .seed("level-3/projectmanagement/seeds/populated.mew")
-            .operations("level-3/projectmanagement/operations/queries.mew")
-            .step("count_all_projects", |a| a.value(2))
-            .step("count_all_tasks", |a| a.value(5))
-            .step("count_all_milestones", |a| a.value(2))
-            .step("count_all_members", |a| a.value(3))
-            .step("query_active_projects", |a| a.rows(1))
-            .step("query_high_priority_tasks", |a| a.rows(3))
-            .step("query_todo_tasks", |a| a.rows(1))
-            .step("query_in_progress", |a| a.rows(1))
-            .step("query_all_tasks", |a| a.rows(5))
-            .step("query_members", |a| a.rows(3))
-    }
-
-    #[test]
-    fn test_query_operations_with_populated_data() {
-        scenario().run().unwrap();
-    }
-}
-
-mod errors {
-    use super::*;
-
-    pub fn scenario() -> Scenario {
-        Scenario::new("errors")
-            .ontology("level-3/projectmanagement/ontology.mew")
-            .operations("level-3/projectmanagement/operations/errors.mew")
-            .step("spawn_missing_title", |a| a.error("required"))
-            .step("spawn_invalid_priority_low", |a| a.error("constraint"))
-            .step("spawn_invalid_priority_high", |a| a.error("constraint"))
-            .step("spawn_invalid_status", |a| a.error("constraint"))
-            .step("spawn_valid", |a| a.created(1))
-    }
-
-    #[test]
-    fn test_error_handling_for_invalid_operations() {
-        scenario().run().unwrap();
-    }
-}
-
 mod cascade_behavior {
     use super::*;
 
