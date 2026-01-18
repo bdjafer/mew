@@ -235,33 +235,33 @@ mod timestamps {
         Scenario::new("timestamps")
             .ontology("level-1/expressions/ontology.mew")
             .operations("level-1/expressions/operations/timestamps.mew")
-            // Seed data
+            // Seed data (t1-t5 with fixed timestamps)
             .step("seed_timestamp_data", |a| a.created(5))
-            // now() tests
-            .step("spawn_with_now", |a| a.created(1))
-            .step("query_now_comparison", |a| a.scalar("count", 5i64))
-            // year() tests
+            // year() tests (deterministic: only t1-t5 exist)
             .step("query_year_extraction", |a| a.scalar("yr", 2024i64))
             .step("query_year_filter", |a| a.scalar("count", 4i64))
-            .step("query_year_comparison", |a| a.rows(2))
-            // month() tests
+            .step("query_year_comparison", |a| a.rows(1))
+            // month() tests (deterministic: only t1-t5 exist)
             .step("query_month_extraction", |a| a.scalar("mo", 6i64))
-            .step("query_month_filter", |a| a.scalar("count", 3i64))
+            .step("query_month_filter", |a| a.scalar("count", 2i64))
             .step("query_month_range", |a| a.scalar("count", 3i64))
-            // day() tests
+            // day() tests (deterministic: only t1-t5 exist)
             .step("query_day_extraction", |a| a.scalar("dy", 31i64))
             .step("query_day_filter", |a| a.scalar("count", 2i64))
             .step("query_day_mid_month", |a| a.rows(1))
-            // hour/minute/second tests
+            // hour/minute/second tests (deterministic: only t1-t5 exist)
             .step("query_hour_extraction", |a| a.scalar("hr", 12i64))
             .step("query_minute_extraction", |a| a.scalar("min", 30i64))
             .step("query_second_extraction", |a| a.scalar("sec", 45i64))
-            .step("query_time_filter", |a| a.scalar("count", 4i64))
-            // Timestamp arithmetic tests
+            .step("query_time_filter", |a| a.scalar("count", 3i64))
+            // now() tests (spawns t6 with runtime timestamp)
+            .step("spawn_with_now", |a| a.created(1))
+            .step("query_now_comparison", |a| a.scalar("count", 5i64))
+            // Timestamp arithmetic tests (uses fixed timestamps by label)
             .step("query_timestamp_plus_duration", |a| a.rows(1))
             .step("query_timestamp_minus_duration", |a| a.rows(1))
             .step("query_timestamp_diff", |a| a.rows(1))
-            // Combined tests
+            // Combined tests (t6 now exists)
             .step("query_date_parts_combined", |a| a.rows(1))
             .step("query_timestamp_ordering", |a| a.rows(6))
             .step("query_recent_records", |a| a.scalar("count", 4i64))
