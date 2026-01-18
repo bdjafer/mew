@@ -543,8 +543,12 @@ impl<'r> Analyzer<'r> {
                 if let Some(type_def) = self.registry.get_type(*type_id) {
                     Err(AnalyzerError::unknown_attribute(attr, &type_def.name, span))
                 } else {
-                    // Type not found - return Any
-                    Ok(Type::Any)
+                    let type_name = self
+                        .registry
+                        .get_type(*type_id)
+                        .map(|t| t.name.as_str())
+                        .unwrap_or("unknown");
+                    Err(AnalyzerError::unknown_attribute(attr, type_name, span))
                 }
             }
             Type::AnyNodeRef => {

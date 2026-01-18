@@ -1,0 +1,148 @@
+-- ===========================================================================
+-- SCENARIO: Standalone WALK (no preceding MATCH)
+-- DESCRIPTION: Tests WALK FROM #id syntax without MATCH binding
+-- FOCUS: ID reference starting points per specs/expressions/id_references.md
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- SETUP: Create org hierarchy for traversal
+-- ---------------------------------------------------------------------------
+
+--# test_setup_standalone_ceo
+SPAWN standalone_ceo: Executive {
+  first_name = "Standalone",
+  last_name = "CEO",
+  email = "standalone.ceo@company.com",
+  employee_id = "EMP800001",
+  hire_date = now(),
+  salary = 500000.0,
+  management_level = 5,
+  budget_authority = 10000000.0,
+  title = "Chief Executive Officer"
+}
+--@ expect:ok
+
+--# test_setup_standalone_vp
+SPAWN standalone_vp: Manager {
+  first_name = "Standalone",
+  last_name = "VP",
+  email = "standalone.vp@company.com",
+  employee_id = "EMP800002",
+  hire_date = now(),
+  salary = 300000.0,
+  management_level = 4,
+  budget_authority = 2000000.0
+}
+--@ expect:ok
+
+--# test_setup_standalone_dir
+SPAWN standalone_dir: Manager {
+  first_name = "Standalone",
+  last_name = "Dir",
+  email = "standalone.dir@company.com",
+  employee_id = "EMP800003",
+  hire_date = now(),
+  salary = 200000.0,
+  management_level = 3,
+  budget_authority = 500000.0
+}
+--@ expect:ok
+
+--# test_setup_standalone_mgr
+SPAWN standalone_mgr: Manager {
+  first_name = "Standalone",
+  last_name = "Mgr",
+  email = "standalone.mgr@company.com",
+  employee_id = "EMP800004",
+  hire_date = now(),
+  salary = 150000.0,
+  management_level = 2,
+  budget_authority = 100000.0
+}
+--@ expect:ok
+
+--# test_setup_standalone_emp
+SPAWN standalone_emp: Employee {
+  first_name = "Standalone",
+  last_name = "Emp",
+  email = "standalone.emp@company.com",
+  employee_id = "EMP800005",
+  hire_date = now(),
+  salary = 80000.0
+}
+--@ expect:ok
+
+--# test_setup_standalone_hierarchy
+MATCH ceo: Executive, vp: Manager, dir: Manager, mgr: Manager, emp: Employee
+WHERE ceo.employee_id = "EMP800001" AND vp.employee_id = "EMP800002"
+AND dir.employee_id = "EMP800003" AND mgr.employee_id = "EMP800004"
+AND emp.employee_id = "EMP800005"
+LINK reports_to(vp, ceo)
+LINK reports_to(dir, vp)
+LINK reports_to(mgr, dir)
+LINK reports_to(emp, mgr)
+--@ expect:ok
+
+-- ---------------------------------------------------------------------------
+-- WALK: Standalone from ID reference (forward traversal)
+-- ---------------------------------------------------------------------------
+
+--# test_standalone_walk_upward
+WALK FROM #standalone_emp FOLLOW reports_to
+RETURN NODES AS chain
+--@ expect:rows = 4
+
+-- ---------------------------------------------------------------------------
+-- WALK: Standalone reverse direction
+-- ---------------------------------------------------------------------------
+
+--# test_standalone_walk_downward
+WALK FROM #standalone_ceo FOLLOW <-reports_to
+RETURN NODES AS all_reports
+--@ expect:error
+
+-- ---------------------------------------------------------------------------
+-- WALK: Standalone with UNTIL condition
+-- ---------------------------------------------------------------------------
+
+--# test_standalone_walk_until
+WALK FROM #standalone_emp FOLLOW reports_to UNTIL node.management_level >= 4
+RETURN TERMINAL AS vp_level
+--@ expect:rows = 1
+
+-- ---------------------------------------------------------------------------
+-- WALK: Standalone RETURN PATH
+-- ---------------------------------------------------------------------------
+
+--# test_standalone_walk_return_path
+WALK FROM #standalone_mgr FOLLOW reports_to
+RETURN PATH AS mgr_to_ceo_path
+--@ expect:rows = 3
+
+-- ---------------------------------------------------------------------------
+-- WALK: Standalone with quoted ID syntax
+-- ---------------------------------------------------------------------------
+
+--# test_standalone_walk_quoted_id
+WALK FROM #"standalone_dir" FOLLOW reports_to
+RETURN NODES AS dir_chain
+--@ expect:rows = 2
+
+-- ---------------------------------------------------------------------------
+-- WALK: Error case - non-existent ID
+-- ---------------------------------------------------------------------------
+
+--# test_standalone_walk_nonexistent_id
+WALK FROM #nonexistent_node_xyz FOLLOW reports_to
+RETURN NODES AS chain
+--@ expect:error = "NodeNotFound"
+
+-- ---------------------------------------------------------------------------
+-- CLEANUP
+-- ---------------------------------------------------------------------------
+
+--# test_cleanup_standalone_employees
+MATCH e: Employee
+WHERE e.employee_id STARTS WITH "EMP8000"
+KILL e
+--@ expect:ok

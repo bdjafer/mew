@@ -10,6 +10,7 @@
 //! - no_self: [no_self] constraint prevents self-referential edges
 //! - complex_joins: Multi-hop joins across 2-4 relationships
 //! - walk_traversal: WALK FOLLOW/UNTIL/DEPTH with RETURN NODES/EDGES/PATH/TERMINAL
+//! - walk_standalone: WALK FROM #id without preceding MATCH (ID reference starting points)
 //! - multiple_inheritance: TeamLead : Employee, Mentorship (node inherits from 2+ types)
 
 use mew_tests::prelude::*;
@@ -625,6 +626,48 @@ mod diamond_inheritance {
 
     #[test]
     fn test_diamond_inheritance_resolution() {
+        scenario().run().unwrap();
+    }
+}
+
+mod walk_standalone {
+    use super::*;
+
+    /// Tests standalone WALK from ID reference (no preceding MATCH).
+    /// Per specs/statements/walk.md and specs/expressions/id_references.md,
+    /// WALK FROM #id should work directly without needing MATCH to bind a variable.
+    pub fn scenario() -> Scenario {
+        Scenario::new("walk_standalone")
+            .ontology("level-2/humanresources/ontology.mew")
+            .seed("level-2/humanresources/seeds/populated.mew")
+            .operations("level-2/humanresources/operations/walk_standalone.mew")
+            // Setup org hierarchy
+            .step("test_setup_standalone_ceo", |a| a.created(1))
+            .step("test_setup_standalone_vp", |a| a.created(1))
+            .step("test_setup_standalone_dir", |a| a.created(1))
+            .step("test_setup_standalone_mgr", |a| a.created(1))
+            .step("test_setup_standalone_emp", |a| a.created(1))
+            .step("test_setup_standalone_hierarchy", |a| a.linked(4))
+            // Standalone WALK: forward traversal from ID ref (emp→mgr→dir→vp→ceo = 4 nodes)
+            .step("test_standalone_walk_upward", |a| a.rows(4))
+            // Standalone WALK: reverse direction (<-edge syntax not supported)
+            .step("test_standalone_walk_downward", |a| a.error("parse"))
+            // Standalone WALK: with UNTIL condition (stops at vp, management_level=4)
+            .step("test_standalone_walk_until", |a| a.rows(1))
+            // Standalone WALK: RETURN PATH (mgr→dir→vp→ceo = 3 steps)
+            .step("test_standalone_walk_return_path", |a| a.rows(3))
+            // Standalone WALK: quoted ID syntax (dir→vp→ceo = 2 nodes)
+            .step("test_standalone_walk_quoted_id", |a| a.rows(2))
+            // Standalone WALK: non-existent ID (runtime error)
+            .step("test_standalone_walk_nonexistent_id", |a| {
+                a.error("not found")
+            })
+            // Cleanup
+            .step("test_cleanup_standalone_employees", |a| a.deleted(5))
+    }
+
+    #[test]
+    fn test_walk_standalone_from_id_ref() {
         scenario().run().unwrap();
     }
 }
