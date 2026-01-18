@@ -41,7 +41,7 @@ jobs:
         with:
           prompt: ${{ steps.skill.outputs.prompt }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.WORKFLOW_PAT }}
           allowed_bots: '*'
           claude_args: |
             --model claude-opus-4-5-20251101
@@ -74,7 +74,7 @@ jobs:
         with:
           prompt: ${{ steps.skill.outputs.prompt }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.WORKFLOW_PAT }}
           allowed_bots: '*'
           claude_args: |
             --model claude-opus-4-5-20251101
@@ -90,6 +90,7 @@ jobs:
       - name: Check gates and merge if ready
         uses: actions/github-script@v8
         with:
+          github-token: ${{ secrets.WORKFLOW_PAT }}
           script: |
             const { owner, repo } = context.repo;
             const prNumber = context.payload.pull_request.number;
