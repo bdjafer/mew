@@ -15,6 +15,7 @@ setup:
     @echo "Installing development tools..."
     rustup component add rustfmt clippy
     cargo install cargo-watch cargo-llvm-cov 2>/dev/null || true
+    git config core.hooksPath .githooks
     @echo "✓ Setup complete"
 
 # ============================================================================

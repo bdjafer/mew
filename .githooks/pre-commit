@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+cd mew
+cargo fmt --all 2>/dev/null
+git add -u
