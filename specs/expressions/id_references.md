@@ -73,11 +73,28 @@ An ID reference expression has type `ID`. The referenced entity may be either a 
 
 ### Resolution
 
-ID references are resolved at runtime:
-1. The ID value is extracted from the reference
-2. The engine looks up the entity (node or edge) with that ID
-3. If found, the entity is returned
+ID references are resolved at runtime using a two-phase lookup:
+
+1. **Session binding lookup**: If the identifier matches a session-bound variable name (e.g., from a prior SPAWN statement), the bound entity is returned
+2. **Graph entity lookup**: Otherwise, the engine looks up the entity (node or edge) with that literal ID in the graph
+3. If found by either method, the entity is returned
 4. If not found, the behavior depends on context (see below)
+
+**Why session bindings first?** Node IDs are auto-generated numeric values, not user-specified strings. When you write `SPAWN foo: Type { ... }`, the variable `foo` is bound to the created node's numeric ID. The ID reference `#foo` resolves via session bindings, enabling natural chaining:
+
+```
+SPAWN task: Task { title = "Example" }
+WALK FROM #task FOLLOW depends_on    -- resolves via session binding
+RETURN endpoint
+```
+
+For literal graph IDs (e.g., stored UUIDs or known identifiers), the reference resolves directly:
+
+```
+WALK FROM #"550e8400-e29b-41d4"    -- resolves via graph lookup
+FOLLOW causes
+RETURN path
+```
 
 ### Usage Contexts
 

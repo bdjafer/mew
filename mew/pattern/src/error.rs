@@ -36,6 +36,10 @@ pub enum PatternError {
     /// Division by zero.
     #[error("Division by zero")]
     DivisionByZero,
+
+    /// Node not found by ID reference.
+    #[error("Node not found: no node with ID '{id}'")]
+    NodeNotFound { id: String },
 }
 
 impl PatternError {
@@ -72,6 +76,10 @@ impl PatternError {
         Self::InvalidOperation {
             message: message.into(),
         }
+    }
+
+    pub fn node_not_found(id: impl Into<String>) -> Self {
+        Self::NodeNotFound { id: id.into() }
     }
 }
 

@@ -41,7 +41,10 @@ CollectClause = "COLLECT" CollectTarget ("," CollectTarget)*
 
 CollectTarget = "nodes" | "edges" | "path"
 
-ReturnClause = "RETURN" Projection ("," Projection)*
+ReturnClause = "RETURN" ReturnType ("AS" Identifier)?
+            | "RETURN" Projection ("," Projection)*
+
+ReturnType = "PATH" | "NODES" | "EDGES" | "TERMINAL"
 ```
 
 ### Keywords
@@ -54,6 +57,10 @@ ReturnClause = "RETURN" Projection ("," Projection)*
 | `DEPTH` | Walk modifier |
 | `UNTIL` | Walk modifier |
 | `COLLECT` | Walk modifier |
+| `NODES` | Return type |
+| `EDGES` | Return type |
+| `PATH` | Return type |
+| `TERMINAL` | Return type |
 
 ### Examples
 ```
@@ -145,6 +152,37 @@ RETURN endpoint
 ```
 
 The endpoint meeting the UNTIL condition IS included in results.
+
+Use `RETURN TERMINAL` to return only the nodes where the UNTIL condition first becomes true (see Return Types).
+
+### Return Types
+
+WALK supports specialized return types for common traversal patterns:
+
+| Return Type | Description |
+|-------------|-------------|
+| `RETURN NODES` | Returns all nodes visited during traversal |
+| `RETURN EDGES` | Returns all edges traversed |
+| `RETURN PATH` | Returns the complete path (nodes and edges) |
+| `RETURN TERMINAL` | Returns only nodes where UNTIL condition matched |
+
+```
+-- Return all nodes in the chain
+WALK FROM start FOLLOW links RETURN NODES AS chain
+
+-- Return only the terminal node (where UNTIL matched)
+WALK FROM employee FOLLOW reports_to
+UNTIL node:Executive
+RETURN TERMINAL AS executive
+
+-- Return the path taken
+WALK FROM source FOLLOW depends_on RETURN PATH AS dependency_path
+
+-- Return edges traversed
+WALK FROM task FOLLOW blocks RETURN EDGES AS blocking_edges
+```
+
+`RETURN TERMINAL` is specifically designed for UNTIL queries where you want only the stopping points, not all intermediate nodes. Without UNTIL, it returns all endpoints.
 
 ### Collection
 
