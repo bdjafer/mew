@@ -30,29 +30,45 @@ mod unlink {
             // Create links: 3 tagged + 2 blocks + 1 subtask_of = 6
             .step("test_setup_create_links", |a| a.linked(6))
             // Verify tagged links = 3
-            .step("test_verify_tagged_links_exist", |a| a.scalar("tagged_count", 3i64))
+            .step("test_verify_tagged_links_exist", |a| {
+                a.scalar("tagged_count", 3i64)
+            })
             // Verify blocking links = 2
-            .step("test_verify_blocking_links_exist", |a| a.scalar("blocking_count", 2i64))
+            .step("test_verify_blocking_links_exist", |a| {
+                a.scalar("blocking_count", 2i64)
+            })
             // Unlink single tag
             .step("test_unlink_single_tag", |a| a.unlinked(1))
             // Verify single unlink = 0
-            .step("test_verify_single_unlink", |a| a.scalar("still_linked", 0i64))
+            .step("test_verify_single_unlink", |a| {
+                a.scalar("still_linked", 0i64)
+            })
             // Verify other links remain = 2
-            .step("test_verify_other_links_remain", |a| a.scalar("remaining_count", 2i64))
+            .step("test_verify_other_links_remain", |a| {
+                a.scalar("remaining_count", 2i64)
+            })
             // Unlink all tags from task 2
             .step("test_unlink_all_tags_from_specific_task", |a| a.unlinked(1))
             // Verify all tags unlinked = 0
-            .step("test_verify_all_tags_unlinked", |a| a.scalar("tag_count", 0i64))
+            .step("test_verify_all_tags_unlinked", |a| {
+                a.scalar("tag_count", 0i64)
+            })
             // Unlink blocking edge
             .step("test_unlink_blocking_edge", |a| a.unlinked(1))
             // Verify blocking unlinked = 0
-            .step("test_verify_blocking_unlinked", |a| a.scalar("block_count", 0i64))
+            .step("test_verify_blocking_unlinked", |a| {
+                a.scalar("block_count", 0i64)
+            })
             // Verify other blocking remains = 1
-            .step("test_verify_other_blocking_remains", |a| a.scalar("block_count", 1i64))
+            .step("test_verify_other_blocking_remains", |a| {
+                a.scalar("block_count", 1i64)
+            })
             // Unlink subtask
             .step("test_unlink_subtask", |a| a.unlinked(1))
             // Verify subtask unlinked = 0
-            .step("test_verify_subtask_unlinked", |a| a.scalar("link_count", 0i64))
+            .step("test_verify_subtask_unlinked", |a| {
+                a.scalar("link_count", 0i64)
+            })
             // Recreate some tags
             .step("test_recreate_some_tags", |a| a.linked(2))
             // Unlink all tags from tag (t1 + t2 recreated + t3 never unlinked = 3)
@@ -60,9 +76,13 @@ mod unlink {
             // Verify all unlinked = 0
             .step("test_verify_all_unlinked", |a| a.scalar("remaining", 0i64))
             // Tasks still exist = 3
-            .step("test_tasks_still_exist_after_unlink", |a| a.scalar("task_count", 3i64))
+            .step("test_tasks_still_exist_after_unlink", |a| {
+                a.scalar("task_count", 3i64)
+            })
             // Tag still exists = 1
-            .step("test_tag_still_exists_after_unlink", |a| a.scalar("tag_count", 1i64))
+            .step("test_tag_still_exists_after_unlink", |a| {
+                a.scalar("tag_count", 1i64)
+            })
             // Setup tasks with edge attributes
             .step("test_setup_tasks_with_edge_attributes", |a| a.created(1))
             .step("test_setup_tasks_with_edge_attributes_2", |a| a.created(1))
@@ -106,7 +126,9 @@ mod bulk_mutations {
             // SPAWN with specific fields RETURNING
             .step("test_spawn_returning_specific_fields", |a| a.created(1))
             // SET multiple attributes
-            .step("test_set_multiple_attributes_single_entity", |a| a.modified(1))
+            .step("test_set_multiple_attributes_single_entity", |a| {
+                a.modified(1)
+            })
             // Verify bulk set
             .step("test_verify_bulk_set", |a| a.rows(1))
             // SET multiple entities
@@ -130,13 +152,19 @@ mod bulk_mutations {
             // Bulk kill children only
             .step("test_bulk_kill_children_only", |a| a.deleted(3))
             // Verify children killed = 0
-            .step("test_verify_children_killed", |a| a.scalar("remaining", 0i64))
+            .step("test_verify_children_killed", |a| {
+                a.scalar("remaining", 0i64)
+            })
             // Verify parent remains = 1
-            .step("test_verify_parent_remains", |a| a.scalar("remaining", 1i64))
+            .step("test_verify_parent_remains", |a| {
+                a.scalar("remaining", 1i64)
+            })
             // Bulk spawn and link
             .step("test_bulk_spawn_and_link", |a| a.created(3).linked(2))
             // Verify bulk spawn and link = 2
-            .step("test_verify_bulk_spawn_and_link", |a| a.scalar("subtask_count", 2i64))
+            .step("test_verify_bulk_spawn_and_link", |a| {
+                a.scalar("subtask_count", 2i64)
+            })
             // Bulk set (compound mutation, no RETURNING per spec)
             .step("test_bulk_set_cancelled", |a| a.modified(3))
             // Verify bulk set via separate query
@@ -150,7 +178,9 @@ mod bulk_mutations {
             // Bulk set priority (compound mutation, no RETURNING per spec)
             .step("test_bulk_set_priority", |a| a.modified(3))
             // Verify bulk set via separate query
-            .step("test_verify_bulk_set_priority", |a| a.scalar("updated_count", 3i64))
+            .step("test_verify_bulk_set_priority", |a| {
+                a.scalar("updated_count", 3i64)
+            })
             // Cleanup
             .step("test_cleanup_all_test_tasks", |a| a.deleted(10))
             .step("test_cleanup_all_test_subtasks", |a| a.deleted(2))
@@ -182,7 +212,9 @@ mod blocking {
             // Task cannot block itself (no_self constraint)
             .step("test_task_cannot_block_itself", |a| a.error("self"))
             // Verify no self block = 0
-            .step("test_verify_no_self_block_created", |a| a.scalar("self_blocks", 0i64))
+            .step("test_verify_no_self_block_created", |a| {
+                a.scalar("self_blocks", 0i64)
+            })
             // Create blocking chain
             .step("test_create_blocking_chain", |a| a.linked(2))
             // Verify blocking chain
@@ -206,7 +238,9 @@ mod blocking {
             // Create multiple blockers
             .step("test_create_multiple_blockers", |a| a.linked(3))
             // Verify multiple blockers = 3
-            .step("test_verify_multiple_blockers", |a| a.scalar("blocker_count", 3i64))
+            .step("test_verify_multiple_blockers", |a| {
+                a.scalar("blocker_count", 3i64)
+            })
             // List all blockers = 3
             .step("test_list_all_blockers", |a| a.rows(3))
             // Find in-progress blockers >= 2
@@ -216,7 +250,9 @@ mod blocking {
             // Unlink one blocker
             .step("test_unlink_one_blocker", |a| a.unlinked(1))
             // Verify one blocker removed = 2
-            .step("test_verify_one_blocker_removed", |a| a.scalar("remaining_blockers", 2i64))
+            .step("test_verify_one_blocker_removed", |a| {
+                a.scalar("remaining_blockers", 2i64)
+            })
             // High priority blocked by low priority >= 1
             .step("test_high_priority_blocked_by_low_priority", |a| a.rows(0)) // No low->high priority blocks in test data
             // Count blocking relationships >= 5
@@ -263,7 +299,9 @@ mod anonymous_targets {
             .step("test_tasks_not_blocked_by_anything", |a| a.rows(3))
             // Combined patterns with anonymous
             .step("test_tasks_with_tag_but_not_blocking", |a| a.rows(1))
-            .step("test_tasks_blocking_but_not_tagged_with_review", |a| a.rows(1))
+            .step("test_tasks_blocking_but_not_tagged_with_review", |a| {
+                a.rows(1)
+            })
             // Count with anonymous target
             .step("test_count_tasks_with_any_relationship", |a| a.rows(1))
             // Multiple anonymous targets
@@ -295,18 +333,32 @@ mod parameters {
             .step("test_setup_param_tag", |a| a.created(1))
             .step("test_setup_param_links", |a| a.linked(2))
             // Missing parameters should produce errors
-            .step("test_param_in_where_missing_string", |a| a.error("missing_parameter"))
-            .step("test_param_in_where_missing_int", |a| a.error("missing_parameter"))
-            .step("test_param_in_where_missing_multiple", |a| a.error("missing_parameter"))
-            .step("test_param_in_pattern_filter_missing", |a| a.error("missing_parameter"))
+            .step("test_param_in_where_missing_string", |a| {
+                a.error("missing_parameter")
+            })
+            .step("test_param_in_where_missing_int", |a| {
+                a.error("missing_parameter")
+            })
+            .step("test_param_in_where_missing_multiple", |a| {
+                a.error("missing_parameter")
+            })
+            .step("test_param_in_pattern_filter_missing", |a| {
+                a.error("missing_parameter")
+            })
             // SPAWN with missing params should error
-            .step("test_param_in_spawn_missing", |a| a.error("missing_parameter"))
+            .step("test_param_in_spawn_missing", |a| {
+                a.error("missing_parameter")
+            })
             // SET with missing param should error
-            .step("test_param_in_set_missing", |a| a.error("missing_parameter"))
+            .step("test_param_in_set_missing", |a| {
+                a.error("missing_parameter")
+            })
             // Boolean parameter - no SubTasks exist, so MATCH finds nothing and WHERE isn't evaluated
             .step("test_param_bool_type_missing", |a| a.rows(0))
             // Parameter in list (IN clause) - missing should error
-            .step("test_param_in_list_missing", |a| a.error("missing_parameter"))
+            .step("test_param_in_list_missing", |a| {
+                a.error("missing_parameter")
+            })
             // Cleanup (only the 3 setup tasks remain since spawn failed)
             .step("test_cleanup_param_links", |a| a.unlinked(2))
             .step("test_cleanup_param_tasks", |a| a.deleted(3))
@@ -384,35 +436,55 @@ mod link_if_not_exists {
             .step("test_verify_edge_created", |a| a.scalar("edge_count", 1i64))
             // Idempotency: Second LINK IF NOT EXISTS is no-op
             .step("test_link_if_not_exists_idempotent", |a| a.linked(0))
-            .step("test_verify_still_one_edge", |a| a.scalar("edge_count", 1i64))
+            .step("test_verify_still_one_edge", |a| {
+                a.scalar("edge_count", 1i64)
+            })
             // LINK IF NOT EXISTS: Multiple different targets
             .step("test_setup_second_tag", |a| a.created(1))
             .step("test_link_if_not_exists_different_target", |a| a.linked(1))
-            .step("test_verify_two_different_edges", |a| a.scalar("tag_count", 2i64))
+            .step("test_verify_two_different_edges", |a| {
+                a.scalar("tag_count", 2i64)
+            })
             // LINK IF NOT EXISTS: On blocks edge
             .step("test_link_blocks_if_not_exists", |a| a.linked(1))
-            .step("test_verify_blocks_created", |a| a.scalar("block_count", 1i64))
+            .step("test_verify_blocks_created", |a| {
+                a.scalar("block_count", 1i64)
+            })
             .step("test_blocks_idempotent", |a| a.linked(0))
-            .step("test_verify_still_one_block", |a| a.scalar("block_count", 1i64))
+            .step("test_verify_still_one_block", |a| {
+                a.scalar("block_count", 1i64)
+            })
             // LINK IF NOT EXISTS: With subtask_of edge
             .step("test_link_subtask_if_not_exists", |a| a.linked(1))
-            .step("test_verify_subtask_linked", |a| a.scalar("subtask_count", 1i64))
+            .step("test_verify_subtask_linked", |a| {
+                a.scalar("subtask_count", 1i64)
+            })
             .step("test_subtask_idempotent", |a| a.linked(0))
-            .step("test_verify_still_one_subtask_link", |a| a.scalar("subtask_count", 1i64))
+            .step("test_verify_still_one_subtask_link", |a| {
+                a.scalar("subtask_count", 1i64)
+            })
             // LINK IF NOT EXISTS: Multiple sources to same target
             .step("test_link_child_to_same_tag", |a| a.linked(1))
-            .step("test_verify_multiple_sources_to_tag", |a| a.scalar("task_count", 2i64))
+            .step("test_verify_multiple_sources_to_tag", |a| {
+                a.scalar("task_count", 2i64)
+            })
             // LINK IF NOT EXISTS vs regular LINK
             .step("test_setup_new_tag_for_comparison", |a| a.created(1))
             .step("test_regular_link_first", |a| a.linked(1))
-            .step("test_link_if_not_exists_after_regular_link", |a| a.linked(0))
-            .step("test_verify_still_one_comparison_edge", |a| a.scalar("edge_count", 1i64))
+            .step("test_link_if_not_exists_after_regular_link", |a| {
+                a.linked(0)
+            })
+            .step("test_verify_still_one_comparison_edge", |a| {
+                a.scalar("edge_count", 1i64)
+            })
             // LINK IF NOT EXISTS: In a loop (multiple invocations)
             .step("test_setup_loop_task", |a| a.created(1))
             .step("test_link_loop_iteration_1", |a| a.linked(1))
             .step("test_link_loop_iteration_2", |a| a.linked(0))
             .step("test_link_loop_iteration_3", |a| a.linked(0))
-            .step("test_verify_only_one_edge_after_loop", |a| a.scalar("edge_count", 1i64))
+            .step("test_verify_only_one_edge_after_loop", |a| {
+                a.scalar("edge_count", 1i64)
+            })
             // Cleanup
             .step("test_cleanup_tasks", |a| a.deleted(3))
             .step("test_cleanup_subtask", |a| a.deleted(1))
@@ -550,4 +622,3 @@ mod policy {
         scenario().run().unwrap();
     }
 }
-
