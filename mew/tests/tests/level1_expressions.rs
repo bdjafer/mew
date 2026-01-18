@@ -256,7 +256,8 @@ mod timestamps {
             .step("query_time_filter", |a| a.scalar("count", 3i64))
             // now() tests (spawns t6 with runtime timestamp)
             .step("spawn_with_now", |a| a.created(1))
-            .step("query_now_comparison", |a| a.scalar("count", 5i64))
+            // Per spec: now() returns current time at evaluation, so t6.start_time < now() at query time
+            .step("query_now_comparison", |a| a.scalar("count", 6i64))
             // Timestamp arithmetic tests (uses fixed timestamps by label)
             .step("query_timestamp_plus_duration", |a| a.rows(1))
             .step("query_timestamp_minus_duration", |a| a.rows(1))
