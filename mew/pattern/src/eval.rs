@@ -143,12 +143,7 @@ impl<'r> Evaluator<'r> {
             Value::NodeRef(node_id) => {
                 // Get the attribute from the node
                 if let Some(node) = graph.get_node(node_id) {
-                    // Validate that the attribute exists on the type schema
-                    if let Some(type_def) = self.registry.get_type(node.type_id) {
-                        if !type_def.has_attr(attr) {
-                            return Err(PatternError::unknown_attribute(attr, &type_def.name));
-                        }
-                    }
+                    // Return attribute value, or null if not found (lenient access)
                     Ok(node.get_attr(attr).cloned().unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)
@@ -157,12 +152,7 @@ impl<'r> Evaluator<'r> {
             Value::EdgeRef(edge_id) => {
                 // Get the attribute from the edge
                 if let Some(edge) = graph.get_edge(edge_id) {
-                    // Validate that the attribute exists on the edge type schema
-                    if let Some(edge_def) = self.registry.get_edge_type(edge.type_id) {
-                        if edge_def.get_attr(attr).is_none() {
-                            return Err(PatternError::unknown_attribute(attr, &edge_def.name));
-                        }
-                    }
+                    // Return attribute value, or null if not found (lenient access)
                     Ok(edge.get_attr(attr).cloned().unwrap_or(Value::Null))
                 } else {
                     Ok(Value::Null)

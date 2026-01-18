@@ -533,7 +533,8 @@ impl<'r> Analyzer<'r> {
                         // Convert attribute type name to Type
                         Ok(self.type_name_to_type(&attr_def.type_name))
                     } else {
-                        Err(AnalyzerError::unknown_attribute(attr, &type_def.name, span))
+                        // Unknown attribute returns Null at runtime (lenient access)
+                        Ok(Type::Null)
                     }
                 } else {
                     // Type not found - return Any
@@ -550,7 +551,8 @@ impl<'r> Analyzer<'r> {
                     if edge_def.get_attr(attr).is_some() {
                         Ok(Type::Any) // Edge attributes simplified
                     } else {
-                        Err(AnalyzerError::unknown_attribute(attr, &edge_def.name, span))
+                        // Unknown attribute returns Null at runtime (lenient access)
+                        Ok(Type::Null)
                     }
                 } else {
                     Ok(Type::Any)
