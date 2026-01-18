@@ -73,7 +73,7 @@ LINK service_has_role(#api, #user_role)
 --# test_create_folder
 SPAWN docs: Folder {
   name = "Documents",
-  path = "/documents",
+  folder_path = "/documents",
   sensitivity = "internal"
 }
 
@@ -159,7 +159,7 @@ RETURN d.title, u.username, s.permission
 
 --# test_query_folder_docs
 MATCH f: Folder, d: Document, in_folder(d, f)
-RETURN f.path, d.title
+RETURN f.folder_path, d.title
 
 -- ---------------------------------------------------------------------------
 -- Update: Document status
