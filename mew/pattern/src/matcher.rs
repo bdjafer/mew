@@ -80,10 +80,8 @@ impl<'r, 'g> Matcher<'r, 'g> {
         // We prefer forward (stored-order) matches over reverse matches
         for edge_var in &edge_vars_for_dedup {
             // First pass: collect all matches, grouping by edge_id
-            let mut edge_matches: std::collections::HashMap<
-                mew_core::EdgeId,
-                Vec<Bindings>,
-            > = std::collections::HashMap::new();
+            let mut edge_matches: std::collections::HashMap<mew_core::EdgeId, Vec<Bindings>> =
+                std::collections::HashMap::new();
             let mut non_edge_bindings = Vec::new();
 
             for bindings in candidates {

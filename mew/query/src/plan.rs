@@ -102,7 +102,10 @@ pub enum PlanOp {
 
     /// Deduplicate by edge binding variable (for symmetric edges).
     /// Keeps only one row per unique edge_id.
-    EdgeDedup { input: Box<PlanOp>, edge_var: String },
+    EdgeDedup {
+        input: Box<PlanOp>,
+        edge_var: String,
+    },
 
     /// Empty result (for patterns that can't match).
     Empty,
