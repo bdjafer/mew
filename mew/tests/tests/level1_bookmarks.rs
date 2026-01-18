@@ -22,7 +22,9 @@ mod edge_cases {
             .step("query_numeric_extremes", |a| a.scalar("count", 8i64))
             .step("spawn_then_kill_immediately", |a| a.created(1).deleted(1))
             .step("verify_killed_not_queryable", |a| a.scalar("count", 0i64))
-            .step("create_relationship_then_kill_source", |a| a.created(2).linked(1).deleted(1))
+            .step("create_relationship_then_kill_source", |a| {
+                a.created(2).linked(1).deleted(1)
+            })
             .step("verify_folder_remains", |a| a.scalar("count", 1i64))
             .step("verify_edge_cascade_removed", |a| a.scalar("count", 0i64))
     }
@@ -102,7 +104,9 @@ mod edge_operations {
             .step("spawn_entities", |a| a.created(8))
             .step("link_bookmarks_to_folder", |a| a.linked(3))
             .step("count_work_folder_bookmarks", |a| a.scalar("count", 2i64))
-            .step("count_personal_folder_bookmarks", |a| a.scalar("count", 1i64))
+            .step("count_personal_folder_bookmarks", |a| {
+                a.scalar("count", 1i64)
+            })
             .step("link_multiple_tags_to_bookmark", |a| a.linked(3))
             .step("count_tags_on_b1", |a| a.scalar("count", 3i64))
             .step("query_bookmarks_by_tag", |a| a.rows(1))
@@ -132,7 +136,9 @@ mod query_filtering {
             .step("seed_data", |a| a.created(5))
             .step("filter_by_boolean_true", |a| a.scalar("count", 3i64))
             .step("filter_by_boolean_false", |a| a.scalar("count", 2i64))
-            .step("filter_by_int_equality", |a| a.first(row_str! { "b.title" => "Beta" }))
+            .step("filter_by_int_equality", |a| {
+                a.first(row_str! { "b.title" => "Beta" })
+            })
             .step("filter_by_int_greater", |a| a.scalar("count", 2i64))
             .step("filter_by_int_greater_equal", |a| a.scalar("count", 3i64))
             .step("filter_by_int_less", |a| a.scalar("count", 2i64))
@@ -167,13 +173,21 @@ mod query_ordering {
             .ontology("level-1/bookmarks/ontology.mew")
             .operations("level-1/bookmarks/operations/query_ordering.mew")
             .step("seed_bookmarks", |a| a.created(5))
-            .step("order_by_title_asc", |a| a.rows(5).first(row_str! { "b.title" => "Apple" }))
-            .step("order_by_title_desc", |a| a.rows(5).first(row_str! { "b.title" => "Zebra" }))
-            .step("order_by_visit_count_asc", |a| a.rows(5).first(row_str! { "b.title" => "Mango" }))
+            .step("order_by_title_asc", |a| {
+                a.rows(5).first(row_str! { "b.title" => "Apple" })
+            })
+            .step("order_by_title_desc", |a| {
+                a.rows(5).first(row_str! { "b.title" => "Zebra" })
+            })
+            .step("order_by_visit_count_asc", |a| {
+                a.rows(5).first(row_str! { "b.title" => "Mango" })
+            })
             .step("order_by_visit_count_desc", |a| a.rows(5))
             .step("order_by_multiple_fields", |a| a.rows(5))
             .step("limit_results", |a| a.rows(3))
-            .step("limit_with_order", |a| a.rows(2).first(row_str! { "b.title" => "Apple" }))
+            .step("limit_with_order", |a| {
+                a.rows(2).first(row_str! { "b.title" => "Apple" })
+            })
             .step("offset_results", |a| a.rows(2))
             .step("distinct_visit_counts", |a| a.rows(4))
             .step("count_distinct", |a| a.scalar("count", 4i64))
@@ -219,9 +233,7 @@ mod query_exists {
         Scenario::new("query_exists")
             .ontology("level-1/bookmarks/ontology.mew")
             .operations("level-1/bookmarks/operations/query_exists.mew")
-            .step("seed_with_mixed_relationships", |a| {
-                a.created(6).linked(4)
-            })
+            .step("seed_with_mixed_relationships", |a| a.created(6).linked(4))
             .step("exists_in_folder", |a| a.scalar("count", 2i64))
             .step("exists_with_tag", |a| a.scalar("count", 2i64))
             .step("not_exists_in_folder", |a| a.scalar("count", 2i64))
@@ -262,7 +274,6 @@ mod queries {
     }
 }
 
-
 mod string_functions {
     use super::*;
 
@@ -283,13 +294,21 @@ mod string_functions {
             .step("query_urls_ending_com", |a| a.scalar("count", 2i64))
             // contains() tests
             .step("query_urls_containing_example", |a| a.scalar("count", 3i64))
-            .step("query_titles_containing_server", |a| a.scalar("count", 1i64))
+            .step("query_titles_containing_server", |a| {
+                a.scalar("count", 1i64)
+            })
             // lower/upper tests
-            .step("query_lower_title", |a| a.first(row_str! { "lowered" => "github repository" }))
-            .step("query_upper_title", |a| a.first(row_str! { "uppered" => "GITHUB REPOSITORY" }))
+            .step("query_lower_title", |a| {
+                a.first(row_str! { "lowered" => "github repository" })
+            })
+            .step("query_upper_title", |a| {
+                a.first(row_str! { "uppered" => "GITHUB REPOSITORY" })
+            })
             .step("query_case_insensitive_search", |a| a.scalar("count", 1i64))
             // trim() tests
-            .step("query_trim_title", |a| a.first(row_str! { "trimmed" => "Untrimmed Title" }))
+            .step("query_trim_title", |a| {
+                a.first(row_str! { "trimmed" => "Untrimmed Title" })
+            })
             .step("query_trimmed_length", |a| a.scalar("len", 15i64))
             // Concatenation tests
             .step("query_concat_title_desc", |a| a.rows(1))
@@ -323,21 +342,31 @@ mod errors_comprehensive {
             .step("set_required_to_null", |a| a.created(1).error("required"))
             .step("set_type_mismatch", |a| a.created(1).error("type"))
             .step("set_invalid_attribute", |a| a.created(1).error("attribute"))
-            .step("set_readonly_created_at", |a| a.created(1).error("readonly"))
+            .step("set_readonly_created_at", |a| {
+                a.created(1).error("readonly")
+            })
             // LINK errors
             .step("link_nonexistent_source", |a| a.error("not found"))
-            .step("link_nonexistent_target", |a| a.created(1).error("not found"))
+            .step("link_nonexistent_target", |a| {
+                a.created(1).error("not found")
+            })
             .step("link_both_nonexistent", |a| a.error("not found"))
             .step("link_wrong_type_source", |a| a.created(2).error("type"))
             .step("link_wrong_type_target", |a| a.created(2).error("type"))
             .step("link_wrong_arity", |a| a.created(2).error("arity"))
-            .step("link_invalid_edge_type", |a| a.created(2).error("edge type"))
+            .step("link_invalid_edge_type", |a| {
+                a.created(2).error("edge type")
+            })
             // UNLINK errors
             .step("unlink_nonexistent_edge", |a| a.error("not found"))
-            .step("unlink_nonexistent_pattern", |a| a.created(2).error("not found"))
+            .step("unlink_nonexistent_pattern", |a| {
+                a.created(2).error("not found")
+            })
             // KILL errors
             .step("kill_nonexistent_node", |a| a.error("not found"))
-            .step("kill_already_killed", |a| a.created(1).deleted(1).error("not found"))
+            .step("kill_already_killed", |a| {
+                a.created(1).deleted(1).error("not found")
+            })
             // QUERY errors
             .step("query_invalid_type", |a| a.error("type"))
             .step("query_invalid_attribute", |a| a.rows_gte(0)) // Nonexistent fields return null instead of error

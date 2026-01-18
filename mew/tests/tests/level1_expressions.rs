@@ -22,7 +22,9 @@ mod data_types {
             // Float type tests
             .step("spawn_float_values", |a| a.created(5))
             .step("query_float_values", |a| a.scalar("count", 5i64))
-            .step("query_float_comparison_greater", |a| a.scalar("count", 3i64))
+            .step("query_float_comparison_greater", |a| {
+                a.scalar("count", 3i64)
+            })
             .step("query_float_comparison_less", |a| a.scalar("count", 1i64))
             .step("query_float_equality", |a| a.rows(1))
             .step("query_float_range", |a| a.scalar("count", 4i64))
@@ -60,7 +62,9 @@ mod string_functions {
             // starts_with() tests
             .step("query_starts_with_match", |a| a.scalar("count", 1i64))
             .step("query_starts_with_no_match", |a| a.scalar("count", 0i64))
-            .step("query_starts_with_case_sensitive", |a| a.scalar("count", 1i64))
+            .step("query_starts_with_case_sensitive", |a| {
+                a.scalar("count", 1i64)
+            })
             // ends_with() tests
             .step("query_ends_with_match", |a| a.scalar("count", 1i64))
             .step("query_ends_with_extension", |a| a.rows(1))
@@ -77,10 +81,16 @@ mod string_functions {
             .step("query_trim_function", |a| a.rows(3))
             .step("query_trim_length", |a| a.scalar("len", 7i64))
             // substring() tests
-            .step("query_substring_basic", |a| a.first(row_str! { "sub" => "Lorem" }))
-            .step("query_substring_middle", |a| a.first(row_str! { "sub" => "World" }))
+            .step("query_substring_basic", |a| {
+                a.first(row_str! { "sub" => "Lorem" })
+            })
+            .step("query_substring_middle", |a| {
+                a.first(row_str! { "sub" => "World" })
+            })
             // String concatenation (++) tests
-            .step("query_concat_basic", |a| a.first(row_str! { "concatenated" => "hello world" }))
+            .step("query_concat_basic", |a| {
+                a.first(row_str! { "concatenated" => "hello world" })
+            })
             .step("query_concat_multiple", |a| a.rows(1))
             .step("query_concat_attributes", |a| a.rows(1))
     }
@@ -106,11 +116,15 @@ mod arithmetic {
             .step("query_addition_with_literal", |a| a.scalar("sum", 15.0))
             // Subtraction tests
             .step("query_subtraction_basic", |a| a.scalar("diff", 7.0))
-            .step("query_subtraction_negative_result", |a| a.scalar("diff", -7.0))
+            .step("query_subtraction_negative_result", |a| {
+                a.scalar("diff", -7.0)
+            })
             // Multiplication tests
             .step("query_multiplication_basic", |a| a.scalar("product", 30.0))
             .step("query_multiplication_decimals", |a| a.rows(1))
-            .step("query_multiplication_large", |a| a.scalar("product", 1000.0))
+            .step("query_multiplication_large", |a| {
+                a.scalar("product", 1000.0)
+            })
             // Division tests
             .step("query_division_basic", |a| a.rows(1))
             .step("query_division_decimals", |a| a.rows(1))
@@ -120,7 +134,9 @@ mod arithmetic {
             // Unary minus tests
             .step("query_unary_minus_positive", |a| a.scalar("negated", -10.0))
             .step("query_unary_minus_negative", |a| a.scalar("negated", 5.0))
-            .step("query_unary_minus_in_expression", |a| a.scalar("result", 7.0))
+            .step("query_unary_minus_in_expression", |a| {
+                a.scalar("result", 7.0)
+            })
             // abs() tests
             .step("query_abs_positive", |a| a.scalar("absolute", 10.0))
             .step("query_abs_negative", |a| a.scalar("absolute", 5.0))
@@ -133,7 +149,9 @@ mod arithmetic {
             .step("query_ceil_function", |a| a.scalar("ceiled", 4.0))
             .step("query_round_function", |a| a.scalar("rounded", 3.0))
             // Operator precedence tests
-            .step("query_precedence_mul_over_add", |a| a.scalar("result", 16.0))
+            .step("query_precedence_mul_over_add", |a| {
+                a.scalar("result", 16.0)
+            })
             .step("query_precedence_parentheses", |a| a.scalar("result", 26.0))
             .step("query_precedence_complex", |a| a.rows(1))
             // Arithmetic in WHERE clause
@@ -165,15 +183,31 @@ mod null_handling {
             .step("query_is_null_false", |a| a.scalar("count", 2i64))
             .step("query_is_null_multiple", |a| a.scalar("count", 4i64))
             // coalesce() tests
-            .step("query_coalesce_basic", |a| a.first(row_str! { "result" => "fallback" }))
-            .step("query_coalesce_not_null", |a| a.first(row_str! { "result" => "has_value" }))
-            .step("query_coalesce_chain", |a| a.first(row_str! { "result" => "first" }))
-            .step("query_coalesce_chain_middle", |a| a.first(row_str! { "result" => "second" }))
-            .step("query_coalesce_chain_last", |a| a.first(row_str! { "result" => "final_fallback" }))
+            .step("query_coalesce_basic", |a| {
+                a.first(row_str! { "result" => "fallback" })
+            })
+            .step("query_coalesce_not_null", |a| {
+                a.first(row_str! { "result" => "has_value" })
+            })
+            .step("query_coalesce_chain", |a| {
+                a.first(row_str! { "result" => "first" })
+            })
+            .step("query_coalesce_chain_middle", |a| {
+                a.first(row_str! { "result" => "second" })
+            })
+            .step("query_coalesce_chain_last", |a| {
+                a.first(row_str! { "result" => "final_fallback" })
+            })
             // ?? operator tests
-            .step("query_null_coalesce_op_basic", |a| a.first(row_str! { "result" => "default" }))
-            .step("query_null_coalesce_op_not_null", |a| a.first(row_str! { "result" => "has_value" }))
-            .step("query_null_coalesce_op_chain", |a| a.first(row_str! { "result" => "final_fallback" }))
+            .step("query_null_coalesce_op_basic", |a| {
+                a.first(row_str! { "result" => "default" })
+            })
+            .step("query_null_coalesce_op_not_null", |a| {
+                a.first(row_str! { "result" => "has_value" })
+            })
+            .step("query_null_coalesce_op_chain", |a| {
+                a.first(row_str! { "result" => "final_fallback" })
+            })
             // Null propagation tests
             .step("query_null_propagation_arithmetic", |a| a.rows(1))
             .step("query_null_propagation_comparison", |a| a.rows(1))
@@ -255,8 +289,12 @@ mod aggregations_advanced {
             .step("query_collect_float_values", |a| a.rows(1))
             .step("query_collect_grouped", |a| a.rows(3))
             // COUNT DISTINCT tests
-            .step("query_count_distinct_category", |a| a.scalar("unique_categories", 3i64))
-            .step("query_count_distinct_int", |a| a.scalar("unique_ints", 4i64))
+            .step("query_count_distinct_category", |a| {
+                a.scalar("unique_categories", 3i64)
+            })
+            .step("query_count_distinct_int", |a| {
+                a.scalar("unique_ints", 4i64)
+            })
             .step("query_count_distinct_vs_count", |a| a.rows(1))
             // SUM/AVG with Float tests
             .step("query_sum_float", |a| a.rows(1))
@@ -264,8 +302,12 @@ mod aggregations_advanced {
             .step("query_avg_float", |a| a.rows(1))
             .step("query_avg_float_by_category", |a| a.rows(3))
             // MIN/MAX with String tests
-            .step("query_min_string", |a| a.first(row_str! { "first_label" => "apple" }))
-            .step("query_max_string", |a| a.first(row_str! { "last_label" => "cherry" }))
+            .step("query_min_string", |a| {
+                a.first(row_str! { "first_label" => "apple" })
+            })
+            .step("query_max_string", |a| {
+                a.first(row_str! { "last_label" => "cherry" })
+            })
             .step("query_min_max_string_by_category", |a| a.rows(3))
             // MIN/MAX with Float tests
             .step("query_min_float", |a| a.scalar("minimum", 5.25))
@@ -344,7 +386,9 @@ mod transactions {
             .step("explicit_rollback_transaction", |a| a.created(0))
             .step("verify_rollback", |a| a.scalar("count", 0i64))
             // Multi-operation transaction tests
-            .step("multi_op_transaction", |a| a.created(4).linked(1).modified(2))
+            .step("multi_op_transaction", |a| {
+                a.created(4).linked(1).modified(2)
+            })
             .step("verify_multi_op", |a| a.rows(1))
             // Failure rollback tests
             .step("setup_for_failure_test", |a| a.created(1))

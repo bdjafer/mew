@@ -147,7 +147,7 @@ MATCH e: Employee
 WHERE e.employee_id = "EMP900006"
 WALK FROM e FOLLOW reports_to
 RETURN PATH AS reporting_path
---@ expect:rows = 1
+--@ expect:rows = 4
 
 -- ---------------------------------------------------------------------------
 -- WALK: RETURN EDGES
