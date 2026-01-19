@@ -165,9 +165,10 @@ impl Playground {
     #[wasm_bindgen]
     pub fn execute(&mut self, session_id: u32, statement: &str) -> JsValue {
         use mew_session::StatementResult;
+        // Use execute_all to support multi-statement input
         let result = self
             .manager
-            .with_session(session_id, |session| session.execute(statement));
+            .with_session(session_id, |session| session.execute_all(statement));
         let execute_result = match result {
             None => ExecuteResult {
                 success: false,
@@ -277,7 +278,9 @@ impl Playground {
                 },
             },
         };
-        serde_wasm_bindgen::to_value(&execute_result).unwrap()
+        // Use custom serializer to properly handle nested objects
+        let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+        execute_result.serialize(&serializer).unwrap()
     }
 
     #[wasm_bindgen]

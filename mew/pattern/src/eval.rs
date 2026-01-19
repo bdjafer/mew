@@ -271,11 +271,19 @@ impl<'r> Evaluator<'r> {
         match name_lower.as_str() {
             "now" => {
                 // Return current timestamp in milliseconds since epoch
-                use std::time::{SystemTime, UNIX_EPOCH};
-                let duration = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default();
-                Ok(Value::Timestamp(duration.as_millis() as i64))
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let ms = js_sys::Date::now() as i64;
+                    Ok(Value::Timestamp(ms))
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+                    let duration = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default();
+                    Ok(Value::Timestamp(duration.as_millis() as i64))
+                }
             }
             "year" => {
                 if let Some(arg) = args.first() {

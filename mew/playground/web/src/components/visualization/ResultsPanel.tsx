@@ -1,49 +1,9 @@
-import React, { useState, useCallback } from 'react';
-import { useSessionStore } from '../../stores';
-
-interface QueryResult {
-  columns: string[];
-  rows: unknown[][];
-}
+import React from 'react';
+import { useResultsStore } from '../../stores';
 
 export const ResultsPanel: React.FC = () => {
-  const [result, setResult] = useState<QueryResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
-
-  const executeQuery = useSessionStore((state) => state.executeQuery);
-
-  // Subscribe to query executions by wrapping the store's executeQuery
-  const handleQueryExecution = useCallback((query: string) => {
-    setError(null);
-    setSummary(null);
-
-    const queryResult = executeQuery(query);
-
-    if (!queryResult.success) {
-      setError(queryResult.error ?? 'Unknown error');
-      setResult(null);
-      return queryResult;
-    }
-
-    if (queryResult.resultType === 'query' && queryResult.columns && queryResult.rows) {
-      setResult({
-        columns: queryResult.columns,
-        rows: queryResult.rows,
-      });
-      setSummary(null);
-    } else if (queryResult.resultType === 'mutation') {
-      setResult(null);
-      setSummary(queryResult.summary ?? 'Mutation completed');
-    }
-
-    return queryResult;
-  }, [executeQuery]);
-
-  // Export the handler for external use
-  React.useEffect(() => {
-    (window as unknown as { __executeQueryWithResults: typeof handleQueryExecution }).__executeQueryWithResults = handleQueryExecution;
-  }, [handleQueryExecution]);
+  // Subscribe to shared results store (updated by session.executeQuery)
+  const lastResult = useResultsStore((state) => state.lastResult);
 
   const formatCell = (value: unknown): string => {
     if (value === null || value === undefined) {
@@ -72,16 +32,26 @@ export const ResultsPanel: React.FC = () => {
     return widths.map((w) => Math.min(w, 50)); // Cap width at 50
   };
 
-  if (error) {
+  // Handle error state
+  if (lastResult && !lastResult.success) {
     return (
       <div className="results-panel">
         <div className="results-header">Results</div>
-        <div className="results-error">{error}</div>
+        <div className="results-error">{lastResult.error ?? 'Unknown error'}</div>
       </div>
     );
   }
 
-  if (summary) {
+  // Handle mutation result
+  if (lastResult && lastResult.result_type === 'mutation') {
+    const parts = [];
+    if (lastResult.nodes_created) parts.push(`${lastResult.nodes_created} nodes created`);
+    if (lastResult.nodes_modified) parts.push(`${lastResult.nodes_modified} nodes modified`);
+    if (lastResult.nodes_deleted) parts.push(`${lastResult.nodes_deleted} nodes deleted`);
+    if (lastResult.edges_created) parts.push(`${lastResult.edges_created} edges created`);
+    if (lastResult.edges_deleted) parts.push(`${lastResult.edges_deleted} edges deleted`);
+    const summary = parts.join(', ') || 'Mutation completed';
+
     return (
       <div className="results-panel">
         <div className="results-header">Results</div>
@@ -90,7 +60,8 @@ export const ResultsPanel: React.FC = () => {
     );
   }
 
-  if (!result) {
+  // Handle empty or no result
+  if (!lastResult || !lastResult.columns || !lastResult.rows) {
     return (
       <div className="results-panel">
         <div className="results-header">Results</div>
@@ -99,7 +70,7 @@ export const ResultsPanel: React.FC = () => {
     );
   }
 
-  const columnWidths = calculateColumnWidths(result.columns, result.rows);
+  const columnWidths = calculateColumnWidths(lastResult.columns, lastResult.rows);
 
   // Build ASCII table
   const buildSeparator = () => {
@@ -119,17 +90,17 @@ export const ResultsPanel: React.FC = () => {
   return (
     <div className="results-panel">
       <div className="results-header">
-        Results <span className="results-count">({result.rows.length} rows)</span>
+        Results <span className="results-count">({lastResult.rows.length} rows)</span>
       </div>
       <div className="results-table-container">
         <pre className="results-ascii-table">
           {buildSeparator()}
           {'\n'}
-          {buildRow(result.columns)}
+          {buildRow(lastResult.columns)}
           {'\n'}
           {buildSeparator()}
           {'\n'}
-          {result.rows.map((row, idx) => (
+          {lastResult.rows.map((row, idx) => (
             <React.Fragment key={idx}>
               {buildRow(row.map(formatCell))}
               {'\n'}

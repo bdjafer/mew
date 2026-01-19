@@ -13,6 +13,8 @@ interface ToolResult {
   message?: string;
   summary?: string;
   rowCount?: number;
+  columns?: string[];
+  rows?: string; // Formatted rows for AI consumption
 }
 
 interface ChatState {
@@ -282,7 +284,9 @@ function handleToolResults(
   if (internals.pendingToolResults.length === 0) return;
 
   const errors = internals.pendingToolResults.filter((r) => !r.success);
+  const successes = internals.pendingToolResults.filter((r) => r.success);
 
+  // Handle errors - auto-iterate to fix them
   if (errors.length > 0 && internals.autoIterationCount < MAX_AUTO_ITERATIONS) {
     internals.autoIterationCount++;
 
@@ -303,6 +307,28 @@ function handleToolResults(
       `Auto-iteration ${internals.autoIterationCount}/${MAX_AUTO_ITERATIONS}:`,
       feedbackMessage
     );
+    get().sendMessage(feedbackMessage, internals.currentContext, true);
+    return;
+  }
+
+  // Handle successful query results - send results back to AI so it can see the data
+  const queryResults = successes.filter(
+    (r) => (r.tool === 'edit_query' || r.tool === 'execute_query') && r.rows
+  );
+
+  if (queryResults.length > 0 && internals.autoIterationCount < MAX_AUTO_ITERATIONS) {
+    internals.autoIterationCount++;
+
+    const resultMessages = queryResults
+      .map((r) => {
+        const header = `Query returned ${r.rowCount} rows. Columns: ${r.columns?.join(', ')}`;
+        return `${header}\n\nData:\n${r.rows}`;
+      })
+      .join('\n\n---\n\n');
+
+    const feedbackMessage = `[System] Query executed successfully. Here are the results:\n\n${resultMessages}`;
+
+    console.log('Sending query results to AI');
     get().sendMessage(feedbackMessage, internals.currentContext, true);
   }
 }

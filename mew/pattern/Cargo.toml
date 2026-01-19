@@ -9,3 +9,6 @@ mew-graph.workspace = true
 mew-parser.workspace = true
 mew-registry.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"

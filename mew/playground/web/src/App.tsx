@@ -4,14 +4,16 @@ import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { ResizeHandle } from './components/layout/ResizeHandle';
 import { Visualization } from './components/visualization/Visualization';
-import { DetailPanel } from './components/layout/DetailPanel';
-import { ChatPanel } from './components/chat/ChatPanel';
+import { RightPanel } from './components/layout/RightPanel';
 import { SettingsModal } from './components/settings/SettingsModal';
+import { StatusBar } from './components/visualization/StatusBar';
 import { useChatStore, useUIStore, useSessionStore, useEditorStore } from './stores';
 import { DEFAULT_SEED } from './stores/editor';
+import { useAIToolActions } from './hooks/useAIToolActions';
 
 function AppContent() {
   const { isReady } = useWasm();
+  useAIToolActions(); // Bridge AI tool calls to actual actions
   const loadSettings = useChatStore((state) => state.loadSettings);
   const loadHistory = useChatStore((state) => state.loadHistory);
   const sidebarWidth = useUIStore((state) => state.sidebarWidth);
@@ -46,9 +48,9 @@ function AppContent() {
         <Sidebar />
         <ResizeHandle />
         <Visualization />
-        <DetailPanel />
+        <RightPanel />
       </main>
-      <ChatPanel />
+      <StatusBar />
       <SettingsModal />
     </div>
   );

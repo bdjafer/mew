@@ -1,10 +1,6 @@
-import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles/main.css';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+// Note: StrictMode removed to avoid double-invoking effects which causes WASM aliasing issues
+createRoot(document.getElementById('root')!).render(<App />);

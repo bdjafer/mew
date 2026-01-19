@@ -216,6 +216,7 @@ version = "0.1.0"
 name = "mew-pattern"
 version = "0.1.0"
 dependencies = [
+ "js-sys",
  "mew-core",
  "mew-graph",
  "mew-parser",

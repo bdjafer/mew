@@ -60,7 +60,7 @@ body {
 
 #main {
   display: grid;
-  grid-template-columns: var(--sidebar-width) auto 1fr 280px;
+  grid-template-columns: var(--sidebar-width) auto 1fr 320px;
   flex: 1;
   overflow: hidden;
 }
@@ -261,24 +261,115 @@ button:hover {
   background: var(--accent);
 }
 
-#detail-panel {
+/* ===== Right Panel (Node Details + Chat) ===== */
+.right-panel {
+  display: flex;
+  flex-direction: column;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border);
-  padding: 1rem;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
-#detail-panel h2 {
-  font-size: 0.75rem;
+.right-panel__section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.right-panel__details {
+  flex-shrink: 0;
+}
+
+.right-panel__chat {
+  flex: 1;
+  min-height: 0;
+}
+
+.right-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.right-panel__title {
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
 }
 
+.right-panel__title--accent {
+  color: var(--accent);
+}
+
+.right-panel__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.right-panel__btn {
+  background: transparent;
+  border: none;
+  padding: 0.25rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.right-panel__btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.right-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+}
+
+.right-panel__chat-content {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.right-panel__chat-content .chat-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+.right-panel__chat-content .chat-panel__input-area {
+  border-top: 1px solid var(--border);
+}
+
+.right-panel__empty {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.right-panel__resize {
+  height: 6px;
+  background: var(--border);
+  cursor: ns-resize;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.right-panel__resize:hover,
+.right-panel__resize--active {
+  background: var(--accent);
+}
+
+/* Node detail styles */
 .node-detail {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
 }
 
 .node-type {
@@ -289,97 +380,47 @@ button:hover {
 
 .node-id {
   color: var(--text-secondary);
-  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
-.node-detail div {
-  margin: 0.25rem 0;
-}
-
-.node-detail strong {
+.node-attrs__title {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--text-secondary);
+  margin: 0.5rem 0 0.25rem 0;
+}
+
+.node-attr {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.2rem 0;
+  font-size: 0.75rem;
+}
+
+.node-attr__key {
+  color: var(--text-secondary);
+}
+
+.node-attr__value {
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+/* Legacy #detail-panel (kept for compatibility) */
+#detail-panel {
+  display: none;
 }
 
 #footer {
   display: none;
 }
 
-#results-panel,
-.results-panel {
-  position: absolute;
-  bottom: 2.5rem;
-  right: 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.75rem;
-  max-width: 400px;
-  max-height: 200px;
-  overflow: auto;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  z-index: 100;
-}
-
-#results-panel:empty,
-.results-panel:empty {
-  display: none;
-}
-
-#results-panel .results-header,
-.results-panel .results-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  font-family: Inter, sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.results-panel .results-count {
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-
-.results-panel .results-error {
-  color: var(--error);
-}
-
-.results-panel .results-empty,
-.results-panel .results-summary {
-  color: var(--text-secondary);
-  font-family: Inter, sans-serif;
-}
-
-.results-panel .results-table-container {
-  overflow-x: auto;
-}
-
-.results-panel .results-ascii-table {
-  margin: 0;
-  white-space: pre;
-}
-
-#results-panel .results-close,
-.results-panel .results-close {
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 0 4px;
-}
-
-#results-panel .results-close:hover,
-.results-panel .results-close:hover {
-  color: var(--text-primary);
-}
+/* Results panel - styles now in visualization.css */
 
 #status-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
   padding: 0.5rem 1rem;
@@ -419,10 +460,6 @@ button:hover {
 
 /* Status bar components */
 .status-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
   padding: 0.5rem 1rem;
@@ -431,6 +468,7 @@ button:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .status-bar-left {
@@ -519,39 +557,9 @@ button:hover {
   }
 }
 
-/* ===== AI Chat Panel ===== */
+/* ===== AI Chat Panel (embedded in right panel) ===== */
 .chat-panel {
-  position: fixed;
-  bottom: 60px;
-  right: 20px;
-  width: 420px;
-  max-height: 550px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.chat-panel--collapsed {
-  transform: translateY(calc(100% - 44px));
-}
-
-.chat-panel--collapsed .chat-panel__body {
-  display: none;
-}
-
-.chat-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  user-select: none;
+  display: none; /* Hidden - now embedded in RightPanel */
 }
 
 .chat-panel__title {
