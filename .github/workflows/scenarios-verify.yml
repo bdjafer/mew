@@ -158,7 +158,7 @@ jobs:
             --allowedTools Bash,Read,Glob,Grep,Edit,Write,Task
 
       - name: Handle result
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.WORKFLOW_PAT }}
           script: |
@@ -226,7 +226,7 @@ jobs:
             --allowedTools Bash,Read,Glob,Grep
 
       - name: Handle result
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.WORKFLOW_PAT }}
           script: |
